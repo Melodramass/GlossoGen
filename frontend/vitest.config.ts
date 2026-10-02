@@ -2,11 +2,8 @@ import { defineConfig } from "vitest/config";
 import { fileURLToPath } from "node:url";
 
 /**
- * Unit tests for the pure functions behind the analysis surface.
- *
- * Node environment, no DOM: what is tested here is data going in and data coming out
- * — chart rows, encodings, CSV cells. The components that render them are covered by
- * driving the real app, which is a different kind of test and a slower one.
+ * Pure functions use Node by default. Component regressions opt into jsdom
+ * with a per-file environment annotation; these do not replace browser profiling.
  */
 export default defineConfig({
   resolve: {

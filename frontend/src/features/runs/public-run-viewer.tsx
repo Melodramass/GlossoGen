@@ -371,12 +371,10 @@ export function PublicRunViewer({ run }: { run: RunDetailResponse }) {
               selectedAgent={selectedAgent}
               showLogs={false}
               showEvalLogs={false}
-              hasLogs={false}
               hasEvalLogs={false}
               agentColorMap={agentColorMap}
               onSelectChannel={handleSelectChannel}
               onSelectAgent={setSelectedAgent}
-              onSelectLogs={() => undefined}
               onSelectEvalLogs={() => undefined}
             />
           </div>
