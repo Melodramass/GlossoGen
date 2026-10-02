@@ -22,8 +22,10 @@ from typing import Any
 from uuid import uuid4
 
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
 from glossogen.elapsed_time import elapsed_seconds_since_start
+from glossogen.mcp_tool_rejection import surface_value_errors
 from glossogen.models.event import MessageSent
 from glossogen.models.mcp_responses import ChannelMessage, ReadChannelResult, SendMessageResult
 from glossogen.models.message import SimulationMessage
@@ -111,7 +113,7 @@ def _resolve_agent_from_context(ctx: ToolContext, runtime: SimulationRuntime) ->
     if request is None:
         bound = calling_agent_id.get()
         if bound is None:
-            raise ValueError(
+            raise ToolError(
                 "Cannot resolve agent identity: no HTTP request in MCP context and no "
                 "calling agent bound. Set calling_agent_id, or use Streamable HTTP with "
                 "an ?agent_id= query parameter."
@@ -119,7 +121,7 @@ def _resolve_agent_from_context(ctx: ToolContext, runtime: SimulationRuntime) ->
         return runtime.resolve_session(agent_id=bound)
     agent_id = request.query_params.get("agent_id")
     if agent_id is None:
-        raise ValueError(
+        raise ToolError(
             "Cannot resolve agent identity: missing ?agent_id= query parameter "
             f"on MCP connection URL. Request path: {request.url.path}"
         )
@@ -138,7 +140,7 @@ def _reject_if_terminated(session: AgentSession, tool_name: str) -> None:
     still be able to read its Done signal to exit cleanly.
     """
     if session.terminated:
-        raise ValueError(
+        raise ToolError(
             f"Agent '{session.agent_id}' is being swapped out; "
             f"tool '{tool_name}' rejected. Read your notifications to exit cleanly."
         )
@@ -154,7 +156,7 @@ def _build_guarded_executor(
     The returned wrapper resolves the calling agent's identity from the MCP
     request context, then checks ``runtime.is_tool_allowed()`` before
     delegating to the original executor. Unauthorized calls raise a
-    ``ValueError`` that the server surfaces as a tool error to the agent.
+    ``ToolError``, whose message the server hands to the agent.
 
     The wrapper preserves the original function's signature so that
     the server can introspect parameter names and types for the tool schema.
@@ -170,7 +172,7 @@ def _build_guarded_executor(
                 agent_id,
                 tool_name,
             )
-            raise ValueError(f"Agent '{agent_id}' is not authorized to call tool '{tool_name}'")
+            raise ToolError(f"Agent '{agent_id}' is not authorized to call tool '{tool_name}'")
         session = runtime.resolve_session(agent_id=agent_id)
         _reject_if_terminated(session=session, tool_name=tool_name)
         async with session.track_active_call():
@@ -363,7 +365,7 @@ def register_tools(mcp: MCPServer, runtime: SimulationRuntime) -> None:
                 agent_id=agent_id,
                 channel_id=channel_id,
             ):
-                raise ValueError(f"You are not a member of channel '{channel_id}'")
+                raise ToolError(f"You are not a member of channel '{channel_id}'")
             visible = runtime.channel_router.get_visible_history(
                 channel_id=channel_id,
                 agent_id=agent_id,
@@ -412,7 +414,7 @@ def register_tools(mcp: MCPServer, runtime: SimulationRuntime) -> None:
                 agent_id=agent_id,
                 channel_id=channel_id,
             ):
-                raise ValueError(f"You are not a member of channel '{channel_id}'")
+                raise ToolError(f"You are not a member of channel '{channel_id}'")
 
             rejection_reason = runtime.scenario.validate_outgoing_message(
                 agent_id=agent_id,
@@ -571,7 +573,7 @@ def register_tools(mcp: MCPServer, runtime: SimulationRuntime) -> None:
             agent_id=agent_id,
             channel_id=channel_id,
         ):
-            raise ValueError(f"You are not a member of channel '{channel_id}'")
+            raise ToolError(f"You are not a member of channel '{channel_id}'")
         member_ids = runtime.channel_router.get_channel_member_ids(channel_id=channel_id)
         return [
             {
@@ -596,5 +598,5 @@ def register_tools(mcp: MCPServer, runtime: SimulationRuntime) -> None:
         mcp.tool(
             name=scenario_tool.name,
             description=scenario_tool.description,
-        )(guarded)
+        )(surface_value_errors(tool_fn=guarded))
         logger.info("Registered scenario MCP tool: %s", scenario_tool.name)

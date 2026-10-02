@@ -231,7 +231,7 @@ derives the getters (`knobs_json_schema`, `get_round_count`,
 | `knobs_model()`, `get_knobs()`, `create_from_config(config)` | Your knobs class; the held instance; the validating factory |
 | `get_agent_roles(knobs)` | The `(agent_id, role_name)` pairs preflight validates model overrides against. Takes a possibly-partial `dict \| None`; read role-determining flags with `cls.resolve_bool_knob(...)` |
 | `get_agents()`, `get_channels()` | Delegations to `team_structure.build_agent_configs(...)` and `team_structure.channels(...)`, never hand-written lists. You supply the `render_system_prompt` callback |
-| `get_world()`, `get_mcp_tools()` | Construct the world from the same specs; one [`ScenarioMcpTool`](../src/glossogen/runtime/scenario_mcp_tool.py) per scenario tool |
+| `get_world()`, `get_mcp_tools()` | Construct the world from the same specs; one [`ScenarioMcpTool`](../src/glossogen/runtime/scenario_mcp_tool.py) per scenario tool. An executor refuses a call by raising `ValueError`; the agent reads its message as the tool's error. Any other exception reaches the agent only as `Error executing tool <name>` |
 | `get_injection(round_number, agent_id)` | The round-start Jinja injection, or `None` for an agent with nothing to hear. Case and previous outcome come from your world |
 | `get_postmortem_injection(...)` | Same shape, for the debrief phase |
 | `on_round_advanced(round_number)` | Resolve the previous round, load the next case, and log your `<Scenario>CaseStarted` event via `self.runtime.event_logger` |

@@ -23,6 +23,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import AnyHttpUrl
 
 from glossogen.evaluation.reports.evaluation_report import EvaluationReport
+from glossogen.mcp_tool_rejection import surface_value_errors
 from glossogen.scenario_loader import get_scenario_class, iter_scenario_classes
 from glossogen.server.mcp.asgi_context import McpRunContextMiddleware
 from glossogen.server.mcp.models import (
@@ -834,7 +835,7 @@ def _build_mcp_server(oauth_provider: GlossoGenOAuthProvider, issuer_url: str) -
     )
 
     for tool_name, tool_desc, tool_fn in _TOOL_DEFS:
-        server.tool(name=tool_name, description=tool_desc)(tool_fn)
+        server.tool(name=tool_name, description=tool_desc)(surface_value_errors(tool_fn=tool_fn))
 
     return server
 
