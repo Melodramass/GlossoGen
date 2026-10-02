@@ -187,6 +187,11 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  button:enabled:not([aria-disabled="true"]),
+  summary:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
 }
 
 @keyframes msg-highlight {
