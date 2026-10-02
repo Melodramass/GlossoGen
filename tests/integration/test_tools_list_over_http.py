@@ -18,9 +18,10 @@ from typing import Any
 
 import anyio
 import httpx
+from mcp.server.mcpserver import MCPServer
 from starlette.applications import Starlette
 
-from glossogen.runtime.mcp_server import FilteringFastMCP
+from glossogen.runtime.mcp_server import per_agent_tool_filter
 
 BASE_TOOL = "send_message"
 OBSERVER_TOOL = "stabilize_veyru"
@@ -53,7 +54,7 @@ class AllowlistByAgent:
 
 def build_app(authorizer: AllowlistByAgent) -> Starlette:
     """Build the simulation MCP server's ASGI app with one tool per agent."""
-    server = FilteringFastMCP(runtime=authorizer, name="comms", host="127.0.0.1", port=0)
+    server = MCPServer(name="comms", middleware=[per_agent_tool_filter(authorizer=authorizer)])
     for name in (BASE_TOOL, OBSERVER_TOOL, ENGINEER_TOOL):
         server.tool(name=name, description=name)(lambda: "ok")
     return server.streamable_http_app()
