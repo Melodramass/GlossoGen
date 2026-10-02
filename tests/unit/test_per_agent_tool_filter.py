@@ -10,10 +10,21 @@ Nothing here was covered while the filter was a `list_tools` override, because
 that override needed a live request context to say anything at all.
 """
 
+import logging
+from typing import Any, cast
+
+import pytest
+from mcp.server.context import ServerRequestContext
+from mcp.server.session import ServerSession
 from mcp.types import Tool as MCPTool
 from starlette.requests import Request
 
-from glossogen.runtime.mcp_server import requesting_agent_id, visible_tools
+from glossogen.runtime.mcp_server import (
+    LIST_TOOLS_METHOD,
+    per_agent_tool_filter,
+    requesting_agent_id,
+    visible_tools,
+)
 from glossogen.runtime.mcp_tools import BASE_TOOL_NAMES
 from glossogen.runtime.scenario_mcp_tool import calling_agent_id
 
@@ -93,3 +104,38 @@ def test_no_identity_anywhere_is_reported_rather_than_guessed() -> None:
     here would hand one agent another's tools.
     """
     assert requesting_agent_id(request=None) is None
+
+
+async def test_a_tools_list_result_of_an_unknown_shape_is_logged_as_an_error(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A result the filter cannot read is passed through, and said so loudly.
+
+    The filter is handed whatever the MCP library serializes, and that shape
+    changed once already between major versions. When it changes again the
+    filter cannot trim the list, so every agent sees every tool; the ERROR is
+    the only sign of it.
+    """
+    unreadable = ("not", "a", "tool", "list")
+
+    async def answer(_ctx: ServerRequestContext[Any, Any]) -> Any:
+        """Stand in for the dispatcher, answering with a shape nobody expects."""
+        return unreadable
+
+    ctx: ServerRequestContext[Any, Any] = ServerRequestContext(
+        session=cast(ServerSession, object()),
+        lifespan_context=None,
+        protocol_version="2025-06-18",
+        method=LIST_TOOLS_METHOD,
+    )
+    token = calling_agent_id.set("observer")
+    try:
+        with caplog.at_level(logging.ERROR, logger="glossogen.runtime.mcp_server"):
+            result = await per_agent_tool_filter(
+                authorizer=AllowList(agent_id="observer", tool_name=MINE)
+            )(ctx=ctx, call_next=answer)
+    finally:
+        calling_agent_id.reset(token)
+
+    assert result is unreadable
+    assert any("every agent is seeing every tool" in r.getMessage() for r in caplog.records)
