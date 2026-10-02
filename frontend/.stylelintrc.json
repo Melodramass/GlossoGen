@@ -16,6 +16,12 @@
         ]
       }
     ],
+    "at-rule-prelude-no-invalid": [
+      true,
+      {
+        "ignoreAtRules": ["media", "apply"]
+      }
+    ],
     "import-notation": "string",
     "lightness-notation": null,
     "hue-degree-notation": null,
