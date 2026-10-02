@@ -198,7 +198,7 @@ export function RunDetail({ scenario, runDirName }: { scenario: string; runDirNa
       {/* Back link */}
       <Link
         href={groupPath("/runs")}
-        className="mb-2 inline-flex shrink-0 items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground"
+        className="mb-2 inline-flex shrink-0 items-center gap-1.5 self-start text-[13px] text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-3.5 w-3.5" /> back to runs
       </Link>
