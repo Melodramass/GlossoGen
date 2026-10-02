@@ -40,7 +40,7 @@ import { RunKnobsDropdown } from "./run-knobs-dropdown";
 import { RunTimelineFabs } from "./run-timeline-fabs";
 import { StartEvaluationModal } from "./start-evaluation-modal";
 import { elapsedSince, formatDuration, humanize } from "./format";
-import { LogPanel } from "./log-panel";
+import { RunDebugLogs } from "./run-debug-logs";
 import { RunSidebar } from "./run-sidebar";
 import { getScenarioPlugin } from "./scenario-registry";
 import { useRunDetailData } from "./use-run-detail-data";
@@ -97,7 +97,7 @@ export function RunDetail({ scenario, runDirName }: { scenario: string; runDirNa
     contextCompactionMarkers,
     agentColorMap,
     channelColorMap,
-    allDebugLogs,
+    liveDebugLogs,
     scenarioMarkers,
     swapEvents,
     maxRound,
@@ -161,7 +161,6 @@ export function RunDetail({ scenario, runDirName }: { scenario: string; runDirNa
 
   const evaluation = restData.evaluation;
   const evaluationInProgress = restData.evaluation_in_progress || evalJustLaunched;
-  const hasLogs = allDebugLogs.length > 0;
   const hasEvalLogs = evaluationInProgress || evaluation !== null || restData.has_eval_log_file;
   const activeInstance = resolveSelectedInstance(selectedAgent, agentInstances);
   const activeAgentColor = activeInstance ? agentColorMap.get(activeInstance.agent_id) : undefined;
@@ -407,7 +406,6 @@ export function RunDetail({ scenario, runDirName }: { scenario: string; runDirNa
           selectedAgent={selectedAgent}
           showLogs={showLogs}
           showEvalLogs={showEvalLogs}
-          hasLogs={hasLogs}
           hasEvalLogs={hasEvalLogs}
           agentColorMap={agentColorMap}
           onSelectChannel={handleSelectChannel}
@@ -426,7 +424,7 @@ export function RunDetail({ scenario, runDirName }: { scenario: string; runDirNa
 
         {/* Main content: chat, logs, or eval logs */}
         {showLogs ? (
-          <LogPanel logs={allDebugLogs} />
+          <RunDebugLogs runId={runId} liveLogs={liveDebugLogs} />
         ) : showEvalLogs ? (
           <EvalLogPanel runId={runId} evaluationInProgress={evaluationInProgress} />
         ) : (

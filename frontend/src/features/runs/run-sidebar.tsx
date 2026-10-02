@@ -16,12 +16,12 @@ interface RunSidebarProps {
   selectedAgent: string | null;
   showLogs: boolean;
   showEvalLogs: boolean;
-  hasLogs: boolean;
   hasEvalLogs: boolean;
   agentColorMap: Map<string, AgentColor>;
   onSelectChannel: (channelId: string | null) => void;
   onSelectAgent: (instanceKey: string) => void;
-  onSelectLogs: () => void;
+  /** Omit for viewers without access to debug logs (e.g. the public demo). */
+  onSelectLogs?: () => void;
   onSelectEvalLogs: () => void;
 }
 
@@ -43,7 +43,6 @@ export function RunSidebar({
   selectedAgent,
   showLogs,
   showEvalLogs,
-  hasLogs,
   hasEvalLogs,
   agentColorMap,
   onSelectChannel,
@@ -172,11 +171,11 @@ export function RunSidebar({
         })}
       </div>
 
-      {hasLogs || hasEvalLogs ? (
+      {onSelectLogs || hasEvalLogs ? (
         <>
           <div className="mx-3.5 mb-4 mt-4 h-px bg-border" />
           <div>
-            {hasLogs ? (
+            {onSelectLogs ? (
               <button
                 className={cn(
                   "flex w-full items-center gap-2 px-3.5 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-accent/50",
