@@ -1,0 +1,162 @@
+site_name: GlossoGen
+site_description: A platform for running controlled experiments on teams of LLM agents.
+# site_url makes the sitemap and each page's canonical tag point at the published
+# site. Without it the sitemap ships empty, and with mike serving one copy of every
+# page per version, search engines have no way to pick one.
+site_url: https://agencyenterprise.github.io/GlossoGen/
+repo_url: https://github.com/agencyenterprise/GlossoGen
+repo_name: agencyenterprise/GlossoGen
+edit_uri: blob/main/
+
+docs_dir: docs
+site_dir: site
+
+# The README is added to the build as the index by docs_hooks, along with the other
+# repository-root pages. Moving them under docs/ instead would break every link to
+# them from GitHub and from every clone.
+hooks:
+  - scripts/docs_hooks.py
+
+# What `mkdocs serve` watches beyond docs/. The hooks pull these into the build,
+# so an edit to one has to rebuild the preview the same way a docs/ edit does.
+watch:
+  - README.md
+  - CONTRIBUTING.md
+  - SECURITY.md
+  - CHANGELOG.md
+  - notebooks/README.md
+  - scripts/docs_hooks.py
+  - overrides
+  - images
+
+theme:
+  name: material
+  # The banner on outdated versions lives in overrides/main.html.
+  custom_dir: overrides
+  icon:
+    logo: material/forum-outline
+    repo: fontawesome/brands/github
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - content.code.copy
+    - content.code.annotate
+    - search.suggest
+    - search.highlight
+  # Black and near-neutral, matching the frontend's monochrome palette; indigo is
+  # the accent the run viewer already uses.
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+# Anchor validation reports at info level by default, which --strict does not
+# elevate: a link to a real page with a renamed heading passed the build and
+# 404-scrolled for the reader. At warn, the strict build fails on it.
+validation:
+  links:
+    anchors: warn
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - tables
+  # GitHub's heading-slug rules, so an `#anchor` written into these files means the
+  # same thing in the repository and on the site. Python-Markdown's own slugify
+  # collapses runs of separators where GitHub keeps them, so a heading holding `&`
+  # or `→` gets one anchor here and another there, and a link written against one
+  # is broken on the other.
+  - toc:
+      permalink: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify {kwds: {case: lower}}
+  - pymdownx.details
+  # The custom fence hands ```mermaid blocks to the theme's Mermaid.js integration
+  # instead of highlighting them as code. GitHub renders the same fences natively,
+  # so one source draws the diagram in the repository and on the site.
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+
+plugins:
+  - search
+  # Executes the notebooks at build time and renders them with their outputs.
+  # They replace the LLM with a script or read CSVs committed under
+  # notebooks/data/, so execution needs no key and no network; committed copies
+  # stay output-free (a linter enforces it), and the site is where the executed
+  # form lives.
+  - mkdocs-jupyter:
+      execute: true
+      include: ["*.ipynb"]
+      include_source: true
+
+# Ordered as a reader needs it rather than alphabetically: what the platform is,
+# how to get a first result, then the reference, then the write-ups.
+nav:
+  - Overview: index.md
+  - Quickstart: quickstart.md
+  - Installation: installation.md
+  - Using it:
+      - Running simulations: running-simulations.md
+      - Observability: observability.md
+      - Evaluation: evaluation.md
+      - Scenarios: scenarios.md
+      - Agent swaps and forks: agent-swaps.md
+      - Web UI: web-ui.md
+      - MCP integration: mcp-integration.md
+      - Exporting runs: exporting-runs.md
+      - Analysis and dashboards: analysis.md
+      - Notebooks:
+          - About the notebooks: notebooks.md
+          - Reading a run: 01_read_a_run.ipynb
+          - Scoring a run: 02_score_a_run.ipynb
+          - Comparing runs: 03_compare_runs.ipynb
+          - Analyzing an export: 04_analyze_an_export.ipynb
+  - Extending it:
+      - Creating a scenario: creating-a-scenario.md
+      - Testing a scenario: testing-a-scenario.md
+      - Creating a metric: creating-a-metric.md
+      - Creating an identity provider: creating-an-identity-provider.md
+  - Reference:
+      - Deployment: deployment.md
+      - Self-hosted models: local-inference-vllm-mlx.md
+      - Security: security.md
+      - Contributing: contributing.md
+      - Changelog: changelog.md
+
+# Wraps long notebook output lines instead of scrolling them horizontally.
+extra_css:
+  - stylesheets/notebook-output.css
+
+extra:
+  version:
+    provider: mike
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/agencyenterprise/GlossoGen
+    - icon: material/play-circle-outline
+      link: https://emergentcomms.ai/demo
+      name: Live demo

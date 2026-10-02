@@ -44,6 +44,7 @@ make check-frontend    # frontend CI mode (prettier --check, no auto-fix)
   - `pydantic_ai_model_factory.py` — per-provider mapping from `(model, provider)` to a pydantic-ai `model=` argument and default `ModelSettings`; shared by the runner and the platform's post-simulation `protocol_probe` helper
   - `communication_protocol.py` — shared prompts and constants for the agent communication protocol
 - `src/glossogen/config_overrides.py` — Hydra-style dot-notation config override parser
+- `src/glossogen/knob_filter.py` — the `<knob><operator><value>` filter grammar, parsed and applied against a run's recorded `scenario_config`. The knob name ends at the **first** operator and the longest one there wins, so a value may itself contain one (`judge_model=gpt>=5`). Comparison is typed from the recorded value rather than the knobs schema, so it imports no scenario class and a run predating a schema change still answers. A knob recorded as null is a value (`swap_round=null` selects the runs that never swapped); a knob the run never recorded matches nothing, even under `!=`. At the root because the listing, the export request model and the CLI's selection resolver all read it
 - `src/glossogen/scenario_registry.py` — maps scenario name strings to the `SimulationScenario` classes shipped here; lives outside `glossogen.scenarios` package init so importing event-related modules doesn't trigger eager loading of every scenario
 - `src/glossogen/scenario_loader.py` — the only way anything resolves a scenario name. Checks `SCENARIO_REGISTRY`, then scenarios other installed distributions declared. `get_scenario_class` raises, `find_scenario_class` returns `None`, `available_scenario_names` lists without importing, `iter_scenario_classes` imports every one
 - `src/glossogen/scenario_entry_points.py` — reads the versioned `glossogen.scenarios.v<N>` entry-point group from installed metadata. Reading imports nothing, which is what lets event discovery cover external scenarios without re-entering the `models.event` import cycle
@@ -51,6 +52,37 @@ make check-frontend    # frontend CI mode (prettier --check, no auto-fix)
 - `src/glossogen/autonomous_supervisor.py` — autonomous mode orchestrator (supports resume via `RewindState`)
 - `src/glossogen/message_rewind.py` — reconstructs simulation state at any message for fork/resume
 - `src/glossogen/run_archive.py` — run directory helpers: `claim_run_dir`, `find_event_offset`/`find_message_offset` (linear JSONL scans), `copy_run_at_event` (copy + JSONL truncate), `strip_legacy_git_dir` (one-shot cleanup of pre-rewrite runs)
+- `src/glossogen/run_export/` — exporting many runs at once, as raw run folders or as CSV tables. Imports no FastAPI, so the same code answers a REST request and a `glossogen export` that never starts a server. Scenario-agnostic by construction: knob columns come from each run's recorded `scenario_config`, evaluator columns from the metric names its report carries, so neither is a list anyone maintains
+  - `export_request_models.py` — `ExportFrame`, and the selection as a tagged union (`FilterRunSelection` | `ExplicitRunSelection`) so "both were given" is unrepresentable; the three request bodies. The `knob` field validates on the model, which is what makes a malformed condition a 422 on all three POSTs and a startup error in the CLI rather than a 500 or a silently dropped filter
+  - `export_preview_models.py` / `export_column_catalog.py` — `MultiRunExportPreview` and `build_export_preview`, computed from the same records the export reads, with per-column coverage counts
+  - `metric_column_projection.py` — **where the empty-vs-zero rule lives**: a missing measurement renders `""` (no number exists), a present one renders its score including `"0.0"` (the metric ran and counted zero). Never default-fill a missing metric to `0`. Every table is **wide in metrics**: a metric is a column (`metric.<name>`), never a value in a `metric_name` column, so a round row is a design-matrix row rather than something to pivot first. `metric_rounds.<name>` carries the per-round observation count, which is the denominator behind a fraction like `round_success`
+  - `knob_flattening.py` — one rule: scalar → own column, mapping → dotted keys, list → one JSON cell
+  - `label_value_columns.py` — labels shaped `key=value` become `label.<key>` columns (`budget=800` → `label.budget`); a bare tag becomes `label_flag.<tag>` = `True`, so filtering a cohort never means substring-matching the joined `labels` cell
+  - `model_weight_class.py` — `model_class` = `open` / `closed` / `mixed`, from the agents' **providers** (`self-hosted`/`ollama` are open weights) rather than model-name substrings, so a family nobody has run yet still classifies; an unrecognized provider gives an empty cell rather than a guess
+  - `run_metadata_columns.py`, `agent_identity_columns.py`, `lineage_columns.py`, `run_context_columns.py` — the other column families, namespaced by prefix so a knob named `status` or `perplexity` cannot collide
+  - `run_level_frame.py` / `round_level_frame.py` / `agent_level_frame.py` — one row per run, per (run, round), and per (run, agent). A round row exists only when some selected metric reported that round, so a missing row still means no observation rather than zero. The agent table is keyed on the run's registered roster rather than on what metrics reported, so it lists who ran under which model even when no metric has a per-agent number
+  - `round_context_frame.py` — one row per (run, round), with `injection.<agent_id>` holding that agent's round-start briefing and `postmortem_injection.<agent_id>` its postmortem one. The per-round prompt, so a message table has the questions behind its answers. **Wide in agents**, matching the hand-written exporters' `<role>_round_event` columns, so a sheet reads a column instead of pivoting; the column set is the roster, so the header is known before any log is opened. The two phases are separate families because the event does not say which delivered it: the scan tracks phase from `postmortem_started` and resets each round. Reads event logs, so it is opt-in like the message table
+  - `message_level_frame.py` / `run_message_records.py` / `message_event_scan.py` / `primary_channel_resolution.py` / `message_repetition_sidecar.py` — one row per channel message, with `text` (pristine) beside `delivered_text`, per-message `chars` / `character_entropy_bits` / `gzip_compression_ratio` recomputed with the metrics' own helpers, and `repetition_factor` joined from the `language_repetition` sidecar by `message_id`. **The only frame that reads event logs**, so it is never emitted by default and reads one run at a time. `message_event_scan` parses only `message_sent`, `tool_result_received` and `injection_delivered` and skips a line that fails: a run recorded before one of a scenario's events gained a required field no longer validates, and parsing every line failed the whole export on an event this table discards. `primary_channel_resolution` asks the scenario for `get_primary_channels()`, backfilling knobs the run predates from a shipped preset (the run's own values always win); when the merged config trips a cross-field validator it gives up and both columns render empty
+  - `csv_frame.py`, `csv_frame_writer.py`, `csv_export_archive.py`, `csv_cell_text.py` — streaming CSV writing (UTF-8 with no BOM, `\n` endings), the `columns.csv` legend, and cell sanitizing for the control characters model output carries
+  - `archive_member_filter.py` / `runs_zip_archive.py` — the shared include/exclude predicate (logs excluded by default, live-state files always) and the zip writer used by both the single-run and multi-run exports
+  - `run_selection_resolution.py` — resolves a selection against a `list[RunSummary]`, sorted by run id so the same selection emits the same CSV bytes every time (archives still stamp each member with its write time). Applies every filter itself, including the knob conditions: the CLI reaches it from a filesystem walk with no listing in front, so a filter this module skips is one the CLI ignores
+  - `export_limits.py` — `MAX_EXPORT_RUN_COUNT` (5000, above the largest labelled cohort here), `MAX_RAW_EXPORT_BYTES` (4 GiB) and `MAX_CSV_EXPORT_BYTES` (512 MiB), each bounding a different thing and measured differently. The run ceiling bounds request duration. The CSV ceiling counts the bytes a client receives, compressed inside a zip, checked during the write. The raw ceiling is estimated before the build by sizing the run folders uncompressed, so it is conservative: the zip delivered is 5.7x to 7.0x smaller here, making 4 GiB counted roughly 600 MiB received. The CSV ceiling applies to the HTTP path only, since the CLI writes to a directory
+
+- `src/glossogen/run_analysis/` — grouped, aggregated answers over many runs, for the charts and for `glossogen analyze`. Imports no FastAPI, like `run_export`, and reads the same `ExportRunRecord`s, so a chart and the CSV it could have come from cover the same observations. Nothing here names a scenario or a metric
+  - `analysis_run_record.py` — the projection every other module reads: one run reduced to its dimension cells, its roster, its numeric run columns, and each metric's score plus per-round and per-agent values. Judge notes and rollups are dropped, which is 18 KB a run against the 156 KB the full report costs (measured: 1,200 veyru runs, 22 MB against 187 MB), and is what lets a scenario-wide cohort sit in the server's cache while someone edits a chart over it
+  - `analysis_grain.py` / `observation_table.py` — the grains and the rows each produces. Run, round and agent reproduce the corresponding CSV frame's row rule; `keyed` is one row per number a metric wrote along an axis of its own, with that metric's keys as dimensions under `key.`. **A measure with no measurement is `None`, never `0.0`**
+  - `metric_inventory.py` — which metrics a selection carries and each one's unit, read off the runs' reports rather than off a registry. The unit is not claimed at the keyed grain: it describes the run-level score, and the keyed values are a different quantity
+  - `measure_resolution.py` — a measure is an evaluator metric or a numeric run column (`total_cost_usd`, `duration_seconds`, `total_messages`, `current_round`); at the round and agent grains a run column repeats the run's own value
+  - `aggregation.py` — mean / median / sum / count / min / max / stddev / sem. Missing values are dropped before the aggregate and counted beside it, so a blank never enters a mean; spread over one observation is nothing rather than zero
+  - `dimension_filter.py` — `in`, `not_in`, `contains`, `is_empty`, `is_not_empty`, and numeric `gte` / `lte` that parse the cell; a cell that is not a number fails a range filter rather than passing it
+  - `analysis_query_models.py` / `analysis_result_models.py` — the query (grain, filters, group-by, measures, sort, limit) split from the selection it runs over, so a dashboard re-points every chart by changing one field. Every aggregate travels with its observation and missing counts
+  - `analysis_query_engine.py` — filter, group, aggregate, sort, cap. Groups whose values are numbers sort numerically, so a knob sweep charts in sweep order
+  - `analysis_field_catalog.py` — what a selection can be sliced and measured by, built from the same table a query reads, with each dimension's distinct values capped and the true count reported beside them
+  - `analysis_spec_parsing.py` / `analysis_text_table.py` — the CLI's `key:aggregate` and `key:operator:values` forms, and the aligned table it prints
+- `src/glossogen/dashboards/` — a saved analysis: a selection, filters, and the charts over them. Charts store their query, not their numbers, so reopening one re-runs it
+  - `dashboard_models.py` — `Dashboard`, `ChartSpec`, `ChartKind` (bar / line / scatter / heatmap / table). The dashboard's selection and filters are inherited by every chart, with chart-level filters merged on top
+  - `dashboard_store.py` + `postgres_dashboard_store.py` + `filesystem_dashboard_store.py` — one contract, two backings: Postgres when `DATABASE_URL` is set, JSON under `<runs-dir>/_dashboards/<group-id>/` when it is not, so single-tenant local mode keeps the feature. `dashboard_store_resolution.py` picks by `app.state.db_pool is None`, the same test run lookup uses. Names are unique per group, enforced by the index rather than by a check-then-insert
+- `src/glossogen/label_descriptions/` — a group's label glossary: what each label means, keyed on the exact label string, so it applies to every run carrying the label without touching any run directory. Labels themselves stay plain strings in `labels.json`. Same two-backing contract as dashboards: Postgres (`label_descriptions` table, `(group_id, label)` primary key) when `DATABASE_URL` is set, one JSON file per group under `<runs-dir>/_label_descriptions/` when it is not. Served by `server/runs/label_description_router.py` (`GET`/`PUT`/`DELETE /labels/descriptions`; the label travels in the body or a query parameter, never the path, because labels like `src=veyru/123` carry path separators). The CLI's `describe-label` / `list-label-descriptions` write and read the local group's file directly, no server needed. Frontend label chips show the description on hover via `use-label-descriptions.ts`
 - `src/glossogen/message_history_builder.py` — reconstructs pydantic-ai ModelMessage history from JSONL events for fork/resume
 - `src/glossogen/llm/` — LLM provider abstraction + Anthropic/OpenAI/HuggingFace implementations
 - `src/glossogen/evaluation/` — generic metrics and evaluation infrastructure
@@ -60,6 +92,7 @@ make check-frontend    # frontend CI mode (prettier --check, no auto-fix)
     - `metric_registry.py` — `GENERIC_METRIC_REGISTRY` maps the metric names shipped here to their classes; `cls()` builds an instance and `cls.compute(..., options=options)` runs it. `available_metrics()` merges in metrics other installed distributions declare and is what the evaluation runner reads
     - `metric_entry_points.py` — the `glossogen.metrics` entry-point group, by name only. It cannot import `Metric`: the scenario contract asks it which metrics to advertise, and a metric module imports the scenario contract, so importing classes here would close that cycle (the same reason `generic_metric_names.py` exists)
     - `measurement.py` — `Measurement`, `RoundObservation`, `AgentObservation`, and judge-side `RoundNote` Pydantic models
+    - `keyed_observation.py` / `keyed_observation_reader.py` / `sidecar_reading.py` — the second half of the metric contract. A metric that writes numbers to a file beside its report (per category, per probe question, per message) implements `read_keyed_observations(run_dir)` to read them back, and the reader walks the registry so the analysis layer still names no metric. Reading is tolerant by design: a cohort spans months of metric versions, and one truncated file costs that run's numbers rather than the sweep. The numbers stay in the sidecar rather than moving into the report, because re-evaluating thousands of runs to relocate a number is not a migration worth paying for
     - `generic_metric_names.py` — canonical name list (avoids circular imports with `scenario_protocol`)
   - `reports/` — on-disk report shape
     - `evaluation_report.py` — `EvaluationReport` schema, plus `load_report` / `write_report` / `merge_evaluation_costs` helpers
@@ -100,20 +133,30 @@ make check-frontend    # frontend CI mode (prettier --check, no auto-fix)
   - `round_transcript_builder.py` — builds per-round message transcripts from events (used by all generic LLM-judge metrics)
   - `prompts/` — Jinja2 templates for LLM judge prompts + the `prompt_renderer.py` loader
 - `src/glossogen/server/` — FastAPI web server exposing simulation data via REST and SSE streaming
-  - `identity/middleware.py` — Clerk-aware ASGI identity middleware; extracts the active group slug from the URL (`/api/g/{slug}/...` or `/mcp/g/{slug}/...`), validates membership via the Clerk session token, and attaches an `Identity` to `request.state`. Local mode (no `CLERK_SECRET_KEY`) short-circuits to a synthetic `local` group / `local-user`.
-  - `identity/clerk_verifier.py` — Networkless Clerk JWT verification. Reads both v2 (`o.id` / `o.slg` nested) and legacy v1 (`org_id` / `org_slug` flat) session token shapes.
-  - `identity/settings.py`, `identity/identity_model.py` — env config + `Identity` Pydantic model.
+  - `identity/middleware.py` — provider-agnostic ASGI identity middleware; extracts the active group slug from the URL (`/api/g/{slug}/...` or `/mcp/g/{slug}/...`), pulls the bearer credential, resolves the slug to a `groups` row, asks the installed provider for an `Identity`, and attaches it to `request.state`. With no provider installed it short-circuits to a synthetic `local` group / `local-user`. Also carries the MCP OAuth-token fallback.
+  - `identity/identity_provider.py` — the `IdentityProvider` ABC and `IdentityRejected`. The platform ships no implementation: authentication is a plug-in.
+  - `identity/identity_provider_loader.py` — resolves the one installed provider, or `None` for single-tenant mode. Unlike the scenario and metric loaders it **raises** on ambiguity (two providers, or one declared under an unread group version), because falling back would mean serving unauthenticated.
+  - `identity/identity_entry_points.py`, `identity/identity_api.py` — the `glossogen.identity_provider.v<N>` group and the contract version, mirroring the scenario plumbing.
+  - `identity/bearer_credential.py` — `bearer_from_header` and `bearer_from_header_or_query`; the second is the `?token=` variant SSE needs.
+  - `identity/identity_model.py` — the `Identity` Pydantic model attached to every request.
+  - `identity/provider_services.py` — the other half of the seam: what the platform offers a provider (`approve_parked_consent`, `frontend_base_url`, and the two `groups` query helpers). Nothing in-tree calls these, which is why they carry vulture whitelist entries.
   - `identity/bootstrap.py` — boots the synthetic `local` group at startup (idempotent upsert into `groups`).
-  - `identity/webhook_router.py` — Svix-verified `POST /api/clerk/webhook` that upserts/soft-deletes rows in the `groups` table from Clerk `organization.created` / `.updated` / `.deleted` events.
-  - `runs/listing.py` — Postgres-backed `list_runs_for_group(request, scenario_filter)`; the active group's `group_id` is read from `request.state.identity`.
+  - `runs/listing.py` — Postgres-backed `list_runs_for_group(request, scenario_filter)`; the active group's `group_id` is read from `request.state.identity`. `_apply_enriched_filters` holds the filters that need a built summary (status, agent, knobs), shared by the paginated and the unpaginated listing.
   - `runs/lookup.py` — `resolve_run_or_404` (queries `runs` table on `(group_id, scenario, run_dir_name)` before touching disk) and `register_new_run` (inserts a row after `claim_run_dir`).
+  - `runs/multi_export_router.py` — `POST /runs/export/preview` / `/csv` / `/raw`. POST because a selection carries hundreds of run ids and a column list a hundred keys. The preview and the downloads share one selection model
+  - `runs/export_selection.py` — resolves a selection within the active group; a filter selection goes through `list_runs_matching_filters_for_group`, an explicit one enumerates the group to check ownership
+  - `runs/archive_streaming_response.py` — builds an archive into a `TemporaryFile` then streams it. O(1) RAM, and a real `Content-Length` so a client can show true progress. Building in a worker thread leaves the event loop responsive: measured on the widest 500-run export, 2.37s to build with a worst loop gap of 12ms. `TMPDIR` is the operational knob
+  - `runs/analysis_router.py` — `POST /runs/analysis/fields` and `/runs/analysis/query`, on the same selection resolution and run ceiling the exports use. A selection matching nothing is answered with an empty result rather than refused, and ids that no longer resolve come back on the answer, because a saved dashboard outlives its runs
+  - `runs/analysis_record_cache.py` — a minute of loaded records per selection, so editing a chart does not re-read one report per run on every keystroke. Concurrent requests for one selection share a load; time is a parameter, so a test states what "later" means instead of waiting for it
+  - `runs/dashboard_router.py` — list / create / read / replace / delete, scoped to the active group. A name another dashboard in the group holds is a 409
+  - `scenarios/filterable_knobs.py` — reads a knobs JSON Schema and keeps the scalar knobs, unwrapping `T | None` and following `$ref` into `$defs` for enums. Behind `GET /scenarios/{name}/filterable-knobs`, which is how the runs list learns what it can filter on without knowing any scenario's knob names
 - `src/glossogen/db/` — Postgres data layer (raw SQL via psycopg3 async; alembic for migrations)
   - `pool.py` — async connection pool wrapper
-  - `queries.py` — typed query helpers returning Pydantic rows (`get_group_by_slug`, `list_runs_for_group`, `insert_run`, `upsert_group`, `soft_delete_group_by_clerk_org_id`, `set_last_active_group`, etc.)
+  - `queries.py` — typed query helpers returning Pydantic rows (`get_group_by_slug`, `list_runs_for_group`, `insert_run`, `upsert_group`, `soft_delete_group_by_external_org_id`, `set_last_active_group`, etc.)
   - `rows.py` — `GroupRow`, `RunRow`, `UserLastActiveGroupRow` Pydantic models
   - `local_tenant.py` — canonical constants `LOCAL_USER_ID = "local-user"`, `LOCAL_GROUP_SLUG = "local"`, `LOCAL_GROUP_NAME = "Local"`
   - `run_registry.py` — standalone (own connection) variants used by the CLI / scripts that run outside the FastAPI lifespan
-  - `migrations/` — alembic env + raw-SQL revisions (`0001_groups_and_runs.py`, `0002_oauth_tables.py`)
+  - `migrations/` — alembic env + raw-SQL revisions
   - `runs/scenario_extension.py` — `ScenarioRunDetailExtension` ABC + auto-discovery of every scenario's optional `run_detail_extension.py`; powers the discriminated-union `scenario_extras` field on `RunDetailResponse`
   - `runs/run_detail_types.py` — leaf DTOs (`AgentDetail`, `ChannelMessage`) shared by `models.py` and scenario-side extensions so extensions can import them without re-entering `models.py` during its discovery-time import
   - `mcp/browser.py` — MCP server mounted at `/mcp` for programmatic run browsing and launching (Claude Code, Cursor)
@@ -130,6 +173,7 @@ make check-frontend    # frontend CI mode (prettier --check, no auto-fix)
 - `frontend/` — Next.js web application
   - `src/features/auth/` — authentication gate and login page
   - `src/features/mcp-config/` — MCP integration modal with connection instructions
+  - `src/features/analysis/` — the analysis surface at `/g/<group>/analysis`: cohort selection, filter builder, chart builder, saved dashboards. `series-palette.ts` holds the validated series slots and heatmap ramp (assigned in fixed order, never cycled, defined as tokens in `globals.css` so a chart follows the theme without reading it); `chart-series.ts` reshapes one result into rows; `charts/` draws bar / line / scatter with Recharts and the heatmap as a table. A group with no observations renders as a gap, never as a zero mark, and every chart carries its table and a CSV of the rows behind it
   - `src/features/runs/scenario-plugin.ts` — `ScenarioPlugin` interface (round-detail panel, tool-metadata renderer, tool-verdict summary, live-judge SSE wiring, timeline markers, round-trigger classification). `extras` is `unknown` at the boundary so the registry can hold every plug-in under a single type
   - `src/features/runs/scenario-registry.ts` — eager-imports each scenario's optional `<scenario>/plugin.tsx`; `getScenarioPlugin(name)` resolves an unknown name to the default no-op plug-in. Compiled in, so a scenario installed from another distribution renders with the platform UI
 
@@ -192,6 +236,25 @@ This was measured, not assumed. With that floor patched to 50ms,
 under `-n auto`, which changed what its world announced and broke a recorded
 baseline. Nothing about the scenario or the platform was wrong; the test was
 racing.
+
+### Tests and files the repo ships
+
+**No test may write to a file the repo ships**, even if it restores it afterwards.
+Test processes share one filesystem: under `-n auto` the restore protects the test
+that made the edit and nothing else, so any test reading that file inside the
+window sees the edit and reports the thing it read as broken.
+
+Break a copy instead. Copy the package to `tmp_path`, edit the copy, and point the
+code under test at it: `monkeypatch.setattr(scenario_cls,
+"scenario_package_files", classmethod(...))`. Copy the whole package rather than
+the one file, because the other checks read from that directory too.
+
+This was measured, not assumed. `test_an_events_module_importing_the_event_union_is_reported`
+prepended an import to `prisoners_dilemma/events.py` and restored it in a
+`finally`. Roughly one full-suite run in eighteen, `validate prisoners_dilemma`
+read the file mid-window and failed with `events.py imports from
+glossogen.models.event at line 1`. Nothing was wrong with prisoners_dilemma; two
+tests were racing on one file.
 
 ### Writing
 
@@ -261,16 +324,12 @@ cp .env.example .env
 | `ANTHROPIC_API_KEY` | Yes (for simulations) | Anthropic API key |
 | `OPENAI_API_KEY` | Optional | OpenAI API key |
 | `HF_TOKEN` | Optional | HuggingFace token |
-| `DATABASE_URL` | No (local) / Yes (Clerk/prod) | Postgres connection string for the tenancy + runs index (e.g. `postgresql://localhost:5432/glossogen_dev`). Leave unset or blank for no-database local mode (runs index derived from the filesystem, OAuth state in memory). Required for Clerk multi-tenant auth and production. |
-| `CLERK_SECRET_KEY` | Yes (Clerk mode) | Clerk backend secret. If unset, the server boots in single-tenant **local mode** (every request runs as `local-user` in the `local` group). |
-| `CLERK_PUBLISHABLE_KEY` | Yes (Clerk mode) | Clerk publishable key. |
-| `CLERK_JWT_KEY` | Yes (Clerk mode) | PEM public key from the Clerk dashboard. Used for networkless JWT verification. |
-| `CLERK_WEBHOOK_SECRET` | Yes (Clerk mode) | Svix signing secret for `POST /api/clerk/webhook` that keeps the `groups` table in sync with Clerk org create/update/delete events. |
-| `CLERK_AUTHORIZED_PARTIES` | Optional (Clerk mode) | Comma-separated list of frontend origins allowed to mint tokens for this backend (e.g. `http://localhost:3000,https://app.example.com`). |
+| `DATABASE_URL` | No (single-tenant) / Yes (multi-tenant, prod) | Postgres connection string for the tenancy + runs index (e.g. `postgresql://localhost:5432/glossogen_dev`). Leave unset or blank for no-database single-tenant mode (runs index derived from the filesystem, OAuth state in memory). Required whenever an identity provider is installed. |
 | `ALLOWED_ORIGINS` | Optional | Comma-separated CORS origins (defaults to `http://localhost:3000`) |
 | `GLOSSOGEN_RUNS_DIR` | Optional | Directory for simulation run data (defaults to `./runs`) |
 | `ENABLE_EVALUATIONS` | Optional | Whether the REST evaluate endpoint (the frontend "Run Eval" button) is enabled. Defaults to enabled; set to `false`/`0`/`no`/`off` to disable (endpoint returns 403, frontend hides the button via `GET /api/server-config`). Does not affect the CLI `glossogen evaluate` command. |
-| `FRONTEND_URL` | Optional | Base URL the MCP OAuth consent flow redirects to. Falls back to the first `ALLOWED_ORIGINS` entry, then `http://localhost:3000`. Required in Clerk mode for the `/mcp-consent` redirect to reach the right host. |
+| `FRONTEND_URL` | Optional | Base URL the MCP OAuth consent flow redirects to. Falls back to the first `ALLOWED_ORIGINS` entry, then `http://localhost:3000`. Required in multi-tenant mode for the `/mcp-consent` redirect to reach the right host. |
+| (identity provider vars) | Yes (multi-tenant) | Whatever the installed provider reads. The platform ships none; see the Authentication section. |
 | `OAUTH_ISSUER_URL` | Yes (for MCP) | Public backend URL for MCP OAuth (MCP is disabled if unset) |
 | `SELF_HOSTED_BASE_URLS` | Required for `--provider self-hosted` | JSON object mapping model name → OpenAI-compatible `/v1` base URL. Example: `{"meta-llama/Llama-3.3-70B-Instruct":"https://....modal.run/v1","Qwen/Qwen3-32B":"https://....modal.run/v1"}` |
 | `SELF_HOSTED_API_KEY` | Required for `--provider self-hosted` | Bearer token shared across all entries in `SELF_HOSTED_BASE_URLS` (matches each server's `--api-key`) |
@@ -285,8 +344,6 @@ Frontend environment variables go in `frontend/.env.local` (see `frontend/.env.l
 | Variable | Default | Description |
 |---|---|---|
 | `API_URL` | (required) | Backend API base URL. Read at request time and forwarded to the browser by the root layout — never compiled into the bundle. |
-| `CLERK_PUBLISHABLE_KEY` | (unset) | Publishable key from the Clerk dashboard. Leave unset for local mode; the frontend then skips mounting `<ClerkProvider>` and the proxy is a pass-through. |
-| `CLERK_SECRET_KEY` | (unset) | Clerk secret key for server-side `auth()` / `clerkMiddleware()` calls inside Next.js Server Components and the proxy. |
 
 ## Development
 
@@ -325,29 +382,32 @@ make langfuse-logs   # tail the langfuse-web logs
 
 ## Authentication
 
-The backend is multi-tenant. Each Clerk **organization** corresponds to a study **group**; every run is owned by exactly one group, never shared across groups except via the export/import flow. The active group is identified by the URL slug: `/g/<slug>/...` on the frontend maps to `/api/g/<slug>/...` on the backend.
+The backend is multi-tenant. Each **organization in the installed identity provider** corresponds to a study **group**; every run is owned by exactly one group, never shared across groups except via the export/import flow. The active group is identified by the URL slug: `/g/<slug>/...` on the frontend maps to `/api/g/<slug>/...` on the backend.
 
-Two run-time modes, switched by the presence of `CLERK_SECRET_KEY`:
+Authentication itself is a plug-in. The platform ships no provider, so there are two run-time modes, switched by whether one is installed.
 
-### Local Mode (no Clerk)
+### Single-tenant mode (no provider installed)
 
-Default for dev clones. Leave `CLERK_SECRET_KEY` unset on the backend and `CLERK_PUBLISHABLE_KEY` unset on the frontend.
+Default for a clone.
 
-- `ClerkIdentityMiddleware` short-circuits every request to a synthetic `local` group / `local-user`. The `local` row is upserted into `groups` at server startup by `identity/bootstrap.py:ensure_local_group`.
+- `IdentityMiddleware` resolves every request to a synthetic `local` group / `local-user`. The `local` row is upserted into `groups` at server startup by `identity/bootstrap.py:ensure_local_group`.
 - The frontend renders without a sign-in flow; `<GroupProvider>` is hard-coded to `LOCAL_GROUP_SLUG = "local"`.
-- Postgres is still required (the `local` group + `runs` index live there).
-- All endpoints except `GET /api/health` still go through the identity middleware — they just receive the synthetic local identity automatically.
+- Postgres is optional. Unset `DATABASE_URL` and the runs index comes from the filesystem with OAuth state in memory; set it and the `local` group plus the runs index live in Postgres.
+- All endpoints except the unauthenticated ones still pass through the identity middleware; they just receive the synthetic identity.
+- **It performs no authentication.** Do not expose it to a network.
 
-### Clerk Mode (prod / multi-tenant)
+### Multi-tenant mode (a provider installed)
 
-Set `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, `CLERK_JWT_KEY`, and `CLERK_WEBHOOK_SECRET` on the backend; set `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` on the frontend. See README "Authentication" for the full Clerk-dashboard setup.
+A provider is a separate installed distribution declaring one entry point under `glossogen.identity_provider.v1`, implementing `IdentityProvider` (`src/glossogen/server/identity/identity_provider.py`).
 
-- Frontend mounts `<ClerkProvider>`. Clerk-issued session tokens carry the active org as either `o = { id, slg, ... }` (v2 — default for new apps) or flat `org_id` / `org_slug` (legacy v1). The verifier reads both.
-- `frontend/src/proxy.ts` wires `clerkMiddleware` with `organizationSyncOptions.organizationPatterns = ["/g/:slug", "/g/:slug/(.*)"]`, so navigating to `/g/<slug>/...` automatically activates that organization on the user's session *server-side, for the current request* — before any token is minted. This is how a user with multiple Clerk orgs can hit any of them by URL without first calling `setActive`.
-- The API client (`frontend/src/shared/lib/api-client.ts`) calls `session.getToken({ skipCache: true })` per request and attaches the result as `Authorization: Bearer ...`. `skipCache: true` matters: without it, a token minted before `setActive` (e.g. just after sign-in) is returned with `org_slug=null` and every `/api/g/<slug>/...` call 403s.
-- `ClerkIdentityMiddleware` (`src/glossogen/server/identity/middleware.py`) verifies the token via `clerk_backend_api.security.verify_token`, parses the URL's group slug, asserts `claims.org_slug == url_slug` (the slug-vs-active-org check), looks up the group's UUID in Postgres, and attaches `Identity(user_id, active_group_id, active_group_slug, ...)` to `request.state`.
-- Clerk webhook events (`organization.created`, `organization.updated`, `organization.deleted`) hit `POST /api/clerk/webhook` (Svix-verified). The handler upserts / soft-deletes rows in `groups`. Membership events are accepted but not mirrored — the JWT's active org claim is the source of truth.
-- SSE endpoints use the `?token=<jwt>` query parameter (EventSource cannot set custom headers); the identity middleware accepts the bearer in either the `Authorization` header or the `token` query string.
+- The platform does the parts a provider must not get wrong: it extracts the bearer credential (header, or `?token=` for SSE), parses the URL's group slug, and resolves that slug to a `groups` row. Only then does it call `resolve_identity(credential, group)`.
+- A provider therefore answers one question, whether this credential grants access to this group and as whom, and never queries the `groups` table. It raises `IdentityRejected` with 401 for a credential that does not verify and 403 for one that verifies but does not cover the group.
+- A provider also declares `unauthenticated_path_prefixes()` for the endpoints its own service calls (a webhook has no user session), contributes `routers()`, and supplies `deferred_consent_url()` for the MCP flow.
+- **Ambiguity is fatal.** Two declared providers, or one declared under a group version this platform does not read, refuses to boot. The scenario and metric loaders warn and continue in the same situation; here that would mean running with no authentication while an operator believes a provider is installed.
+- `DATABASE_URL` is required: resolving a slug needs Postgres, and the lifespan refuses to start a provider without it.
+- SSE endpoints use the `?token=<credential>` query parameter, since `EventSource` cannot set headers; the middleware accepts either.
+
+Frontend side: `frontend/src/features/auth/auth-adapter.ts` is the contract and `frontend/src/features/auth/adapter/` the implementation, which a deployment replaces. Four modules split by runtime (`proxy.ts`, `server.ts`, `browser.ts`, `client.tsx`), because one module cannot be imported from the edge runtime, a Server Component, a directive-free browser module, and a client component at once. `/sign-in`, `/sign-up`, `/select-org` and `/mcp-consent` stay here as shells rendering one adapter component each, since the App Router resolves pages by file path. Public adapter config travels through `AUTH_PUBLIC_*` and the existing request-time runtime config.
 
 ### MCP OAuth 2.0 Authentication
 
@@ -359,10 +419,10 @@ The MCP server at `/mcp` uses OAuth 2.0 with PKCE and dynamic client registratio
 OAuth configuration:
 - Clients auto-register via `POST /mcp/register` (dynamic client registration, RFC 7591).
 - Authorization uses the code flow with PKCE (RFC 7636) via `GET /mcp/authorize`.
-- In **local mode** the authorize endpoint auto-approves and binds the issued token to the synthetic `local` group.
-- In **Clerk mode** the authorize endpoint parks the request as a `pending_oauth_consents` row keyed by an opaque `request_id` (migration `0003_pending_oauth_consent`) and redirects the browser to `{FRONTEND_URL}/mcp-consent?request_id=<id>`. The frontend page is gated by Clerk's `proxy.ts` (signs in if needed); when the user has an active org via `organizationSyncOptions` it shows "Approve for <slug>" / "Cancel", otherwise it renders `<OrganizationList>` to pick or create one. Approve POSTs `/mcp/consent/approve` with the user's Clerk JWT — the backend asserts membership via the JWT's active `org_slug` claim, materialises the OAuth code bound to that `group_id`, and returns the OAuth-client redirect URL.
+- With no provider installed the authorize endpoint auto-approves and binds the issued token to the synthetic `local` group.
+- In **multi-tenant mode** the authorize endpoint parks the request as a `pending_oauth_consents` row keyed by an opaque `request_id` (migration `0003_pending_oauth_consent`) and redirects the browser to the provider's `deferred_consent_url`, which is `{FRONTEND_URL}/mcp-consent?request_id=<id>`. The page's shell renders the adapter's `ConsentGate`, which signs the user in and settles which group is being authorized; the platform's consent panel then POSTs `/mcp/consent/approve` with a session token. That endpoint is contributed by the provider, which verifies the caller and calls `approve_parked_consent(request, request_id, group_id)` from `identity/provider_services.py` to materialise the code bound to that `group_id`. That wrapper is the provider-facing call; it reaches the OAuth provider off `app.state` so a provider never does, and it raises `ConsentNotApprovable` for a link that expired or was already used, which is a 4xx rather than a server error. The parking machinery is platform code: it is about having more than one group to choose from, not about any one vendor.
 - Token exchange at `POST /mcp/token` issues access tokens (1 hour) and refresh tokens (30 days). Each row carries a `group_id` so every tool call is scoped via the `RunContext` contextvar primed by `mcp/asgi_context.py`.
-- [`ClerkIdentityMiddleware`](src/glossogen/server/identity/middleware.py) accepts MCP OAuth access tokens as a Bearer fallback on `/api/g/<slug>/...` requests, so the CLI can address REST endpoints with the same token issued for MCP.
+- [`IdentityMiddleware`](src/glossogen/server/identity/middleware.py) accepts MCP OAuth access tokens as a Bearer fallback on `/api/g/<slug>/...` requests, so the CLI can address REST endpoints with the same token issued for MCP.
 - OAuth metadata is discoverable at `GET /mcp/.well-known/oauth-authorization-server`.
 - Token state lives in Postgres (`access_tokens`, `refresh_tokens`, `authorization_codes`, `pending_oauth_consents`).
 
@@ -370,14 +430,16 @@ CLI surface (uses the same OAuth flow):
 - `glossogen login` — walks the user through the OAuth handshake, stores `{access_token, refresh_token, group_slug}` in `~/.glossogen/credentials.json`. See `src/glossogen/oauth_client.py`.
 - `glossogen whoami` — round-trips through `GET /mcp/whoami` to print the token's bound group.
 - `glossogen push-to-prod` — bulk-uploads local runs to a configured remote via `/api/g/<slug>/runs/import`. Filters by label / scenario / report-present; idempotent on `run_id`. See `src/glossogen/prod_push.py`.
-- `glossogen sync-metadata-to-prod` — for every local-evaluated run that's *already* on prod: PUTs the local labels onto `/api/g/<slug>/runs/{scenario}/{run_dir_name}/labels` when they differ, and PUTs the local evaluation report onto `/api/g/<slug>/runs/{scenario}/{run_dir_name}/evaluation` unconditionally (local is the source of truth — every PUT replaces the on-disk copy). Use `push-to-prod` for runs not yet on prod. See `src/glossogen/prod_metadata_sync.py`.
+- `glossogen sync-metadata-to-prod` — for every local-evaluated run that's *already* on prod: PUTs the local labels onto `/api/g/<slug>/runs/{scenario}/{run_dir_name}/labels` when they differ, and PUTs the local evaluation report onto `/api/g/<slug>/runs/{scenario}/{run_dir_name}/evaluation` unconditionally (local is the source of truth — every PUT replaces the on-disk copy). Also syncs the label glossary: PUTs every local label description the remote is missing or records differently onto `/api/g/<slug>/labels/descriptions`; descriptions only the remote has are left alone. Use `push-to-prod` for runs not yet on prod. See `src/glossogen/prod_metadata_sync.py`.
+- `glossogen analyze` — groups and aggregates many runs' metrics into one table. Same selection flags as `glossogen export`, plus `--grain`, `--group-by`, `--measure key:aggregate`, `--filter key:operator:values`, and `--list-fields`. Reads the runs directory directly, so no server and no database, and it is what a chart's numbers are checked against. See [docs/analysis.md](docs/analysis.md).
+- `glossogen export` — exports many runs as CSV tables (`run_level` / `round_level` / `agent_level` / `message_level` / `round_context`, the last two opt-in since they read every run's event log) and optionally a zip of their run folders. Reads the runs directory directly, so it needs no server and no database, and it covers unevaluated and in-progress runs. Filter with `--scenario` / `--label` / `--run-id-contains` / `--knob`, or name runs with `--run-id`; the two forms cannot be combined. `--knob` takes one `<knob><operator><value>` condition on the run's recorded `scenario_config` and is repeatable; quote it when it contains `>` or `<`. See [docs/exporting-runs.md](docs/exporting-runs.md).
 
 Implementation files:
-- `src/glossogen/server/mcp/oauth_provider.py` — `OAuthAuthorizationServerProvider` implementation; `authorize` parks pending requests in Clerk mode and calls `approve_pending_consent` from the consent router.
-- `src/glossogen/server/mcp/consent_router.py` — `POST /mcp/consent/approve` (Clerk JWT auth) and `GET /mcp/whoami` (OAuth token auth).
+- `src/glossogen/server/mcp/oauth_provider.py` — `OAuthAuthorizationServerProvider` implementation; `authorize` auto-approves when no provider is installed, otherwise parks the request and sends the browser to `provider.deferred_consent_url(...)`. The provider's own endpoint then reaches `approve_pending_consent` through `provider_services.approve_parked_consent`, never directly.
+- `src/glossogen/server/mcp/whoami_router.py` — `GET /mcp/whoami` (OAuth token auth). Provider-agnostic: the token was minted here. `POST /mcp/consent/approve` is contributed by the identity provider instead.
 - `src/glossogen/server/mcp/oauth_storage.py` — Postgres-backed storage for clients, codes, tokens, and pending consents.
 - `src/glossogen/server/mcp/asgi_context.py` — ASGI wrapper that reads the bearer token, resolves its `group_id`, and primes `RunContext` for every tool call.
-- `frontend/src/app/mcp-consent/` — the consent page (Clerk-gated by `proxy.ts`); `consent-client.tsx` carries the picker + Approve button.
+- `frontend/src/app/mcp-consent/` — the consent page. A shell around the auth adapter's `ConsentGate`; `features/mcp-consent/consent-panel.tsx` carries the copy and the Approve button.
 
 ## MCP Integration
 
@@ -387,13 +449,13 @@ The backend exposes an MCP (Model Context Protocol) server at `/mcp` for program
 
 - `list_scenarios` — lists available scenarios with knobs files, metrics, and supported models/providers
 - `list_runs` — paginated run listing with filtering by scenario, model, fork status, run status, and labels (AND-matched)
-- `get_run_metadata` — lightweight metadata for a single run: agents, channels, configuration, evaluation summary, labels, and full lineage provenance (`parent_run_id` plus the structured `fork_source` / `replace_agent_source` / `resume_at_round_source` / `cross_run_replace_agent_source`)
-- `list_derived_runs` — lists every run derived from a parent run (replace-agent, resume-at-round, cross-run-replace-agent), with derivation type, round boundaries, swapped/imported models, labels, and headline `round_success` scores. Uses the runs-index timeline-parent linkage; this can return fewer runs than an orchestrator `src=<run_id>` grouping label, which may span an entire experiment family
+- `get_run_metadata` — lightweight metadata for a single run: agents, channels, configuration, evaluation summary, labels, and full lineage provenance (`parent_run_id` plus the structured `fork_source` / `replace_agent_source` / `fork_at_round_source` / `cross_run_replace_agent_source`)
+- `list_derived_runs` — lists every run derived from a parent run (replace-agent, fork-at-round, cross-run-replace-agent), with derivation type, round boundaries, swapped/imported models, labels, and headline `round_success` scores. Uses the runs-index timeline-parent linkage; this can return fewer runs than an orchestrator `src=<run_id>` grouping label, which may span an entire experiment family
 - `get_run` — full run content with messages; opt-in sections for reasoning, tool use, debug logs, and system prompts; filtering by agent or channel
 - `get_knobs_schema` — returns a scenario's knobs JSON Schema and available knobs preset files
 - `get_knobs_preset` — loads a knobs preset JSON payload by scenario and preset name
 - `start_run` — launches a simulation subprocess with scenario, model, provider, and optional knobs
-- `export_run_artifacts` — returns a relative download URL for a zip archive of the run's artifacts
+- `export_run_artifacts` — returns a relative download URL for a tar.gz bundle of the run's artifacts
 - `export_agent_thread` — reconstructs one agent's thread (optional exclusive `cutoff_round`) and returns a drop-in provider-native request body (Anthropic Messages / OpenAI Chat); `output_format` defaults to the agent's own provider. Thin MCP wrapper over `thread_export.export_agent_thread_from_run_dir` (same orchestrator as the `glossogen export-thread` CLI and the `/runs/.../agents/{agent_id}/thread` REST endpoint)
 
 ### Connecting
@@ -418,7 +480,7 @@ claude mcp add-json glossogen-runs '{"type":"http","url":"<API_URL>/mcp"}'
 }
 ```
 
-Replace `<API_URL>` with the backend URL (e.g. `http://localhost:8000` for local development). The client handles OAuth registration, authorization, and token refresh automatically. In local mode the consent step auto-approves to the synthetic `local` group. In Clerk mode the client's browser tab opens the Clerk-gated `/mcp-consent` page, where the user signs in (if not already) and clicks Approve to bind the issued token to their active org. See the **MCP OAuth 2.0 Authentication** section above for the full flow.
+Replace `<API_URL>` with the backend URL (e.g. `http://localhost:8000` for local development). The client handles OAuth registration, authorization, and token refresh automatically. In single-tenant mode the consent step auto-approves to the synthetic `local` group. In multi-tenant mode the client's browser tab opens `/mcp-consent`, where the auth adapter signs the user in and settles which group to bind the issued token to. See the **MCP OAuth 2.0 Authentication** section above for the full flow.
 
 ## Deployment
 
@@ -441,8 +503,7 @@ it has no config-as-code file here.
 
 Environment variables:
 - `DATABASE_URL` — Postgres connection string (required; backend won't boot without it)
-- `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, `CLERK_JWT_KEY`, `CLERK_WEBHOOK_SECRET` — required for Clerk-gated multi-tenant auth
-- `CLERK_AUTHORIZED_PARTIES` — comma-separated frontend origins allowed to mint tokens (e.g. `https://frontend.up.railway.app`)
+- whatever the installed identity provider reads — required for multi-tenant auth
 - `ANTHROPIC_API_KEY` — required for simulations
 - `ALLOWED_ORIGINS` — comma-separated frontend URLs for CORS (e.g. `https://frontend.up.railway.app`)
 - `OAUTH_ISSUER_URL` — public backend URL to enable MCP OAuth (e.g. `https://backend.up.railway.app`)
@@ -452,14 +513,14 @@ Environment variables:
 
 Runtime variables:
 - `API_URL` — backend service URL (runtime variable, not a build arg)
-- `CLERK_PUBLISHABLE_KEY` — Clerk publishable key (required to mount `<ClerkProvider>` and gate routes)
-- `CLERK_SECRET_KEY` — Clerk secret key used by Next.js Server Components and the proxy
+- `AUTH_PUBLIC_*` — public values the auth adapter needs (browser-visible)
+- the adapter's server-side secrets, read by `adapter/server.ts` / `adapter/proxy.ts`
 
 **Deploy order**: Backend first (get URL) → set it as the frontend's `API_URL` variable → deploy frontend → update backend `ALLOWED_ORIGINS` with the frontend URL.
 
 ## Run Output Directory Structure
 
-All simulation outputs use a standard directory layout. The JSONL event log is the canonical state ledger for a run. Every fork, replace-agent, cross-run, and resume-at-round operation locates the target event in the JSONL and writes a truncated copy into a new run directory.
+All simulation outputs use a standard directory layout. The JSONL event log is the canonical state ledger for a run. Every fork, replace-agent, cross-run, and fork-at-round operation locates the target event in the JSONL and writes a truncated copy into a new run directory.
 
 ```
 runs/{scenario_name}/{unix_timestamp}/
@@ -470,10 +531,10 @@ runs/{scenario_name}/{unix_timestamp}/
 ├── labels.json                        # JSON array of label strings (e.g. ["baseline_oss"])
 ├── note.md                            # Optional free-text note for the run
 ├── fork_manifest.json                 # (forked runs only) provenance: source_run_id, target_message_id
-├── replace_manifest.json              # (replace-agent or resume-at-round runs) provenance + post-swap channel visibility; replaced_agent_id/replacement_model/replacement_provider are null for resume-at-round
+├── replace_manifest.json              # (replace-agent or fork-at-round runs) provenance + post-swap channel visibility; replaced_agent_id/replacement_model/replacement_provider are null for fork-at-round
 ├── cross_run_replace_manifest.json    # (cross-run replace-agent runs only) source_a/source_b/imported_model + post-swap channel visibility
 ├── imported_history_source.jsonl      # (cross-run replace-agent runs only) verbatim copy of Sim B's JSONL used to mount the imported agent's history
-├── replace_config.json                # (replace-agent / cross-run / resume-at-round runs) merged scenario_config + model_overrides written by the orchestrator
+├── replace_config.json                # (replace-agent / cross-run / fork-at-round runs) merged scenario_config + model_overrides written by the orchestrator
 ├── resume_context_{agent_id}.json     # (resume / fork / replace-agent / cross-run runs) per-agent reconstructed pydantic-ai message history dumped at resume time for inspection
 ├── resume_context_{agent_id}_round_{R}.json  # (in-run scheduled swap) one file per AgentSwappedMidRun event capturing the swapped-in agent's seed history
 ├── language_repetition_messages.jsonl # (language_repetition metric) one row per primary-channel message: its per-message redundancy factor (judge, replica-averaged), keyed by message_id
@@ -491,7 +552,9 @@ runs/{scenario_name}/{unix_timestamp}/
 
 ### Run Labels
 
-Labels are short tags attached to a run for filtering and grouping in the UI and in evaluation queries. They live in `labels.json` inside the run dir as a JSON array of strings.
+Labels are short tags attached to a run for filtering and grouping in the UI and in evaluation queries. They live in `labels.json` inside the run dir as a JSON array of strings, and that file is the source of truth. When a database is present the server also mirrors each run's labels into the `runs.labels` column (`src/glossogen/server/runs/label_mirror.py`): the label union and label filtering read the mirror instead of opening one file per run, rows never mirrored are backfilled at server startup, and drift from direct file writes is repaired whenever the server reads the run's file anyway (a listed page row, or the run's detail).
+
+A label can optionally carry a description, recorded once per group in the label glossary (`src/glossogen/label_descriptions/`) rather than per run: `glossogen describe-label <label> --description "what it means"`, or `PUT /api/g/{group_slug}/labels/descriptions` with body `LabelDescription{label, description}`. The UI shows it when hovering a label chip. Record one when creating a cohort label, so the next reader does not have to reverse-engineer what the cohort was for.
 
 Two ways to apply them:
 
@@ -501,7 +564,7 @@ Two ways to apply them:
    echo '["baseline_oss"]' > "runs/veyru/<timestamp>/labels.json"
    ```
 
-**Important**: do not PUT labels after evaluations have run. Evaluations merge into `labels.json` (preserving prior labels), but a PUT replaces. Apply your labels *before* `glossogen evaluate` if you also want eval-derived labels to coexist.
+**Important**: the PUT replaces the whole list, so read the current labels first when adding to them. (`glossogen evaluate` no longer writes `labels.json`; eval-derived `eval:*` labels only exist on runs evaluated before that changed.)
 
 ### DO NOT use substring matching to bulk-relabel runs
 
@@ -532,7 +595,7 @@ The pattern matched runs labeled `["baseline", "budget=2000", "eval:content_filt
 
 The `{scenario_name}.jsonl` file is the canonical event log for a run. `EventLogger` appends one line per event and never mutates earlier lines, so every event has a stable byte offset for the lifetime of the run.
 
-Forks, replace-agent, cross-run replace-agent, and resume-at-round all locate their target event in the source JSONL (via `find_event_offset` / `find_message_offset` in `src/glossogen/run_archive.py`), copy the source run directory, and truncate the JSONL in the new directory to end at that event. Run dirs created before this change carry a legacy `.git/` subdirectory; `load_events` removes it on first read (`strip_legacy_git_dir`).
+Forks, replace-agent, cross-run replace-agent, and fork-at-round all locate their target event in the source JSONL (via `find_event_offset` / `find_message_offset` in `src/glossogen/run_archive.py`), copy the source run directory, and truncate the JSONL in the new directory to end at that event. Run dirs created before this change carry a legacy `.git/` subdirectory; `load_events` removes it on first read (`strip_legacy_git_dir`).
 
 ## Running Simulations
 
@@ -621,33 +684,33 @@ If a simulation errors midway through, resume from the last checkpoint using the
 
 ```bash
 VIRTUAL_ENV= uv run --no-sync python -m glossogen run <scenario> \
-  --model <model> --provider <provider> --runs-dir ./runs \
+  --model <model> --provider <provider> \
   --resume ./runs/<scenario>/<timestamp> \
   --config <same-preset-or-file-as-the-original> \
   > ./runs/<scenario>/<timestamp>/resume_stdout.log 2>&1 &
 ```
 
-The `--resume` flag requires the same `--config` as the original run. The `--runs-dir` flag is still required but ignored when resuming.
+The `--resume` flag requires the same `--config` as the original run. `--runs-dir` is not needed when resuming; `--resume` names the directory.
 
 ### Replacing an Agent (Round-Level Rewind)
 
-Replay a finished run from the start of a chosen round with one specific agent restarted on a fresh history while every other agent keeps its full reconstructed history. Useful for asking "could a fresh agent follow the engineer from here on?". It answers empirically what a judge only estimates.
+Fork a finished run after a chosen round with one specific agent restarted on a fresh history while every other agent keeps its full reconstructed history. `--after-round N` keeps rounds 1..N complete, verdict and postmortem included, and the replacement enters round N+1. Useful for asking "could a fresh agent follow the engineer from here on?". It answers empirically what a judge only estimates.
 
 ```bash
 glossogen replace-agent veyru \
   --source-run-dir ./runs/veyru/<timestamp> \
-  --round-start 5 \
+  --after-round 4 \
   --replaced-agent-id field_observer \
   --model claude-sonnet-4-6 --provider anthropic \
   --runs-dir ./runs \
-  [--rounds-after-swap N] \
+  [--rounds-after K] \
   [--visible-history-channel CHANNEL ...] \
   [--knobs path/to/overrides.json]
 ```
 
-Internals: clones the source run's git repo at the commit produced by the source's `RoundAdvanced` event for `--round-start`. The cloned JSONL therefore contains every committed event up to and including that `round_advanced` (round N-1 fully ended in source: game phase, postmortem, both `round_ended` events) but no `injection_delivered` events for round N yet. On resume the game clock starts at round N and calls `runtime.deliver_round_injections(N)` to fire the round-N injections fresh. The replaced agent's full event log is preserved on disk; its reconstructed pydantic-ai history is stripped of `text` / `thinking` parts and any tool calls targeting blocked channels (e.g. veyru's postmortem channels). The veyru world's per-team `outcomes` list is seeded from the source's `veyru_case_started` / `veyru_stabilization_judged` / `round_ended` events via `restore_state_from_events`, so the round-N injection's "PREVIOUS VEYRU RESULT" block reflects the source's actual round N-1 outcome. Cannot be used with `--round-start 1`. Non-replaced agents stay on their exact original models.
+Internals: `resolve_fork_boundary` picks the truncation anchor for `--after-round N`: the source's `RoundAdvanced(N+1)` when one exists, or the last event before `SimulationEnded` when N was the source's final round. `copy_run_at_event` then copies the run directory with the JSONL truncated there. The clone therefore contains round N fully ended (game phase, postmortem, both `round_ended` events) but no `injection_delivered` events for round N+1. On resume the game clock opens round N+1 (recording a fresh `RoundAdvanced(trigger="fork_after_round")` on a final-round fork) and fires that round's injections fresh. The replaced agent's full event log is preserved on disk; its reconstructed pydantic-ai history is stripped of `text` / `thinking` parts and any tool calls targeting blocked channels (e.g. veyru's postmortem channels). The veyru world's per-team `outcomes` list is seeded from the source's `veyru_case_started` / `veyru_stabilization_judged` / `round_ended` events via `restore_state_from_events`, so the entry round's "PREVIOUS VEYRU RESULT" block reflects the source's actual round-N outcome. `--after-round` must be >= 1. Non-replaced agents stay on their exact original models.
 
-`--rounds-after-swap` defaults to `source_round_count - round_start` (the remaining rounds in the original run after the replacement boundary). The resumed simulation's `round_count` is set to `round_start + rounds_after_swap`.
+`--rounds-after` defaults to `source_round_count - after_round` (the source rounds past the boundary); forking after the source's final round requires an explicit value. A `round_count` carried by `--knobs` (every shipped preset has one) sets the fork's total rounds when the flag is omitted, and must agree with it when both are given, so a full preset passed to `--knobs` alongside `--rounds-after` errors unless the numbers line up; drop `round_count` from override files. The fork's `round_count` is set to `after_round + rounds_after`. The manifest keeps the frozen on-disk schema: `round_start` is the entry round (`after_round + 1`) and `rounds_after_swap` is `round_count - round_start`.
 
 **Per-channel history visibility (platform feature).** The replace-agent flow chooses, per channel the replaced agent is a member of, whether that channel's prior messages remain visible after resume.
 
@@ -667,16 +730,16 @@ glossogen cross-run-replace-agent veyru \
   --source-a-run-dir ./runs/veyru/<sim_a_timestamp> \
   --source-b-run-dir ./runs/veyru/<sim_b_timestamp> \
   --replaced-agent-id field_observer \
-  --round-start 15 \
+  --after-round 14 \
   --runs-dir ./runs \
   [--source-b-round-end N] \
   [--model M --provider P] \
   [--knobs path/to/overrides.json] \
-  [--rounds-after-swap K] \
+  [--rounds-after K] \
   [--visible-history-channel CHANNEL ...]
 ```
 
-**Default for `--source-b-round-end`** is `min(round_start - 1, B_max_round)` — temporally aligned with Sim A's swap point but clamped to the last round Sim B actually played, so the imported agent always gets the largest possible slice of B's history without exceeding what B reached. Example: `round_start=20` against a Sim B that only ran 15 rounds → `source_b_round_end=15`.
+**Default for `--source-b-round-end`** is `min(after_round, B_max_round)` — temporally aligned with Sim A's fork boundary but clamped to the last round Sim B actually played, so the imported agent always gets the largest possible slice of B's history without exceeding what B reached. Example: `after_round=19` against a Sim B that only ran 15 rounds → `source_b_round_end=15`.
 
 **Default for `--model`/`--provider`** is to read Sim B's `AgentRegistered` for the imported agent (so the imported agent runs under the same model it used in Sim B). Override with `--model M --provider P` to test cross-team behaviour with a different model. Both must be provided together.
 
@@ -684,44 +747,46 @@ glossogen cross-run-replace-agent veyru \
 
 **Postmortem on cross-run runs.** The CLI does not auto-set `postmortem_disabled_at_start` — pass `--knobs /tmp/cross_team_knobs.json` with `{"postmortem_disabled_at_start": true}` for veyru cross-team experiments so opus and gpt-5.4 don't have a backchannel to re-align protocols after the swap. Forgetting this contaminates cross-team experiments.
 
-**Manifest + provenance.** Persisted as `cross_run_replace_manifest.json` (parallel to `replace_manifest.json`). Carries both `source_a_run_id` (target timeline) and `source_b_run_id` (where the imported agent came from), plus `imported_model`/`imported_provider`, `round_start`, `source_b_round_end`, `rounds_after_swap`, `replaced_agent_id`, `channels_with_visible_history`, `blocked_tool_call_channels`. The discovery layer surfaces this on `RunSummary` / `RunDetailResponse` as `cross_run_replace_agent_source`. Cross-run runs appear in the run list with a violet "Cross-run" badge that links back to both sources.
+**Manifest + provenance.** Persisted as `cross_run_replace_manifest.json` (parallel to `replace_manifest.json`). Carries both `source_a_run_id` (target timeline) and `source_b_run_id` (where the imported agent came from), plus `imported_model`/`imported_provider`, `round_start` (the entry round), `source_b_round_end`, `rounds_after_swap`, `replaced_agent_id`, `channels_with_visible_history`, `blocked_tool_call_channels`. The discovery layer surfaces this on `RunSummary` / `RunDetailResponse` as `cross_run_replace_agent_source`. Cross-run runs appear in the run list with a violet "Cross-run" badge that links back to both sources.
 
 **Verifying the imported history.** Each resumed run writes `resume_context_{agent_id}.json` to the new run dir capturing the exact reconstructed pydantic-ai messages handed to that agent on its first turn. For cross-run runs, `resume_context_<replaced_agent_id>.json`'s tail should match Sim B's last few `field_observer` (or whichever role) messages verbatim, which confirms the cross-run history is being mounted from Sim B and not contaminated by Sim A.
 
-**Label convention.** Cross-run runs are labelled `cross_team` plus a range tag like `15-25` (rounds played post-swap). That label lets analysis tooling group cross-team runs and compare `round_success_after_resume` per `(imported_model, round_start)` bucket against both Source A and Source B accuracy on the same rounds. Apply labels by writing `labels.json` directly *before* `glossogen evaluate` runs (the eval-derived labels merge into that file).
+**Label convention.** Cross-run runs are labelled `cross_team` plus a range tag like `15-25` (rounds played post-swap). That label lets analysis tooling group cross-team runs and compare `round_success_after_resume` per `(imported_model, after_round)` bucket against both Source A and Source B accuracy on the same rounds. Apply labels by writing `labels.json` directly *before* `glossogen evaluate` runs (the eval-derived labels merge into that file).
 
-**`round_success_after_resume` works for both flows.** The metric reads either `replace_manifest.json` or `cross_run_replace_manifest.json` and projects to a common `_ResumeAnchor` (`round_start`, `rounds_after_swap`, `source_run_id`, `source_run_dir`). For cross-run runs, the comparison is against Sim A (`source_a_*`): "did the imported agent perform better/worse than what the original agent achieved over the same window?".
+**`round_success_after_resume` works for both flows.** The metric reads either `replace_manifest.json` or `cross_run_replace_manifest.json` and projects to a common `ResumeAnchor` (`resume_anchors.py`), whose `round_start` / `rounds_after_swap` window uses the manifests' frozen field names. For cross-run runs, the comparison is against Sim A (`source_a_*`): "did the imported agent perform better/worse than what the original agent achieved over the same window?".
 
-### Resume at a Round (Post-Hoc, No Agent Replacement)
+### Fork at a Round (Post-Hoc, No Agent Replacement)
 
-Round-anchored resume clones a finished run at the start of a chosen round and continues execution without restarting any agent. Every agent keeps its full reconstructed history; the resumed simulation differs from the source only through merged knob overrides. Useful for post-hoc multi-swap studies (inject new `scheduled_events`), toggling `postmortem_enabled` mid-experiment, extending `round_count` past where the source stopped, or just replaying a finished run on a different configuration.
+Fork-at-round clones a finished run keeping rounds 1..N complete and plays round N+1 onward without restarting any agent. Every agent keeps its full reconstructed history; the fork differs from the source only through merged knob overrides. Useful for post-hoc multi-swap studies (inject new `scheduled_events`), toggling `postmortem_enabled` mid-experiment, or replaying a run's remaining rounds on a different configuration. `--rounds-after` sets how far the fork plays, past the source's own end included. A `round_count` carried by `--knobs` (every shipped preset has one) does the same when the flag is omitted, and must agree with it when both are given.
 
 ```bash
-glossogen resume-at-round veyru \
+glossogen fork-at-round veyru \
   --source-run-dir ./runs/veyru/<source_timestamp> \
-  --round-start 16 \
+  --after-round 15 \
   --runs-dir ./runs \
   [--knobs path/to/overrides.json] \
-  [--rounds-after-resume K]
+  [--rounds-after K]
 ```
 
-Required: `scenario_name` (positional), `--source-run-dir`, `--round-start` (≥ 2), `--runs-dir`. Optional: `--knobs <preset-name|path>` (shallow-merged onto source `scenario_config`), `--rounds-after-resume K` (`round_count` is set to `round_start + rounds_after_resume`; default is `source_round_count - round_start`).
+Required: `scenario_name` (positional), `--source-run-dir`, `--after-round` (≥ 1), `--runs-dir`. Optional: `--knobs <preset-name|path>` (shallow-merged onto source `scenario_config`), `--rounds-after K` (`round_count` is set to `after_round + rounds_after`; default is `source_round_count - after_round`; forking after the source's final round requires an explicit value, and the resumed clock then records the advance fresh as `RoundAdvanced(trigger="fork_after_round")`).
 
-**Mechanism.** The flow reuses the `replace-agent` machinery with `replaced_agent_id=None`. `resolve_round_start_anchor` finds the source's `RoundAdvanced(round_start)` event id, the git repo is cloned and checked out at that commit, `model_overrides` is built by pinning every agent to its source-active registration (so a multi-swap source's per-phase models survive the resume), the merged config writes `replace_config.json`, and the resumed subprocess launches via `glossogen run --resume`. The manifest is the standard `replace_manifest.json` with `replaced_agent_id`, `replacement_model`, `replacement_provider` all `null` and `channels_with_visible_history` / `blocked_tool_call_channels` empty.
+**Mechanism.** The flow reuses the `replace-agent` machinery with `replaced_agent_id=None`. `resolve_fork_boundary` picks the anchor (the source's `RoundAdvanced(after_round + 1)`, or the last event before `SimulationEnded` on a final-round fork), the run directory is copied with the JSONL truncated there, `model_overrides` is built by pinning every agent to its source-active registration, the merged config writes `replace_config.json`, and the resumed subprocess launches via `glossogen run --resume`. A boundary behind an already-fired `scheduled_events` swap is refused: the swap's history filters and swapped-in model live only in its config and `AgentSwappedMidRun` event, so the fork would rebuild that seat with its predecessor's full turns under the pre-swap model. Fork before the swap fires (post-hoc swap studies inject new `scheduled_events` into a clean source), or replace that same agent. The manifest is the standard `replace_manifest.json` with `replaced_agent_id`, `replacement_model`, `replacement_provider` all `null` and `channels_with_visible_history` / `blocked_tool_call_channels` empty; `round_start` records the entry round and `rounds_after_swap` records `round_count - round_start`.
 
-**Resume ordering on the boundary round.** The game clock's resume branch defers `deliver_round_injections` until after agent runners are launched and the boundary hook fires. The supervisor calls `dispatch_resume_boundary_events()` (which executes any `scheduled_events` bucketed at `round_start`) then `deliver_initial_round_injections()`. This mirrors the normal `_advance_round` order (boundary hook → injection delivery) and ensures that when a `swap_agent` event fires exactly at `round_start`, the round's injection lands in the post-swap session rather than the cancelled predecessor's queue. The `RoundBoundaryScheduler` is pre-seeded from `RewindState.rounds_with_fired_scheduler_events` (set of round numbers carrying `AgentSwappedMidRun` or `PostmortemDisabledMidRun` in the loaded events) so boundaries that already fired in the source, or in a crashed-and-resumed run, are not re-dispatched.
+**Resume ordering on the boundary round.** The game clock's resume branch defers `deliver_round_injections` until after agent runners are launched and the boundary hook fires. The supervisor calls `dispatch_resume_boundary_events()` (which executes any `scheduled_events` bucketed at the entry round) then `deliver_initial_round_injections()`. This mirrors the normal `_advance_round` order (boundary hook → injection delivery) and ensures that when a `swap_agent` event fires exactly at the entry round, the round's injection lands in the post-swap session rather than the cancelled predecessor's queue. The `RoundBoundaryScheduler` is pre-seeded from `RewindState.rounds_with_fired_scheduler_events` (set of round numbers carrying `AgentSwappedMidRun` or `PostmortemDisabledMidRun` in the loaded events) so boundaries that already fired in the source, or in a crashed-and-resumed run, are not re-dispatched.
 
-**Inherited `scheduled_events` semantics.** When the source's config carries `scheduled_events`, those entries are preserved unless overridden. Events at `at_round < round_start` are silently skipped (the resumed clock never visits those rounds). Events at `at_round == round_start` fire on resume, by design, because the cloned JSONL captures the state at `RoundAdvanced(round_start)`, which is committed *before* the source's scheduler dispatches that boundary. Pass `--knobs '{"scheduled_events": [...]}'` to override the list (e.g. add a post-hoc swap at a later round, or clear the schedule entirely).
+**Inherited `scheduled_events` semantics.** When the source's config carries `scheduled_events`, those entries are preserved unless overridden. Events at `at_round <= after_round` never re-fire: the fork keeps those rounds as the source played them. An event at `after_round + 1` fires on resume, by design, because the cloned JSONL is captured *before* the source's scheduler dispatches that boundary. Pass `--knobs '{"scheduled_events": [...]}'` to override the list (e.g. add a post-hoc swap at a later round, or clear the schedule entirely).
 
 **Picking the subprocess `--model`/`--provider`.** Since every agent is pinned via `model_overrides`, the top-level `--model`/`--provider` flags are unused. The CLI selects the first source-active registration's pair as the defaults so `glossogen run`'s required argparse flags are satisfied.
 
-**Knob-schema evolution caveat.** If the scenario's knobs schema gained a required field after the source was created, validation will reject the merged config until the missing key is supplied. Pass it via `--knobs` for that resume (example: veyru's `easy_round_numbers: frozenset[int]` was added later, so older veyru runs need `--knobs '{"easy_round_numbers": [1, 2, 3, 6, 13]}'` to resume).
+**Knob-schema evolution caveat.** If the scenario's knobs schema gained a required field after the source was created, validation will reject the merged config until the missing key is supplied. Pass it via `--knobs` for that fork (example: veyru's `easy_round_numbers: frozenset[int]` was added later, so older veyru runs need `--knobs '{"easy_round_numbers": [1, 2, 3, 6, 13]}'` to fork).
 
-**Discovery.** The manifest is surfaced as `RunSummary.resume_at_round_source` / `RunDetailResponse.resume_at_round_source` (`ResumeAtRoundSource { source_run_id, round_start, rounds_after_resume, target_event_id, resumed_at }`); when `replaced_agent_id` is null, `replace_agent_source` is suppressed in favour of this field.
+**Discovery.** The manifest is surfaced as `RunSummary.fork_at_round_source` / `RunDetailResponse.fork_at_round_source` (`ForkAtRoundSource { source_run_id, after_round, rounds_after, target_event_id, forked_at }`, translated from the stored window); when `replaced_agent_id` is null, `replace_agent_source` is suppressed in favour of this field.
 
-**FE surfaces.** The run-detail header shows a green `Resumed @ round N (+K)` badge linking back to the source. The runs-list row shows a green `↺R{N}` badge. Multi-swap runs render one `AgentSwapPointFab` per scheduled swap so users can scroll directly to any boundary.
+**FE surfaces.** The run-detail header shows a green `Forked after round N (+K)` badge linking back to the source. The runs-list row shows a green `↺R{N}` badge naming the boundary round. Multi-swap runs render one `AgentSwapPointFab` per scheduled swap so users can scroll directly to any boundary.
 
-**Lineage chain.** `replace_manifest.json` carries `source_run_id` + `source_run_dir`, so chaining resume-of-resume-of-resume is traceable: walk `source_run_id` recursively to reach the root. The same field powers the badge's link target.
+**Crash recovery.** `--resume` on a fork whose log grew past its boundary anchors at the log's end, keeping every advance, injection, and verdict the crashed launch already recorded; a fork with only agent re-registrations past its boundary (never launched, or crashed during startup) resumes at the boundary. Play means the agents' own event types (messages, LLM cycles, tool calls); scenario and world events the clock flushes while opening a round count as recoverable progress, not play. A cross-run fork recovers the same way unless it actually played: the imported agent's post-boundary turns cannot be re-seeded from source B, so a played cross-run fork must be re-created. Forking a cross-run run is refused, and so is any boundary behind an already-fired in-run swap. A replace-agent run accepts only a re-replacement of the same seat: any other derivation would rebuild the replaced seat pass-through from a log whose history filters live only in the source's manifest, which clones do not inherit. Fork clones carry no `simulation_ended` lines and no inherited derivation manifests, so a fork of a crashed-then-recovered source never trips the `simulation_ended` evaluation gate early.
+
+**Lineage chain.** `replace_manifest.json` carries `source_run_id` + `source_run_dir`, so chaining fork-of-fork-of-fork is traceable: walk `source_run_id` recursively to reach the root. The same field powers the badge's link target.
 
 ### In-Run Agent Swaps via `scheduled_events`
 
@@ -820,7 +885,7 @@ Single replace-agent run, monitor pattern:
 ```bash
 VIRTUAL_ENV= uv run --no-sync python -m glossogen replace-agent veyru \
   --source-run-dir ./runs/veyru/<source_timestamp> \
-  --round-start 15 \
+  --after-round 14 \
   --replaced-agent-id field_observer \
   --model gpt-5.4 --provider openai \
   --runs-dir ./runs \
@@ -870,7 +935,7 @@ launch_one() {
   echo "$(date) [$model] launching source=$source knobs=$knobs" >> "$LOG"
   VIRTUAL_ENV= uv run --no-sync python -m glossogen replace-agent veyru \
     --source-run-dir "runs/veyru/$source" \
-    --round-start 15 --rounds-after-swap 10 \
+    --after-round 14 --rounds-after 11 \
     --replaced-agent-id field_observer \
     --model "$model" --provider "$provider" \
     --runs-dir "$RUNS_DIR" \
@@ -1001,6 +1066,8 @@ Scenarios opt into most platform metrics by implementing the corresponding hooks
 | Hook | Enables |
 |---|---|
 | `judge_round_result(round_number, trigger) -> list[RoundResult]` (required) | `round_success`, `round_success_after_resume` |
+| `Metric.read_keyed_observations(run_dir)` (on the metric, not the scenario) | the analysis surface's `keyed` grain: charting a metric's per-category, per-question or per-message numbers across runs |
+| `get_judge_models(knobs) -> tuple[ModelConsumer, ...]` | The launch check that refuses a run whose environment cannot reach the scenario's own judge. Defaults to the `judge_model` / `judge_provider` pair; override when the judge is conditional |
 | `get_primary_channels() -> list[PrimaryChannel]` (required) | `perplexity`, `mean_chars_per_round`, `mean_chars_per_message`, language-emergence judges |
 | `build_communication_rounds(events) -> list[CommunicationRoundView]` | `communication_open_coding`, `communication_feature_presence`, `protocol_learned_after_swap` |
 | `detect_protocol_boundary_window(events, agent_configs) -> ProtocolBoundaryWindow \| None` | `protocol_learned_after_swap` (default returns first `AgentSwappedMidRun`; override to also detect scenario-specific boundaries like intern takeover / two-team observer swap) |
@@ -1017,6 +1084,8 @@ There are no scenario-specific metrics left. Every scoring concept (round-succes
 
 - `export_openapi.py` — drives `make gen-api-types`; the `check-api-types` CI job depends on it
 - `generate_demo_snapshot.py` — builds the frontend's `/demo` assets
+- `measure_docs_style.py` — measures documentation pages against the bands in `docs/documentation-style.md`; part of the docs review, not a linter
+- `docs_hooks.py` — mkdocs build hooks: adds the repository-root pages to the site and rewrites links that leave the docs tree into GitHub permalinks. Referenced from `mkdocs.yml`
 - `consolidate_communication_ontology.py` — pass 2 of the communication pipeline, between the `communication_open_coding` and `communication_feature_presence` metrics
 
 Keep it that way. One-off experiment orchestration, cohort reruns, and label
@@ -1039,6 +1108,6 @@ Never assume cleanup is wanted. Ask first, act second.
 ## Pre-Commit Checklist
 
 1. Run `make lint` and fix all errors.
-1b. If you touched a scenario, run `VIRTUAL_ENV= uv run --no-sync python -m glossogen check-scenario <name>`. It builds every preset and checks the contract without launching anything.
+1b. If you touched a scenario, run `VIRTUAL_ENV= uv run --no-sync python -m glossogen validate <name>`. It builds every preset and checks the contract without launching anything. It also takes a directory, for a scenario package that is not installed.
 2. Check for dead code: unused model fields, orphaned functions, stale imports. Remove them.
-3. If vulture reports new false positives, regenerate the whitelist: `VIRTUAL_ENV= uv run --no-sync vulture src/ --min-confidence 60 --make-whitelist > vulture_whitelist.py`
+3. If vulture reports new false positives, regenerate the whitelist over the same paths `make lint-server` checks, or the regenerated file drops the entries covering the ones it left out: `VIRTUAL_ENV= uv run --no-sync vulture src/ scripts/ linter/ --min-confidence 60 --make-whitelist > vulture_whitelist.py`

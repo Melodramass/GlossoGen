@@ -1,34 +1,89 @@
 # Web UI
 
-A FastAPI backend and a Next.js frontend for browsing runs. The two are separate
-processes; start each in its own terminal.
+A FastAPI backend and a Next.js frontend for browsing runs. One command starts
+both:
+
+```bash
+glossogen serve --runs-dir ./runs --port 8000 --ui-port 3000
+```
+
+Open <http://localhost:3000> once it is up. `--ui-port` starts the UI from the
+published frontend container, so it needs Docker. Omit it to run the backend
+alone. The server runs in your own environment, so scenarios and metrics
+installed from other packages appear in the UI.
+
+The flag runs the latest published UI, wires `API_URL` to the server it just
+started, and adds the UI's origin to CORS. `--ui-image` with a version tag pins
+an older UI, which an older server needs, since a current UI calls endpoints it
+may not serve.
+
+From a checkout, run the two as dev processes instead, one terminal each:
 
 ```bash
 make dev            # terminal 1: FastAPI backend on port 8000 (reads ./runs/)
 make dev-frontend   # terminal 2: Next.js dev server on port 3000
 ```
 
-Open <http://localhost:3000> once both are up.
+Pointing the checkout UI at a server on another port makes two settings yours
+to keep in step: `API_URL` is read at request time, and `ALLOWED_ORIGINS`
+defaults to `http://localhost:3000`. A UI served from an unlisted origin
+renders pages whose API calls are refused by CORS, which shows up as an empty
+run list rather than as an error.
 
-The run list shows scenario, timestamp, message count, status (including
-in-progress runs), evaluation status, and lineage badges for every derived run
-(fork, replace-agent, cross-run, resume-at-round). Opening a run gives the full
-message timeline, agent reasoning, debug logs and evaluation results.
+## The runs page
 
-Simulations are launched from the [CLI](running-simulations.md) or via the MCP
-[`start_run`](mcp-integration.md) tool, not from the run list.
+![The runs page, numbered](../images/web_ui_runs_list.webp)
 
-Both targets assume this checkout. Installed as a dependency instead, one command
-does both:
+| # | What it is |
+|---|---|
+| 1 | Navigation: Analysis (cross-run charts), Branches (lineage), Export and Import (move runs out as CSV or archives, or in from another deployment), and MCP connection instructions |
+| 2 | Search by run id substring |
+| 3 | Scenario filter, one chip per installed scenario. Selecting exactly one reveals the knob filter bar, item 4 |
+| 4 | The knob filter bar, covered below |
+| 5 | Label filter, AND-matched: a run must carry every selected label |
+| 6 | A run row: when it started, how long it ran, what it cost, its status (in-progress runs are listed too), and the round it reached |
+| 7 | The run's id with a copy button, a **Knobs** dropdown listing the full recorded config, the run's labels, and its evaluation status. Derived runs carry lineage badges here (fork, replace-agent, cross-run, fork-at-round) |
+| 8 | The result count: how many runs the knob conditions kept, out of what the other filters left |
 
-```bash
-glossogen serve --runs-dir ./runs --port 8000 --ui-port 3000
-```
+### Filtering by knob
 
-`--ui-port` runs the published frontend image against the server it just
-started, so a scenario or metric that ships in another package is browsed from
-the environment that holds it. See
-[Viewing your runs in the web UI](creating-a-scenario.md#viewing-your-runs-in-the-web-ui).
+![The knob filter bar, shown once a single scenario is selected](../images/scenario_knobs.png)
+
+Select a single scenario and a filter bar appears offering that scenario's
+knobs. Pick a knob, a comparison and a value, and press Add. Conditions
+accumulate as chips and every one has to hold. The comparisons on offer follow
+the knob's type: a number takes `>= <= > < = !=`, a boolean takes true or false, an enum
+takes one of its own values, and a knob that can be left unset gets a "not set"
+box.
+
+The knobs come from the scenario's own schema, so a scenario installed from
+another package is filterable with no change to the platform.
+
+The same conditions travel to the CSV and raw exports, to `glossogen export
+--knob` and `glossogen analyze --knob`, and to the export endpoints as the
+selection's `knob` array. See
+[Filtering by knob](exporting-runs.md#filtering-by-knob) for the grammar.
+
+**Analysis** opens the cross-run surface: pick a cohort, group and filter it, chart
+metrics from the evaluation reports, and save the result as a dashboard the rest of
+the group can open. See [analysis and dashboards](analysis.md).
+
+## Inside a run
+
+![The run page, numbered](../images/web_ui_run_detail.webp)
+
+| # | What it is |
+|---|---|
+| 1 | The run: scenario, a copyable id, and its labels |
+| 2 | Run info and actions: the recorded knobs, re-running evaluation, editing labels, attaching a note |
+| 3 | Channel tabs: every channel's messages interleaved in send order, or one channel at a time |
+| 4 | Agent tabs: the run as one agent saw it. A seat swapped mid-run gets one tab per occupant |
+| 5 | The evaluation log, when an evaluation has run |
+| 6 | Timeline controls: show or hide reasoning, filter tool calls, export the run as a PDF or a bundle |
+| 7 | An injection: the briefing the scenario handed one agent at the start of the round |
+| 8 | The round's verdict and why it ended (agents idle, timeout, or the scenario's own trigger) |
+| 9 | The evaluation report's headline scores |
+| 10 | What the evaluation itself cost, and the judge model it ran under |
 
 ## Live streaming
 
@@ -41,77 +96,19 @@ JSONL.
 
 ## Run labels
 
-Labels are short tags on a run, for filtering and grouping. They live in
-`labels.json` in the run directory as a JSON array of strings, and are editable
-through `PUT /api/g/{group_slug}/runs/{scenario}/{run_dir_name}/labels`.
+Labels are short tags on a run, for filtering and grouping. Add or edit them
+with the run page's **Labels** control, and filter the runs list by them: a run
+must carry every selected label. There is no way to set them at launch, so
+label a run once it appears in the list.
 
-That PUT **replaces** the whole list rather than appending, and evaluation merges
-its own entries into the same file. Apply labels before evaluating, or read the
-existing list and write it back with your addition, or you will drop what
-evaluation put there.
+On disk a run's labels are `labels.json` in its run directory, so scripts can
+read and write them too. On a server backed by a database, label filtering and
+the filter dropdown read a mirror of that file kept on the run's index row, and
+a direct file write reaches the mirror only when the server next reads the file
+(the run appearing on a listed page, its detail opening, or an export the run
+matches). Until then a label-filtered view can miss the run; labels applied
+through the API are visible immediately.
 
-## Authentication
-
-Two modes, switched by whether `CLERK_SECRET_KEY` is set on the backend.
-
-**Local mode**, the default for dev clones. Leave `CLERK_SECRET_KEY` unset on the
-backend and `CLERK_PUBLISHABLE_KEY` unset on the frontend. The identity middleware
-short-circuits every request to a synthetic `local` group and `local-user`, and the
-frontend renders with no sign-in flow. With `DATABASE_URL` also unset there is no
-database at all: the runs index comes from the filesystem and OAuth state is held
-in memory. Setting `DATABASE_URL` keeps local mode but stores the `local` group and
-the runs index in Postgres.
-
-**Clerk mode**, for anything hosted. Set the Clerk variables on both sides, plus
-`CLERK_WEBHOOK_SECRET` so the backend keeps its `groups` table in sync with org
-create / update / delete events. The frontend mounts `<ClerkProvider>` and
-redirects unauthenticated traffic to `/sign-in`. API requests carry the Clerk
-session token as a Bearer header.
-
-Each Clerk **organization** is a study **group**. Every run belongs to exactly one
-group and is never shared across groups except through the export/import flow. The
-active group is the URL slug: `/g/team-a/runs/...` on the frontend hits
-`/api/g/team-a/runs/...` on the backend, and the request is accepted only if the
-user's Clerk session has `team-a` as its active org.
-
-### Users in several organizations
-
-`frontend/src/proxy.ts` wires Clerk's
-`organizationSyncOptions.organizationPatterns` to `["/g/:slug", "/g/:slug/(.*)"]`.
-Clerk's middleware reads the slug from the URL and activates that org on the
-session for the current request, before the page renders or the API client mints a
-token. So a user in several orgs can reach any of them by URL without touching the
-org switcher first.
-
-If the user is not a member of the URL's org, Clerk leaves the previously active
-org in place, the backend sees `claims.org_slug != url_slug`, and the request gets
-a 403.
-
-**One tab at a time, in the cookie.** Clerk's session cookie is a singleton per
-browser, so only one tab's active org is reflected in it. Each tab still activates
-its own org server-side on navigation, so page loads and Server-Component fetches
-are correct, and the API client mints a token per request rather than reading the
-cookie, so foreground requests match the tab's URL. A background fetch that never
-passes through the focused tab could race, though there are none today.
-
-## API type safety
-
-Frontend API calls go through a typed client generated from the backend's OpenAPI
-schema. Raw `fetch()` is refused by ESLint. After changing a response model,
-regenerate:
-
-```bash
-make gen-api-types
-```
-
-CI fails if the committed types drift from the schema.
-
-## Frontend plug-ins
-
-A scenario can ship a `plugin.tsx` for a bespoke round-detail panel, tool-metadata
-renderer, timeline marker or live-judge wiring. Plug-ins are compiled into the
-bundle, so they live in this repository even when the scenario itself does not. A
-scenario with no plug-in renders through the default one: preset-driven controls
-built from the knobs JSON Schema the scenario already publishes, which is enough
-for most scenarios. See
-[Creating a scenario](creating-a-scenario.md#12-optional-add-a-frontend-plug-in).
+Authentication modes are covered under
+[Deployment](deployment.md#authentication), and the identity-provider contract
+in [Creating an identity provider](creating-an-identity-provider.md).

@@ -4,12 +4,12 @@ A metric scores a finished run. It reads the run's event log, optionally calls a
 LLM judge, and returns one or more `Measurement` entries that land in
 `<scenario>_report.json`.
 
-Metrics are scenario-agnostic by default. One you write is available to every
-scenario, including scenarios you did not write, because it reads the event log
-and asks the scenario for what it needs through hooks rather than knowing any
-scenario's internals. You can write one for a scenario in this repo, for a
-scenario you are building, or ship one in your own package without touching this
-repo at all.
+A metric written against the [scenario hooks](#scenario-hooks), rather than
+against one scenario's own events, works on scenarios you did not write. It can
+live in this repo or ship in your own package without touching this repo at
+all. A metric can also be scoped to a single scenario, reading that scenario's
+own events and living under its `evaluation/` directory; the
+[registration section](#in-this-repo) covers that shape.
 
 ## Before you write one
 
@@ -17,7 +17,8 @@ Check whether the platform already measures it. The generic metrics cover
 round success, per-round and per-message character throughput, perplexity and
 n-gram surprisal, compression ratio, message entropy, the language-emergence
 judges, protocol probing and explanation, round-end triggers, and content-filter
-refusals. `CLAUDE.md` lists them all with what each `score` means.
+refusals. [Evaluation](evaluation.md#metrics) lists them all with what each
+`score` means.
 
 Two questions decide the shape of what you write:
 
@@ -48,17 +49,14 @@ class Metric(ABC):
     ) -> list[Measurement]: ...
 ```
 
-- `name` is what callers pass to `--metrics` and the key the report is written
-  under. It must be unique.
-- `events` is the full ordered event log, already parsed.
-- `scenario` is the built scenario, so you can ask it which channels it scores
-  (`get_primary_channels()`), how it renders a round (`build_communication_rounds`),
-  and anything else on its contract.
-- `llm_provider` is the judge selected by `evaluate --model/--provider`.
-  Deterministic metrics ignore it.
-- `run_dir` is the run directory, for writing a sidecar file next to the report.
-- `options` carries the per-invocation flags the CLI passes through. Most metrics
-  ignore it; see `MetricRunOptions` for the current fields.
+| Argument | Holds |
+|---|---|
+| `name` | What callers pass to `--metrics`, and the key the report is written under. Must be unique |
+| `events` | The full ordered event log, already parsed |
+| `scenario` | The built scenario: ask it which channels it scores (`get_primary_channels()`), how it renders a round (`build_communication_rounds`), anything on its contract |
+| `llm_provider` | The judge selected by `evaluate --model/--provider`; deterministic metrics ignore it |
+| `run_dir` | The run directory, for writing a sidecar next to the report |
+| `options` | Per-invocation flags the CLI passes through; most metrics ignore it |
 
 A `Measurement` is `metric_name`, `score` (float), `score_unit` (free-form label),
 `summary` (one line), `per_round` and `per_agent` (structured breakdowns).
@@ -77,6 +75,57 @@ averaging across runs then quietly mixes the two.
 
 Return a zero score only when zero is a genuine observation. `content_filter_refusal`
 scoring `0` means the run had no refusals, which is a finding.
+
+### Numbers that are neither per-round nor per-agent
+
+A `Measurement` holds a run-level `score`, `per_round`, and `per_agent`. A metric
+that measures along some other axis (one number per ontology category, per probe
+question, per message) fits none of those, and the usual answer is a sidecar file
+in `run_dir` beside the report.
+
+Write the sidecar, then implement `read_keyed_observations` so those numbers can be
+charted and aggregated across runs:
+
+```python
+async def read_keyed_observations(self, run_dir: Path) -> list[KeyedObservation]:
+    """Return one confidence per category, keyed by category."""
+    sidecar = await read_json_sidecar(path=run_dir / _SIDECAR_FILENAME)
+    if sidecar is None:
+        return []
+    return [
+        KeyedObservation(
+            keys={"category_id": key_text(value=score.get("category_id"))},
+            value=confidence,
+        )
+        for score in object_rows(value=sidecar.get("scores"))
+        if (confidence := number_or_none(value=score.get("confidence"))) is not None
+    ]
+```
+
+Each key becomes a groupable dimension on the
+[analysis surface](analysis.md#the-query-model), prefixed `key.`: the example
+above charts as `key.category_id`.
+
+## Scenario hooks
+
+A metric stays scenario-agnostic by asking the scenario, rather than the event
+log, for anything scenario-specific. The hooks live on `SimulationScenario`:
+`judge_round_result` and `get_primary_channels` are abstract, so every scenario
+has them. The rest are optional, and a metric whose hook is absent returns
+nothing.
+
+| Hook | Read by |
+|---|---|
+| `judge_round_result` (required) | `round_success`, `round_success_after_resume` |
+| `get_primary_channels` (required) | `perplexity`, the language and throughput metrics, the communication-style judges |
+| `build_communication_rounds` | `communication_open_coding`, `communication_feature_presence`, `protocol_learned_after_swap` |
+| `detect_protocol_boundary_window` | `protocol_learned_after_swap` on scenario-specific boundaries |
+| `get_protocol_probe_config` | the four `protocol_probe*` metrics |
+| `get_protocol_explanation_config` | per-role prompts for `protocol_explanation` |
+
+Every generic metric is platform code reading scenario data through these hooks,
+which is why a scenario in someone else's package gets the whole suite, and why
+a metric you write the same way does too.
 
 ## Writing one
 
@@ -114,10 +163,6 @@ class ExternalWordCountMetric(Metric):
         ]
 ```
 
-That one is real: it lives at
-[tests/fakes/external_metric.py](../tests/fakes/external_metric.py), where the
-tests use it as a stand-in for a metric shipped by another package.
-
 If your metric writes a sidecar (per-message factors, probe responses, an
 ontology), write it into `run_dir` next to the report and name it after the
 metric, the way `language_repetition_messages.jsonl` and
@@ -144,16 +189,15 @@ Two edits, both in
 The second list exists because `SimulationScenario.get_available_metric_names`
 needs the names and cannot import the registry: a metric module imports the
 scenario contract, so importing metric classes back into it would close a cycle.
-A test asserts the two lists match, so forgetting either edit fails there rather
-than at launch, where the symptom would be a metric the CLI runs and the API
-rejects.
+A test asserts the two lists match, so forgetting either edit fails there. At
+launch the symptom would have been a metric the CLI runs and the API rejects.
 
 If the metric only makes sense for one scenario, put the class under that
-scenario's `evaluation/` directory instead and have the scenario override
-`get_available_metric_names`. Call `super()` and add to what it returns: replacing
-it wholesale drops every generic metric and every externally-installed one, and
-the symptom is a metric the API refuses for that scenario only. Prefer a generic metric that reads a scenario hook:
-every scoring concept the platform has ended up expressible that way.
+scenario's `evaluation/` directory and have the scenario override
+`get_available_metric_names`, calling `super()` and adding to what it returns.
+Replacing it wholesale drops every generic and externally-installed metric for
+that scenario. Prefer a generic metric that reads a scenario hook: every scoring
+concept the platform has ended up expressible that way.
 
 ### In your own package
 
@@ -171,12 +215,12 @@ external_word_count = "my_metrics.word_count:ExternalWordCountMetric"
 ```
 
 Then `pip install -e .` (or `uv pip install -e .`) in your package. One
-distribution can declare both metrics and scenarios; the groups are independent,
+distribution can declare both metrics and scenarios. The groups are independent,
 so a metric package needs no scenario and vice versa.
 
 The entry-point name **must equal the class's `name` attribute**. The report is
 keyed by the class's own `name`, so a mismatch would write a measurement under a
-name nobody asked for; the registry refuses that pairing and logs why.
+name nobody asked for. The registry refuses that pairing and logs why.
 
 With the package installed, the metric is runnable and every scenario advertises
 it. No edit to either list above, and no fork.
@@ -189,7 +233,7 @@ What differs from an in-repo metric:
   reports incomparable.
 - **One broken metric does not fail the evaluation.** A metric that will not
   import, is not a `Metric` subclass, or disagrees with its declared name is
-  logged and skipped; the others still run and still write a report. Check the
+  logged and skipped. The others still run and still write a report. Check the
   evaluation log if your metric does not appear.
 - **The group is unversioned**, unlike `glossogen.scenarios.v1`. The scenario
   contract carries a version because a scenario hook's required behaviour can
@@ -202,15 +246,15 @@ Same command either way. The metric name goes in the comma-separated `--metrics`
 list:
 
 ```bash
-VIRTUAL_ENV= uv run --no-sync python -m glossogen evaluate veyru \
+glossogen evaluate veyru \
   --run-dir ./runs/veyru/<timestamp> \
   --metrics external_word_count,round_success,mean_chars_per_round \
   --model claude-haiku-4-5-20251001 --provider anthropic \
   > ./runs/veyru/<timestamp>/eval_stdout.log 2>&1 &
 ```
 
-Installed as a package rather than run from a checkout, that is just
-`glossogen evaluate ...`.
+From a checkout, spell each command
+`VIRTUAL_ENV= uv run --no-sync python -m glossogen ...`.
 
 **Only evaluate a run that has emitted `simulation_ended`.** Gating on a round
 count instead scores a run whose last round is still in flight, and the missing
@@ -236,7 +280,7 @@ Other ways to reach the same runner:
   metric works once installed. Gated by `ENABLE_EVALUATIONS`.
 - **The frontend's "Run Eval" button**, which calls that endpoint.
 
-A metric that raises is logged with its traceback and recorded as failed; the
+A metric that raises is logged with its traceback and recorded as failed. The
 remaining metrics still run and the report is still written.
 
 ## Testing it
@@ -264,6 +308,7 @@ lists agree, and each way a declaration can be refused.
       apply, with one INFO skip line.
 - [ ] In-repo: added to **both** `_GENERIC_METRICS` and `GENERIC_METRIC_NAMES`.
 - [ ] Any prompt lives in a Jinja template, not a Python string.
-- [ ] Sidecar files are written into `run_dir` and named after the metric.
-- [ ] `score_unit` says what `score` is; `summary` reads as one sentence.
+- [ ] Sidecar files are written into `run_dir` and named after the metric, and
+      `read_keyed_observations` reads them back if they hold numbers worth charting.
+- [ ] `score_unit` says what `score` is, and `summary` reads as one sentence.
 - [ ] `make lint` clean, and a test that calls `compute` on a hand-built event list.

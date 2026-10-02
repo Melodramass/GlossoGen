@@ -10,14 +10,15 @@ from uuid import UUID
 
 from psycopg import AsyncConnection
 from psycopg.rows import TupleRow
+from psycopg.types.json import Jsonb
 
 from glossogen.db.rows import DerivedSourceCountRow, GroupRow, RunRow
 
-_GROUP_COLUMNS = "id, clerk_org_id, slug, name, created_at"
+_GROUP_COLUMNS = "id, external_org_id, slug, name, created_at"
 _RUN_COLUMNS = (
     "id, group_id, scenario, run_dir_name, status, created_at, "
     "created_by_user_id, source_run_scenario, source_run_dir_name, "
-    "evaluation_content_hash"
+    "evaluation_content_hash, labels"
 )
 
 
@@ -55,21 +56,21 @@ async def get_group_by_id(
 
 async def upsert_group(
     conn: AsyncConnection[TupleRow],
-    clerk_org_id: str | None,
+    external_org_id: str | None,
     slug: str,
     name: str,
 ) -> GroupRow:
-    """Insert or update a group by ``(clerk_org_id)`` when set, else by ``(slug)``.
+    """Insert or update a group by ``(external_org_id)`` when set, else by ``(slug)``.
 
-    Used both for the synthetic ``local`` group bootstrap (clerk_org_id is NULL)
-    and for the Clerk webhook ``organization.created`` / ``organization.updated``
-    handlers.
+    Used both for the synthetic ``local`` group bootstrap, where
+    ``external_org_id`` is NULL, and by an identity provider mirroring an
+    organization it owns.
     """
     async with conn.cursor() as cur:
-        if clerk_org_id is None:
+        if external_org_id is None:
             await cur.execute(
                 f"""
-                INSERT INTO groups (clerk_org_id, slug, name)
+                INSERT INTO groups (external_org_id, slug, name)
                 VALUES (NULL, %s, %s)
                 ON CONFLICT (slug) DO UPDATE
                   SET name = EXCLUDED.name
@@ -80,14 +81,14 @@ async def upsert_group(
         else:
             await cur.execute(
                 f"""
-                INSERT INTO groups (clerk_org_id, slug, name)
+                INSERT INTO groups (external_org_id, slug, name)
                 VALUES (%s, %s, %s)
-                ON CONFLICT (clerk_org_id) DO UPDATE
+                ON CONFLICT (external_org_id) DO UPDATE
                   SET slug = EXCLUDED.slug,
                       name = EXCLUDED.name
                 RETURNING {_GROUP_COLUMNS}
                 """,
-                (clerk_org_id, slug, name),
+                (external_org_id, slug, name),
             )
         row = await cur.fetchone()
     if row is None:
@@ -95,19 +96,19 @@ async def upsert_group(
     return _group_row_from_tuple(row)
 
 
-async def soft_delete_group_by_clerk_org_id(
+async def soft_delete_group_by_external_org_id(
     conn: AsyncConnection[TupleRow],
-    clerk_org_id: str,
+    external_org_id: str,
 ) -> None:
-    """Mark a Clerk org as deleted by clearing its ``clerk_org_id``.
+    """Mark an external organization as deleted by clearing its ``external_org_id``.
 
-    The local group row is preserved so existing ``runs.group_id`` foreign keys
-    stay valid. Future webhooks for a re-created org will insert a fresh row.
+    The group row is preserved so existing ``runs.group_id`` foreign keys stay
+    valid. A later event for a re-created organization inserts a fresh row.
     """
     async with conn.cursor() as cur:
         await cur.execute(
-            "UPDATE groups SET clerk_org_id = NULL WHERE clerk_org_id = %s",
-            (clerk_org_id,),
+            "UPDATE groups SET external_org_id = NULL WHERE external_org_id = %s",
+            (external_org_id,),
         )
 
 
@@ -180,7 +181,7 @@ async def list_children_of_run(
     """Return runs derived from ``(parent_scenario, parent_run_dir_name)``.
 
     A run is a child if its ``source_run_scenario`` / ``source_run_dir_name``
-    columns match the parent. Covers ``replace-agent``, ``resume-at-round``,
+    columns match the parent. Covers ``replace-agent``, ``fork-at-round``,
     and ``cross-run-replace-agent`` (source A) derivations: all three
     register through ``_register_derived_run`` with the timeline parent.
     """
@@ -207,7 +208,7 @@ async def list_derived_source_counts(
 
     Aggregates the ``runs`` table by ``(source_run_scenario,
     source_run_dir_name)``; a row is emitted only for parents that have at
-    least one derivation (replace-agent, resume-at-round, or
+    least one derivation (replace-agent, fork-at-round, or
     cross-run-replace-agent source A). Newest parent first.
     """
     async with conn.cursor() as cur:
@@ -244,6 +245,7 @@ async def insert_run(
     created_by_user_id: str | None,
     source_run_scenario: str | None,
     source_run_dir_name: str | None,
+    labels: list[str],
 ) -> RunRow:
     """Insert a new run row; conflicts on ``(scenario, run_dir_name)`` are an error."""
     async with conn.cursor() as cur:
@@ -251,9 +253,9 @@ async def insert_run(
             f"""
             INSERT INTO runs (
                 group_id, scenario, run_dir_name, status, created_at,
-                created_by_user_id, source_run_scenario, source_run_dir_name
+                created_by_user_id, source_run_scenario, source_run_dir_name, labels
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING {_RUN_COLUMNS}
             """,
             (
@@ -265,6 +267,7 @@ async def insert_run(
                 created_by_user_id,
                 source_run_scenario,
                 source_run_dir_name,
+                Jsonb(labels),
             ),
         )
         row = await cur.fetchone()
@@ -325,7 +328,7 @@ async def set_last_active_group(
 def _group_row_from_tuple(row: TupleRow) -> GroupRow:
     return GroupRow(
         id=row[0],
-        clerk_org_id=row[1],
+        external_org_id=row[1],
         slug=row[2],
         name=row[3],
         created_at=row[4],
@@ -344,6 +347,7 @@ def _run_row_from_tuple(row: TupleRow) -> RunRow:
         source_run_scenario=row[7],
         source_run_dir_name=row[8],
         evaluation_content_hash=row[9],
+        labels=row[10],
     )
 
 
@@ -372,6 +376,69 @@ async def update_run_evaluation_content_hash(
             """,
             (content_hash, group_id, scenario, run_dir_name),
         )
+
+
+async def update_run_labels(
+    conn: AsyncConnection[TupleRow],
+    group_id: UUID,
+    scenario: str,
+    run_dir_name: str,
+    labels: list[str],
+) -> None:
+    """Mirror a run's ``labels.json`` into its index row.
+
+    The file stays the source of truth; this column is what the label union
+    and label filtering read. The ``group_id`` scope is defensive, like
+    ``update_run_evaluation_content_hash``: an UPDATE against another group's
+    row is a no-op, and an UPDATE matching zero rows (a run deleted between
+    read and repair) is not an error.
+    """
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            UPDATE runs SET labels = %s
+             WHERE group_id = %s AND scenario = %s AND run_dir_name = %s
+            """,
+            (Jsonb(labels), group_id, scenario, run_dir_name),
+        )
+
+
+async def list_distinct_labels_for_group(
+    conn: AsyncConnection[TupleRow],
+    group_id: UUID,
+) -> list[str]:
+    """Return the sorted union of mirrored labels across a group's runs.
+
+    Rows whose ``labels`` column is still ``NULL`` (not yet mirrored)
+    contribute nothing; the startup backfill converges them to ``'[]'``.
+    """
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            SELECT DISTINCT label
+            FROM runs
+            CROSS JOIN LATERAL jsonb_array_elements_text(runs.labels) AS label
+            WHERE group_id = %s
+            ORDER BY label
+            """,
+            (group_id,),
+        )
+        rows = await cur.fetchall()
+    return [row[0] for row in rows]
+
+
+async def list_runs_missing_labels(
+    conn: AsyncConnection[TupleRow],
+) -> list[RunRow]:
+    """Return every run row whose labels mirror has never been written."""
+    async with conn.cursor() as cur:
+        await cur.execute(f"""
+            SELECT {_RUN_COLUMNS} FROM runs
+             WHERE labels IS NULL
+             ORDER BY scenario, run_dir_name
+            """)
+        rows = await cur.fetchall()
+    return [_run_row_from_tuple(row) for row in rows]
 
 
 async def insert_run_if_absent(

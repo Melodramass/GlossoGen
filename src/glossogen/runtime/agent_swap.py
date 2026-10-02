@@ -142,6 +142,10 @@ async def execute_agent_swap(
         name=f"agent-{agent_id}-swapped-r{spec.at_round}",
     )
     resources.runner_tasks[agent_id] = new_task
+    # Same reason as the supervisor's first launch: a swapped-in runner that
+    # returns without waiting again has to say so, or the clock waits out every
+    # remaining phase on an agent that has already stopped.
+    new_task.add_done_callback(new_session.mark_runner_finished)
 
     # Wake the new agent on every channel it can still read (excluding
     # globally disabled ones). Skipping disabled channels prevents the
@@ -256,6 +260,7 @@ async def _build_seed_history(
         cutoff_round=spec.at_round,
         tool_calls_only=True,
         channel_visibility=spec.channel_visibility,
+        filter_below_round=None,
         split_parallel_tool_calls=spec.provider == SELF_HOSTED_PROVIDER,
     )
     return _SeedHistory(history=history, system_prompt=system_prompt)

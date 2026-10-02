@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_identity(request: Request) -> Identity:
-    """Pull the per-request ``Identity`` stamped by ``ClerkIdentityMiddleware``."""
+    """Pull the per-request ``Identity`` stamped by ``IdentityMiddleware``."""
     identity = getattr(request.state, "identity", None)
     if identity is None:
         raise HTTPException(
@@ -60,7 +60,7 @@ async def resolve_run_or_404(
     if pool is None:
         if not run_dir.is_dir() or not jsonl_path.exists():
             raise HTTPException(status_code=404, detail="Run not found")
-        return ResolvedRun(run_dir=run_dir, scenario_name=scenario)
+        return ResolvedRun(run_dir=run_dir, scenario_name=scenario, db_labels=None)
 
     async with pool.connection() as conn:
         row = await get_run(
@@ -80,7 +80,7 @@ async def resolve_run_or_404(
             run_dir,
         )
         raise HTTPException(status_code=404, detail="Run files missing on disk")
-    return ResolvedRun(run_dir=run_dir, scenario_name=scenario)
+    return ResolvedRun(run_dir=run_dir, scenario_name=scenario, db_labels=row.labels)
 
 
 async def register_new_run(
@@ -90,12 +90,13 @@ async def register_new_run(
     status: str,
     source_run_scenario: str | None,
     source_run_dir_name: str | None,
+    labels: list[str],
 ) -> None:
     """Insert a ``runs`` row for a freshly claimed run directory.
 
     Called by every parent-process flow that allocates a new run dir
     (``fork``, ``replace-agent``, ``cross-run-replace-agent``,
-    ``resume-at-round``, bundle import). The CLI subprocess has a separate
+    ``fork-at-round``, bundle import). The CLI subprocess has a separate
     path through ``register_run_standalone`` because it doesn't have access
     to the FastAPI connection pool.
 
@@ -122,6 +123,7 @@ async def register_new_run(
             created_by_user_id=created_by,
             source_run_scenario=source_run_scenario,
             source_run_dir_name=source_run_dir_name,
+            labels=labels,
         )
 
 

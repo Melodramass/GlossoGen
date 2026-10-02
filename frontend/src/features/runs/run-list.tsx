@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -16,14 +17,18 @@ import { useRouter } from "next/navigation";
 import { api } from "@/shared/lib/api-client";
 import { cn } from "@/shared/lib/cn";
 import { splitRunId } from "@/shared/lib/run-id";
+import { useLabelDescriptions } from "@/shared/lib/use-label-descriptions";
+import { Tooltip } from "@/shared/components/ui/tooltip";
 import type { components } from "@/types/api.gen";
 import { useActiveGroupSlug } from "@/features/auth/group-context";
 import { formatDayHeader, humanize } from "./format";
-import { ScenarioDescriptionModal } from "./scenario-description-modal";
 import { ConfigValueModal } from "./config-value-modal";
 import { NoteViewModal } from "./note-view-modal";
+import { KnobFilterBar } from "./knob-filter-bar";
+import { parseKnobFilter } from "./knob-filter-encoding";
 import { labelColor } from "./label-picker-modal";
-import { RunRow } from "./run-row";
+import { RunRow, RunTableColumns } from "./run-row";
+import { useRunExportSelection } from "./run-export-selection-context";
 
 type RunSummary = components["schemas"]["RunSummary"];
 
@@ -48,19 +53,27 @@ function groupByDay(runs: RunSummary[]): Array<{ label: string; runs: RunSummary
 }
 
 export function RunList() {
-  const [modalRun, setModalRun] = useState<RunSummary | null>(null);
+  const {
+    picking,
+    stopPicking,
+    openExport,
+    selectedRunIds,
+    toggleRunSelected,
+    replaceSelection,
+    clearSelection,
+    publishFilters,
+    publishMatchingRunCount,
+  } = useRunExportSelection();
   const [configPreview, setConfigPreview] = useState<{ key: string; value: string } | null>(null);
   const [noteModalRunId, setNoteModalRunId] = useState<string | null>(null);
   const [selectedLabels, setSelectedLabels] = useState<Set<string>>(new Set());
   const [selectedScenarios, setSelectedScenarios] = useState<Set<string>>(new Set());
+  const [knobFilters, setKnobFilters] = useState<string[]>([]);
+  // Whether leaving a single-scenario selection actually discarded conditions,
+  // so the note below reports a drop only when one happened.
+  const [droppedKnobFilters, setDroppedKnobFilters] = useState(false);
   const [idSearch, setIdSearch] = useState("");
   const [idSearchDebounced, setIdSearchDebounced] = useState("");
-  const [modelsPopover, setModelsPopover] = useState<{
-    left: number;
-    top: number;
-    agentModels: RunSummary["agent_models"];
-  } | null>(null);
-  const closePopoverTimerRef = useRef<number | null>(null);
   const router = useRouter();
   const groupSlug = useActiveGroupSlug();
   const queryClient = useQueryClient();
@@ -88,6 +101,8 @@ export function RunList() {
     },
   });
 
+  const labelDescriptions = useLabelDescriptions();
+
   const { data: scenariosData } = useQuery({
     queryKey: ["scenarios"],
     queryFn: async () => {
@@ -112,6 +127,16 @@ export function RunList() {
   }
 
   function toggleScenario(scenario: string) {
+    // Whether the click lands on a single-scenario selection, which is the only
+    // one the knob bar can serve. Read from this render for the message only;
+    // the selection itself still updates functionally.
+    const leavesOneSelected = selectedScenarios.has(scenario)
+      ? selectedScenarios.size === 2
+      : selectedScenarios.size === 0;
+    // A knob condition is written against one scenario's knobs schema, so it
+    // means nothing once the selection names a different one.
+    setKnobFilters([]);
+    setDroppedKnobFilters(!leavesOneSelected && knobFilters.length > 0);
     setSelectedScenarios(prev => {
       const next = new Set(prev);
       if (next.has(scenario)) {
@@ -127,57 +152,6 @@ export function RunList() {
     const handle = window.setTimeout(() => setIdSearchDebounced(idSearch.trim()), 300);
     return () => window.clearTimeout(handle);
   }, [idSearch]);
-
-  useEffect(() => {
-    return () => {
-      if (closePopoverTimerRef.current !== null) {
-        window.clearTimeout(closePopoverTimerRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (modelsPopover === null) {
-      return undefined;
-    }
-    const handleViewportChange = () => {
-      setModelsPopover(null);
-    };
-    window.addEventListener("scroll", handleViewportChange, true);
-    window.addEventListener("resize", handleViewportChange);
-    return () => {
-      window.removeEventListener("scroll", handleViewportChange, true);
-      window.removeEventListener("resize", handleViewportChange);
-    };
-  }, [modelsPopover]);
-
-  const clearModelsPopoverCloseTimer = useCallback(() => {
-    if (closePopoverTimerRef.current !== null) {
-      window.clearTimeout(closePopoverTimerRef.current);
-      closePopoverTimerRef.current = null;
-    }
-  }, []);
-
-  const queueModelsPopoverClose = useCallback(() => {
-    clearModelsPopoverCloseTimer();
-    closePopoverTimerRef.current = window.setTimeout(() => {
-      setModelsPopover(null);
-      closePopoverTimerRef.current = null;
-    }, 80);
-  }, [clearModelsPopoverCloseTimer]);
-
-  const openModelsPopover = useCallback(
-    (targetElement: HTMLElement, agentModels: RunSummary["agent_models"]) => {
-      clearModelsPopoverCloseTimer();
-      const rect = targetElement.getBoundingClientRect();
-      setModelsPopover({
-        left: rect.left,
-        top: rect.bottom + 4,
-        agentModels,
-      });
-    },
-    [clearModelsPopoverCloseTimer]
-  );
 
   const deleteMutation = useMutation({
     mutationFn: async (runId: string) => {
@@ -208,13 +182,22 @@ export function RunList() {
   });
 
   const scenarioFilter = useMemo(() => [...selectedScenarios].sort(), [selectedScenarios]);
+  // Knobs belong to one scenario's schema, so a condition built against one
+  // scenario means nothing against another. Offer the builder only when a single
+  // scenario is picked, and drop the conditions when that changes.
+  const knobFilterScenario = scenarioFilter.length === 1 ? (scenarioFilter[0] ?? null) : null;
   const labelFilter = useMemo(() => [...selectedLabels].sort(), [selectedLabels]);
 
   const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useInfiniteQuery({
       queryKey: [
         "runs",
-        { scenarios: scenarioFilter, labels: labelFilter, runId: idSearchDebounced },
+        {
+          scenarios: scenarioFilter,
+          labels: labelFilter,
+          runId: idSearchDebounced,
+          knobs: knobFilters,
+        },
       ],
       refetchOnMount: "always",
       initialPageParam: null as string | null,
@@ -227,6 +210,7 @@ export function RunList() {
               scenario: scenarioFilter.length > 0 ? scenarioFilter : undefined,
               labels: labelFilter.length > 0 ? labelFilter : undefined,
               run_id_contains: idSearchDebounced.length > 0 ? idSearchDebounced : undefined,
+              knob: knobFilters.length > 0 ? knobFilters : undefined,
             },
           },
         });
@@ -267,7 +251,23 @@ export function RunList() {
     return [...byId.values()];
   }, [data]);
   const groups = useMemo(() => groupByDay(runs), [runs]);
+  // The picking bar renders above the virtualized list, so whether it is present
+  // changes where that list starts on the page.
   const totalRuns = data?.pages[0]?.total ?? 0;
+
+  // The knobs the current conditions ask about, so each row can show what it
+  // recorded for them. Deduplicated: two conditions on one knob is one column.
+  const filteredKnobNames = useMemo(() => {
+    const names: string[] = [];
+    for (const raw of knobFilters) {
+      const parsed = parseKnobFilter(raw);
+      if (parsed !== null && !names.includes(parsed.knob)) {
+        names.push(parsed.knob);
+      }
+    }
+    return names;
+  }, [knobFilters]);
+
   const allLabels = useMemo(() => labelsData?.labels ?? [], [labelsData]);
   const regularFilterLabels = useMemo(
     () => allLabels.filter(label => !label.startsWith("eval:") && !label.startsWith("src=")),
@@ -278,7 +278,42 @@ export function RunList() {
     [scenariosData]
   );
   const hasActiveFilters =
-    selectedLabels.size > 0 || selectedScenarios.size > 0 || idSearchDebounced.length > 0;
+    selectedLabels.size > 0 ||
+    selectedScenarios.size > 0 ||
+    idSearchDebounced.length > 0 ||
+    knobFilters.length > 0;
+
+  // What the selection would show with the innermost narrowing removed, so the
+  // ratio says what that narrowing cost. Knob conditions are the innermost, so
+  // they come off first; with none set, the comparison is against the group.
+  const baselineIgnoresKnobsOnly = knobFilters.length > 0;
+  const baselineScenarios = baselineIgnoresKnobsOnly ? scenarioFilter : [];
+  const baselineLabels = baselineIgnoresKnobsOnly ? labelFilter : [];
+  const baselineRunId = baselineIgnoresKnobsOnly ? idSearchDebounced : "";
+  const baselineLabel = baselineIgnoresKnobsOnly
+    ? "matching the other filters, before the knob conditions"
+    : "in this group";
+  const { data: baselineTotal } = useQuery({
+    queryKey: ["runs-baseline-total", baselineScenarios, baselineLabels, baselineRunId],
+    enabled: hasActiveFilters,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/g/{group_slug}/runs", {
+        params: {
+          query: {
+            limit: 1,
+            scenario: baselineScenarios.length > 0 ? baselineScenarios : undefined,
+            labels: baselineLabels.length > 0 ? baselineLabels : undefined,
+            run_id_contains: baselineRunId.length > 0 ? baselineRunId : undefined,
+          },
+        },
+      });
+      if (error) {
+        throw new Error("Failed to count runs");
+      }
+      return data.total;
+    },
+  });
 
   // Window-scroll virtualization of the day-group cards. The page itself
   // scrolls (no inner scroll container), so off-screen day cards unmount while
@@ -301,6 +336,7 @@ export function RunList() {
     regularFilterLabels.length,
     selectedScenarios.size,
     selectedLabels.size,
+    picking,
   ]);
 
   const groupVirtualizer = useWindowVirtualizer({
@@ -309,6 +345,24 @@ export function RunList() {
     overscan: 3,
     scrollMargin: listScrollMargin,
   });
+
+  // The export modal offers "everything matching the current filters", which is
+  // the only honest way to express it: the list is paginated and virtualized, so
+  // runs past the loaded pages have no id on the client to check.
+  useEffect(() => {
+    publishFilters({
+      scenario: scenarioFilter,
+      labels: labelFilter,
+      run_id_contains: idSearchDebounced.length > 0 ? idSearchDebounced : null,
+      status: null,
+      contains_agent_id: null,
+      knob: knobFilters,
+    });
+  }, [scenarioFilter, labelFilter, idSearchDebounced, knobFilters, publishFilters]);
+
+  useEffect(() => {
+    publishMatchingRunCount(totalRuns);
+  }, [totalRuns, publishMatchingRunCount]);
 
   if (isLoading) {
     return (
@@ -383,7 +437,11 @@ export function RunList() {
           {selectedScenarios.size > 0 ? (
             <button
               type="button"
-              onClick={() => setSelectedScenarios(new Set())}
+              onClick={() => {
+                setKnobFilters([]);
+                setDroppedKnobFilters(false);
+                setSelectedScenarios(new Set());
+              }}
               className="ml-1 inline-flex items-center gap-0.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
             >
               <XCircle className="h-3 w-3" />
@@ -393,15 +451,31 @@ export function RunList() {
         </div>
       ) : null}
 
+      {knobFilterScenario !== null ? (
+        <KnobFilterBar
+          scenarioName={knobFilterScenario}
+          filters={knobFilters}
+          onChange={setKnobFilters}
+        />
+      ) : null}
+
+      {knobFilterScenario === null && selectedScenarios.size > 1 ? (
+        <p className="text-[11px] text-muted-foreground">
+          Knob filtering needs a single scenario: knobs are declared per scenario, so a condition
+          means nothing across two.
+          {droppedKnobFilters ? " The conditions you had set were dropped." : null}
+        </p>
+      ) : null}
+
       {regularFilterLabels.length > 0 ? (
         <div className="flex flex-wrap items-center gap-1.5">
           <Tag className="h-3.5 w-3.5 text-muted-foreground" />
           {regularFilterLabels.map(label => {
             const active = selectedLabels.has(label);
             const color = labelColor(label);
-            return (
+            const description = labelDescriptions.get(label);
+            const chip = (
               <button
-                key={label}
                 type="button"
                 onClick={() => toggleLabel(label)}
                 className={cn(
@@ -413,6 +487,14 @@ export function RunList() {
               >
                 {label}
               </button>
+            );
+            if (description === undefined) {
+              return <Fragment key={label}>{chip}</Fragment>;
+            }
+            return (
+              <Tooltip key={label} label={description} wrap={true}>
+                {chip}
+              </Tooltip>
             );
           })}
           {selectedLabels.size > 0 && regularFilterLabels.some(l => selectedLabels.has(l)) ? (
@@ -436,14 +518,6 @@ export function RunList() {
         </div>
       ) : null}
 
-      {modalRun !== null ? (
-        <ScenarioDescriptionModal
-          scenarioName={humanize(modalRun.scenario_name)}
-          description={modalRun.scenario_description}
-          onClose={() => setModalRun(null)}
-        />
-      ) : null}
-
       {configPreview !== null ? (
         <ConfigValueModal
           configKey={configPreview.key}
@@ -457,36 +531,59 @@ export function RunList() {
         <NoteViewModal runId={noteModalRunId} onClose={() => setNoteModalRunId(null)} />
       ) : null}
 
-      {modelsPopover !== null ? (
-        <div className="pointer-events-none fixed inset-0 z-50">
-          <div
-            className="pointer-events-auto absolute w-max max-w-sm rounded-md border border-border bg-background px-3 py-2 text-xs shadow-lg"
-            style={{
-              left: `${Math.max(8, modelsPopover.left)}px`,
-              top: `${modelsPopover.top}px`,
-            }}
-            onMouseEnter={clearModelsPopoverCloseTimer}
-            onMouseLeave={queueModelsPopoverClose}
-            onClick={e => {
-              e.stopPropagation();
-            }}
-          >
-            {modelsPopover.agentModels.map(a => (
-              <div key={a.agent_id} className="flex justify-between gap-4 py-0.5">
-                <span className="text-muted-foreground">{a.role_name}</span>
-                <span className="font-mono">
-                  {a.provider}:{a.model}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
       {runs.length === 0 && hasActiveFilters ? (
         <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
           <Inbox className="h-8 w-8" />
           <p className="text-sm">No runs match the selected filters</p>
+          {baselineTotal !== undefined && baselineTotal > 0 ? (
+            <p className="text-[11px]">
+              0 of {baselineTotal} runs {baselineLabel}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {picking ? (
+        <div className="mb-3 flex items-center gap-3 rounded-md border border-primary/40 bg-primary/5 px-3 py-1.5 text-xs">
+          <span className="font-medium">
+            {selectedRunIds.size === 0
+              ? "Check the runs to export"
+              : `${selectedRunIds.size} selected`}
+          </span>
+          <button
+            type="button"
+            onClick={() => replaceSelection(runs.map(run => run.run_id))}
+            className="text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Select all {runs.length} loaded
+          </button>
+          {selectedRunIds.size > 0 ? (
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Clear
+            </button>
+          ) : null}
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={stopPicking}
+              className="inline-flex items-center gap-0.5 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <XCircle className="h-3 w-3" />
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={selectedRunIds.size === 0}
+              onClick={openExport}
+              className="rounded-md bg-foreground px-2 py-0.5 font-medium text-background transition-opacity hover:opacity-80 disabled:opacity-50"
+            >
+              Export {selectedRunIds.size > 0 ? selectedRunIds.size : ""}
+            </button>
+          </div>
         </div>
       ) : null}
 
@@ -517,7 +614,8 @@ export function RunList() {
               >
                 <h2 className="mb-2 text-sm font-medium text-muted-foreground">{group.label}</h2>
                 <div className="rounded-lg border border-border">
-                  <table className="w-full text-sm">
+                  <table className="w-full table-fixed text-sm">
+                    <RunTableColumns picking={picking} />
                     <tbody>
                       {group.runs.map((run, idx) => (
                         <RunRow
@@ -525,13 +623,14 @@ export function RunList() {
                           run={run}
                           showTopBorder={idx > 0}
                           onNavigate={navigateToRun}
-                          onShowDescription={setModalRun}
-                          onModelsEnter={openModelsPopover}
-                          onModelsLeave={queueModelsPopoverClose}
                           onStop={stopMutation.mutate}
                           onDelete={deleteMutation.mutate}
                           onShowNote={setNoteModalRunId}
                           onConfigPreview={setConfigPreview}
+                          shownKnobs={filteredKnobNames}
+                          picking={picking}
+                          selected={selectedRunIds.has(run.run_id)}
+                          onToggleSelected={toggleRunSelected}
                         />
                       ))}
                     </tbody>
@@ -556,8 +655,18 @@ export function RunList() {
               Load more
             </button>
           ) : null}
-          <p className="text-[11px] text-muted-foreground">
+          <p
+            className="text-[11px] text-muted-foreground"
+            title={
+              baselineTotal !== undefined && baselineTotal !== totalRuns
+                ? `${totalRuns} of ${baselineTotal} runs ${baselineLabel}`
+                : undefined
+            }
+          >
             Showing {runs.length} of {totalRuns}
+            {baselineTotal !== undefined && baselineTotal !== totalRuns
+              ? ` / ${baselineTotal}`
+              : null}
           </p>
         </div>
       ) : null}

@@ -34,8 +34,9 @@ LIST_TOOLS_METHOD = "tools/list"
 class ToolAuthorizer(Protocol):
     """The one thing the filter asks of the runtime.
 
-    Narrower than ``SimulationRuntime`` so the decision can be exercised without
-    standing up a simulation to ask it.
+    Narrower than ``SimulationRuntime``, which needs a whole simulation to build,
+    so the filtering can be asked its question directly. ``SimulationRuntime``
+    satisfies this without declaring it.
     """
 
     def is_tool_allowed(self, agent_id: str, tool_name: str) -> bool:

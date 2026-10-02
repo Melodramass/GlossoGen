@@ -15,9 +15,9 @@ make install-metrics  # add this if you will run evaluations (pulls torch)
 make lint             # must pass before you open a PR
 ```
 
-`make lint` runs black, isort, ruff, pyright in **strict** mode, vulture, and two
-custom linters, plus prettier/eslint/stylelint/tsc on the frontend. CI runs the
-same thing, so a clean local run means a clean CI run.
+`make lint` runs black, isort, ruff, pyright in **strict** mode, vulture, and the
+custom linters in `linter/`, plus prettier/eslint/stylelint/tsc on the frontend. CI
+runs the same thing, so a clean local run means a clean CI run.
 
 ## Before you open a PR
 
@@ -26,6 +26,8 @@ same thing, so a clean local run means a clean CI run.
 - [ ] `make gen-api-types` produces no diff if you touched a response model (CI fails on drift)
 - [ ] Docstrings on new modules and public functions
 - [ ] No dead code left behind
+- [ ] Documentation pages you touched pass the review in
+      [docs/documentation-style.md](docs/documentation-style.md)
 
 ## Tests
 
@@ -35,11 +37,18 @@ same on your machine as in CI.
 
 ```
 tests/fakes/       a pydantic-ai model that plays a written script, and a stub LLM provider
-tests/testbed/     a two-agent scenario and a harness that runs it end to end
 tests/unit/        one module at a time
+tests/engine/      the declarative round engine, against recorded baselines
+tests/scenarios/   one scenario at a time, driven through its own tools
+tests/metrics/     one metric at a time, sharing one simulated run
 tests/integration/ a real simulation, with only the model faked
 tests/conformance/ every registered scenario against the platform's contract
 ```
+
+The harness those tests run on is not in `tests/`. It lives in
+`src/glossogen/testing/` and ships in the package behind the `testing` extra, so a
+scenario in another distribution tests itself the same way the built-ins do. See
+[Testing a scenario](docs/testing-a-scenario.md).
 
 The conformance suite is parametrized over the scenario registry and every knobs
 preset in the tree, so a new scenario is covered the moment it is registered.
@@ -88,17 +97,35 @@ a call site awkward, that is usually a sign the function is doing too much.
 **Never return bare dicts.** Use a `NamedTuple` or a Pydantic model. Every FastAPI
 endpoint declares a `response_model` and returns an instance of it.
 
+**Documentation is read in two places**, and both have to work: in the repository
+and on the [site](https://agencyenterprise.github.io/GlossoGen/). Write links
+relative as you would for GitHub. `scripts/docs_hooks.py` rewrites the ones that
+leave `docs/` into permalinks at build time. `make docs-build` runs `mkdocs build
+--strict`, which fails on a link or anchor that would 404, and a CI job runs it on
+every PR. External URLs are outside its reach, so a scheduled workflow
+(`external-links.yml`) checks those against the built site weekly.
+`make docs-serve` previews locally.
+
+**Notebooks are committed without their output**, which
+`linter/check_notebook_outputs.py` checks and its `--strip` flag fixes. Output lives
+inside the document, so running one and saving buries the next real diff under
+regenerated cells.
+
+**Prompts live in `prompts/*.jinja`**, and `linter/check_prompt_templates.py`
+checks them: each one parses, its `{% include %}` targets are in the directory
+the renderer searches, nothing renders or includes it in vain, and every template
+name in shipped code answers to a file. Rendering is strict: a name the template
+uses but the caller never passes raises, because the permissive default turns a
+typo into a prompt that is quietly missing a line. Templates ship inside the
+package, so a new `prompts/` directory needs no packaging change. A new file
+*extension* does, via `[tool.setuptools.package-data]`. Prompt-sized string
+literals in scenario Python are reported as advisory.
+
 **No inline imports** and **no `TYPE_CHECKING`** blocks, both enforced by
 custom linters in `linter/`. If you hit a circular import, restructure rather than
 working around it. Conditional loading of an optional dependency goes through
 `importlib.import_module`, as in
 [optional_ml_backend.py](src/glossogen/evaluation/metric_core/optional_ml_backend.py).
-
-**Prompts live in Jinja templates**, never hardcoded in Python. They ship inside
-the package, so a new `prompts/` directory needs no packaging change. A new
-file *extension* does, via `[tool.setuptools.package-data]`. Rendering is strict:
-a name the template uses but the caller never passes raises, because the
-permissive default turns a typo into a prompt that is quietly missing a line.
 
 **LLM output is parsed through a schema.** Define a Pydantic model, pass it to
 `generate_structured()`, use the validated instance. Never parse free text.

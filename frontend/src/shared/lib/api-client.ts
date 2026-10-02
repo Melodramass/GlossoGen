@@ -1,5 +1,6 @@
 import createClient from "openapi-fetch";
 import { getApiUrl } from "@/shared/config/runtime-config";
+import { getSessionToken } from "@/features/auth/adapter/browser";
 import type { paths } from "@/types/api.gen";
 
 /**
@@ -44,44 +45,13 @@ export function setActiveGroupSlug(slug: string | null): void {
 }
 
 /**
- * When Clerk is loaded in the browser, fetch a fresh session token via the
- * global `window.Clerk` accessor. Returns ``null`` in local mode (no
- * Clerk) or before Clerk has finished initializing — the backend's
- * identity middleware treats those requests as the synthetic local
- * identity.
- *
- * Passes ``skipCache: true`` so the token reflects the user's currently
- * active organization. Without it, ``getToken()`` returns whatever was
- * cached at sign-in time — typically ``org_slug: null`` if the user
- * picked their org after sign-in via ``<OrganizationList>`` / the org
- * switcher. The backend then 403s every ``/api/g/<slug>/...`` call.
- */
-async function getClerkSessionToken(): Promise<string | null> {
-  if (typeof window === "undefined") return null;
-  const clerk = (
-    window as unknown as {
-      Clerk?: {
-        session?: { getToken: (opts?: { skipCache?: boolean }) => Promise<string | null> };
-      };
-    }
-  ).Clerk;
-  const session = clerk?.session;
-  if (!session) return null;
-  try {
-    return await session.getToken({ skipCache: true });
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Mode-safe ``Authorization`` header for raw ``fetch`` calls that can't go
- * through openapi-fetch (e.g. multipart uploads). Returns a bearer header in
- * Clerk mode and an empty object in local mode (where the backend's identity
- * middleware supplies the synthetic local identity).
+ * ``Authorization`` header for raw ``fetch`` calls that cannot go through
+ * openapi-fetch, such as multipart uploads. Returns a bearer header when an auth
+ * adapter supplies a token, and an empty object in single-tenant mode, where the
+ * backend supplies the synthetic identity.
  */
 export async function authHeaders(): Promise<Record<string, string>> {
-  const token = await getClerkSessionToken();
+  const token = await getSessionToken();
   if (token) {
     return { Authorization: `Bearer ${token}` };
   }
@@ -113,11 +83,10 @@ function assertGroupSlugSubstituted(url: string): void {
 /**
  * Build a fully-qualified URL for an SSE (`EventSource`) connection.
  *
- * `EventSource` cannot set an `Authorization` header, so the Clerk session
- * token (when present) is appended as a `?token=` query parameter, which the
- * backend identity middleware accepts as a bearer fallback. Returns the URL
- * with no token in local mode (the backend supplies the synthetic local
- * identity). Async because fetching a fresh Clerk token is async.
+ * `EventSource` cannot set an `Authorization` header, so the session token, when
+ * there is one, is appended as a `?token=` query parameter, which the backend
+ * identity middleware accepts as a bearer fallback. Returns the URL with no token
+ * in single-tenant mode. Async because obtaining a fresh token is async.
  */
 export async function buildEventStreamUrl({
   path,
@@ -128,7 +97,7 @@ export async function buildEventStreamUrl({
 }): Promise<string> {
   const substituted = substituteGroupSlug(path);
   assertGroupSlugSubstituted(substituted);
-  const token = await getClerkSessionToken();
+  const token = await getSessionToken();
   if (token) {
     searchParams.set("token", token);
   }
@@ -148,14 +117,67 @@ function extractFilename(disposition: string | null, fallback: string): string {
   return fallback;
 }
 
+/** Read the FastAPI ``detail`` off an error response, or null if it has none. */
+async function errorDetail(resp: Response): Promise<string | null> {
+  try {
+    const payload: unknown = await resp.json();
+    if (payload && typeof payload === "object" && "detail" in payload) {
+      const detail = (payload as { detail: unknown }).detail;
+      if (typeof detail === "string") return detail;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read the whole body, reporting progress as a fraction when the length is known.
+ *
+ * Exports declare a Content-Length because the server builds the archive before
+ * it starts sending, so this reports real progress rather than a byte count with
+ * no denominator.
+ */
+async function readBodyWithProgress(
+  resp: Response,
+  onProgress: (received: number, total: number | null) => void
+): Promise<Blob> {
+  const reader = resp.body?.getReader();
+  if (!reader) return resp.blob();
+
+  const declared = resp.headers.get("Content-Length");
+  const total = declared === null ? null : Number(declared);
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) {
+      chunks.push(value);
+      received += value.byteLength;
+      onProgress(received, total);
+    }
+  }
+  return new Blob(chunks as BlobPart[], {
+    type: resp.headers.get("Content-Type") ?? "application/octet-stream",
+  });
+}
+
 export async function downloadAuthenticatedFile({
   path,
   searchParams,
   fallbackFilename,
+  method,
+  jsonBody,
+  onProgress,
 }: {
   path: string;
   searchParams: URLSearchParams;
   fallbackFilename: string;
+  method?: "GET" | "POST";
+  jsonBody?: unknown;
+  onProgress?: (received: number, total: number | null) => void;
 }): Promise<void> {
   const substituted = substituteGroupSlug(path);
   assertGroupSlugSubstituted(substituted);
@@ -163,16 +185,22 @@ export async function downloadAuthenticatedFile({
   const base = getApiUrl();
   const url = query.length > 0 ? `${base}${substituted}?${query}` : `${base}${substituted}`;
   const headers: Record<string, string> = {};
-  const token = await getClerkSessionToken();
+  const token = await getSessionToken();
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
-  // eslint-disable-next-line no-restricted-globals -- binary download, openapi-fetch returns typed JSON only
-  const resp = await fetch(url, { headers });
-  if (!resp.ok) {
-    throw new Error(`Download failed: ${resp.status} ${resp.statusText}`);
+  let body: string | undefined;
+  if (jsonBody !== undefined) {
+    headers["Content-Type"] = "application/json";
+    body = JSON.stringify(jsonBody);
   }
-  const blob = await resp.blob();
+  // eslint-disable-next-line no-restricted-globals -- binary download, openapi-fetch returns typed JSON only
+  const resp = await fetch(url, { method: method ?? "GET", headers, body });
+  if (!resp.ok) {
+    const detail = await errorDetail(resp);
+    throw new Error(detail ?? `Download failed: ${resp.status} ${resp.statusText}`);
+  }
+  const blob = onProgress ? await readBodyWithProgress(resp, onProgress) : await resp.blob();
   const filename = extractFilename(resp.headers.get("Content-Disposition"), fallbackFilename);
   const blobUrl = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -188,7 +216,7 @@ api.use({
   async onRequest({ request }) {
     const substituted = resolveApiOrigin(substituteGroupSlug(request.url));
     assertGroupSlugSubstituted(substituted);
-    const token = await getClerkSessionToken();
+    const token = await getSessionToken();
 
     const headers = new Headers(request.headers);
     if (token) {

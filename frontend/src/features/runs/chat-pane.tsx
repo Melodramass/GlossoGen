@@ -4,22 +4,20 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Archive, ChevronDown, UserCog } from "lucide-react";
 import Link from "next/link";
-import { cn } from "@/shared/lib/cn";
 import type { components } from "@/types/api.gen";
 import { useGroupPath } from "@/features/auth/group-context";
-import { deriveInitials, type AgentColor } from "./agent-colors";
+import type { AgentColor } from "./agent-colors";
 import type { DisplayEntry } from "./display-entry";
-import { formatTime, humanize } from "./format";
-import { ProseMarkdown } from "./prose-markdown";
-import { NotificationDisplay } from "./notification-display";
-import { ToolCallDisplay } from "./tool-call-display";
-import { RunCycleFailureDisplay } from "./run-cycle-failure-display";
+import { buildChatRows } from "./chat-rows";
+import { humanize } from "./format";
 import { RoundTimelineModal } from "./round-timeline-modal";
 import { RoundInjectionRow, RoundOutcomeRow } from "./round-event-row";
 import type { ScenarioTimelineMarker } from "./scenario-plugin";
 import { ScenarioMarkerDivider } from "./scenario-timeline-marker";
+import { ChatEntryRow } from "./chat-entry-row";
 import { ChatHeader } from "./chat-header";
 import { ChatRoundBadge } from "./chat-round-badge";
+import { cleanToolName, useToolVisibility } from "./tool-visibility";
 import { ConnectionWires } from "./connection-wires";
 
 type AgentDetail = components["schemas"]["AgentDetail"];
@@ -45,9 +43,9 @@ interface ChatPaneProps {
   highlightedMessageId: string | null;
   highlightNonce: number;
   /**
-   * Divider to jump to, from one of the floating jump-to buttons. Rounds are
+   * Divider to jump to, from one of the floating jump-to buttons. Entries are
    * virtualized, so the target element is usually not mounted when the button is
-   * clicked — its round has to be scrolled to first. That is why this carries a
+   * clicked — its row has to be scrolled to first. That is why this carries a
    * round number and not just an element id.
    */
   dividerJumpTarget: DividerJumpTarget | null;
@@ -127,60 +125,6 @@ export interface ContextCompactionMarker {
   summary_char_count: number;
   /** Provider's readable summary, or "" when stored encrypted server-side (OpenAI). */
   summary_text: string;
-}
-
-interface TurnGroup {
-  agentId: string;
-  timestamp: string;
-  entries: DisplayEntry[];
-}
-
-interface RoundGroup {
-  roundNumber: number;
-  turns: TurnGroup[];
-}
-
-function groupByRoundAndTurn(messages: DisplayEntry[]): RoundGroup[] {
-  const rounds: RoundGroup[] = [];
-  let currentRound = -1;
-  let currentTurns: TurnGroup[] = [];
-  let currentTurn: TurnGroup | null = null;
-
-  for (const msg of messages) {
-    if (msg.round_number !== currentRound) {
-      if (currentTurn) {
-        currentTurns.push(currentTurn);
-      }
-      if (currentTurns.length > 0) {
-        rounds.push({ roundNumber: currentRound, turns: currentTurns });
-      }
-      currentRound = msg.round_number;
-      currentTurns = [];
-      currentTurn = {
-        agentId: msg.sender_agent_id,
-        timestamp: msg.timestamp,
-        entries: [msg],
-      };
-    } else if (currentTurn && msg.sender_agent_id === currentTurn.agentId) {
-      currentTurn.entries.push(msg);
-    } else {
-      if (currentTurn) {
-        currentTurns.push(currentTurn);
-      }
-      currentTurn = {
-        agentId: msg.sender_agent_id,
-        timestamp: msg.timestamp,
-        entries: [msg],
-      };
-    }
-  }
-  if (currentTurn) {
-    currentTurns.push(currentTurn);
-  }
-  if (currentTurns.length > 0) {
-    rounds.push({ roundNumber: currentRound, turns: currentTurns });
-  }
-  return rounds;
 }
 
 /** Threshold in pixels for considering the user "at the bottom" of the scroll area. */
@@ -294,21 +238,21 @@ export function ChatPane({
     prevScrollHeightRef.current = el.scrollHeight;
   }, []);
 
-  // A MutationObserver catches all content changes (new messages, partial
-  // streaming text, reasoning expansion) and scrolls to the bottom when the
-  // user was already there. This avoids tracking individual state updates.
+  // Observe the virtual spacer after dynamic row measurements. DOM mutations
+  // alone miss changes to its height and fire while offscreen rows mount.
   useEffect(() => {
     const el = scrollContainerRef.current;
-    if (!el) return undefined;
+    const content = innerContentRef.current;
+    if (!el || !content) return undefined;
 
-    const observer = new MutationObserver(() => {
+    const observer = new ResizeObserver(() => {
       if (!isAtBottomRef.current) return;
       if (el.scrollHeight <= prevScrollHeightRef.current) return;
       prevScrollHeightRef.current = el.scrollHeight;
       el.scrollTop = el.scrollHeight;
     });
 
-    observer.observe(el, { childList: true, subtree: true, characterData: true });
+    observer.observe(content);
     return () => observer.disconnect();
   }, []);
 
@@ -332,20 +276,6 @@ export function ChatPane({
     return messages.filter(m => m.channel_ids.includes(selectedChannel));
   }, [messages, selectedChannel]);
 
-  const notificationPairs = useMemo(() => {
-    const out: Array<{ callMessageId: string; resultMessageId: string; callId: string }> = [];
-    for (const e of filtered) {
-      if (e.is_notification_result && e.paired_message_id !== "") {
-        out.push({
-          callMessageId: e.paired_message_id,
-          resultMessageId: e.message_id,
-          callId: e.call_id,
-        });
-      }
-    }
-    return out;
-  }, [filtered]);
-
   const showChannelBadge = selectedChannel === null;
 
   let headerName = "all activity";
@@ -364,7 +294,10 @@ export function ChatPane({
     selectedChannel === null ? "all channels, global turn order" : `#${selectedChannel}`;
 
   const [showReasoning, setShowReasoning] = useState(true);
-  const [showTools, setShowTools] = useState(true);
+  // Derived from the entries this view can show, so the control disappears in a
+  // channel view: tool calls carry no channel and only surface under "all
+  // activity". Toggles live in the hook, so they survive switching views.
+  const toolVisibility = useToolVisibility(filtered);
 
   // Agent IDs the user has toggled on in the channel header to focus the view.
   // Empty = show every member. Filtering uses the intersection with the
@@ -395,194 +328,153 @@ export function ChatPane({
     });
   }, []);
 
+  const isToolVisible = toolVisibility.isVisible;
   const visibleFiltered = useMemo(() => {
     return filtered.filter(m => {
       if (m.is_reasoning && !showReasoning) return false;
-      if (m.is_tool_use && !showTools) return false;
+      if (m.is_tool_use || m.is_notification_result) {
+        if (!isToolVisible(cleanToolName(m.tool_name))) return false;
+      }
       if (focusedAgentIds.size > 0 && !focusedAgentIds.has(m.sender_agent_id)) return false;
       return true;
     });
-  }, [filtered, showReasoning, showTools, focusedAgentIds]);
+  }, [filtered, showReasoning, isToolVisible, focusedAgentIds]);
 
-  const rounds = useMemo(() => groupByRoundAndTurn(visibleFiltered), [visibleFiltered]);
+  // Wires are drawn between a read_notifications call pill and its parsed
+  // response, so they follow what the tool filter left on screen.
+  const notificationPairs = useMemo(() => {
+    const out: Array<{ callMessageId: string; resultMessageId: string; callId: string }> = [];
+    for (const e of visibleFiltered) {
+      if (e.is_notification_result && e.paired_message_id !== "") {
+        out.push({
+          callMessageId: e.paired_message_id,
+          resultMessageId: e.message_id,
+          callId: e.call_id,
+        });
+      }
+    }
+    return out;
+  }, [visibleFiltered]);
 
-  // Round-level virtualization: only rounds near the viewport are mounted, so a
-  // run with thousands of entries keeps a small DOM. Round heights vary and are
-  // measured dynamically via ``measureElement``.
-  // eslint-disable-next-line react-hooks/incompatible-library -- useVirtualizer returns uncacheable functions, so React Compiler skips memoizing this component
+  const { rows, rowIndexByRound, rowIndexByMessage } = useMemo(
+    () => buildChatRows(visibleFiltered),
+    [visibleFiltered]
+  );
+  const getItemKey = useCallback((index: number) => rows[index]?.key ?? index, [rows]);
+
+  // Bound mounted activity by viewport size, even when a single round or turn
+  // contains thousands of entries. Expanded content is measured dynamically.
+  // eslint-disable-next-line react-hooks/incompatible-library -- useVirtualizer returns uncacheable functions
   const rowVirtualizer = useVirtualizer({
-    count: rounds.length,
+    count: rows.length,
     getScrollElement: () => scrollContainerRef.current,
-    estimateSize: () => 480,
-    overscan: 4,
-    getItemKey: index => `round-${rounds[index]?.roundNumber ?? index}`,
-    // The adapter otherwise wraps its re-render in flushSync, which React 19
-    // rejects because the call originates from the measureElement ref during
-    // commit. Rounds are measured dynamically, so this fired on any scroll that
-    // mounted one. Batching the re-render instead is the library's own opt-out.
+    estimateSize: index => (rows[index]?.kind === "entry" ? 100 : 80),
+    overscan: 6,
+    getItemKey,
     useFlushSync: false,
   });
   const virtualItems = rowVirtualizer.getVirtualItems();
-
-  // The round at the top of the viewport drives the floating "Round N" badge.
-  // Derived from the scroll offset, not ``virtualItems[0]``: the virtual window
-  // includes ``overscan`` items rendered *above* the viewport, so the first
-  // mounted item is several rounds behind what the user is actually reading.
   const scrollOffset = rowVirtualizer.scrollOffset ?? 0;
   const topVisibleItem = virtualItems.find(item => item.end > scrollOffset) ?? virtualItems[0];
   const currentVisibleRound =
-    topVisibleItem !== undefined ? (rounds[topVisibleItem.index]?.roundNumber ?? null) : null;
+    topVisibleItem !== undefined ? (rows[topVisibleItem.index]?.roundNumber ?? null) : null;
 
-  // Round index for a round number / a message id, so jumps can scroll a
-  // possibly-unmounted target into the window before touching the DOM.
-  const roundIndexByNumber = useMemo(() => {
-    const map = new Map<number, number>();
-    rounds.forEach((round, index) => map.set(round.roundNumber, index));
-    return map;
-  }, [rounds]);
-
-  const roundIndexByMessageId = useMemo(() => {
-    const map = new Map<string, number>();
-    rounds.forEach((round, index) => {
-      for (const turn of round.turns) {
-        for (const entry of turn.entries) {
-          map.set(entry.message_id, index);
-        }
-      }
-    });
-    return map;
-  }, [rounds]);
-
-  // Flash (and center) a message once it is mounted. The entry may be off-screen
-  // when the jump starts, so retry across a few frames until the virtualizer has
-  // mounted its round.
-  const flashMessage = useCallback((messageId: string) => {
-    let attemptsLeft = 30;
-    const attempt = () => {
-      const el = messageRefs.current.get(messageId);
-      if (el) {
-        el.scrollIntoView({ behavior: "instant", block: "center" });
-        el.classList.remove("animate-highlight");
-        // Force reflow so the animation restarts even if just removed.
-        void el.offsetWidth;
-        el.classList.add("animate-highlight");
-        window.setTimeout(() => el.classList.remove("animate-highlight"), 1500);
-        return;
-      }
-      if (attemptsLeft > 0) {
-        attemptsLeft -= 1;
-        requestAnimationFrame(attempt);
-      }
-    };
-    requestAnimationFrame(attempt);
+  const jumpFrameRef = useRef<number | null>(null);
+  const highlightTimerRef = useRef<number | null>(null);
+  const highlightedElementRef = useRef<HTMLElement | null>(null);
+  const cancelJump = useCallback(() => {
+    if (jumpFrameRef.current !== null) cancelAnimationFrame(jumpFrameRef.current);
+    if (highlightTimerRef.current !== null) window.clearTimeout(highlightTimerRef.current);
+    highlightedElementRef.current?.classList.remove("animate-highlight");
+    highlightedElementRef.current = null;
+    jumpFrameRef.current = null;
+    highlightTimerRef.current = null;
   }, []);
+  useEffect(() => cancelJump, [cancelJump]);
+
+  // Scroll to the exact virtual row, then highlight after it mounts. Cancel an
+  // older jump when another starts or the chat unmounts.
+  const jumpToRow = useCallback(
+    (index: number, findElement?: () => HTMLElement | null | undefined) => {
+      cancelJump();
+      isAtBottomRef.current = false;
+      rowVirtualizer.scrollToIndex(index, { align: findElement ? "center" : "start" });
+      if (!findElement) return;
+      let attemptsLeft = 60;
+      const settle = () => {
+        const el = findElement();
+        if (el) {
+          el.scrollIntoView({ behavior: "instant", block: "center" });
+          el.classList.remove("animate-highlight");
+          void el.offsetWidth;
+          el.classList.add("animate-highlight");
+          highlightedElementRef.current = el;
+          highlightTimerRef.current = window.setTimeout(() => {
+            el.classList.remove("animate-highlight");
+            highlightedElementRef.current = null;
+            highlightTimerRef.current = null;
+          }, 1500);
+          jumpFrameRef.current = null;
+          return;
+        }
+        if (attemptsLeft-- > 0) {
+          rowVirtualizer.scrollToIndex(index, { align: "center" });
+          jumpFrameRef.current = requestAnimationFrame(settle);
+        }
+      };
+      jumpFrameRef.current = requestAnimationFrame(settle);
+    },
+    [cancelJump, rowVirtualizer]
+  );
 
   const jumpToMessage = useCallback(
     (messageId: string) => {
-      const roundIdx = roundIndexByMessageId.get(messageId);
-      if (roundIdx !== undefined) {
-        rowVirtualizer.scrollToIndex(roundIdx, { align: "center" });
-      }
-      flashMessage(messageId);
+      const index = rowIndexByMessage.get(messageId);
+      if (index !== undefined) jumpToRow(index, () => messageRefs.current.get(messageId));
     },
-    [roundIndexByMessageId, rowVirtualizer, flashMessage]
+    [rowIndexByMessage, jumpToRow]
   );
 
   const jumpToRound = useCallback(
     (roundNumber: number) => {
-      const roundIdx = roundIndexByNumber.get(roundNumber);
-      if (roundIdx !== undefined) {
-        rowVirtualizer.scrollToIndex(roundIdx, { align: "start" });
-      }
+      const index = rowIndexByRound.get(roundNumber);
+      if (index !== undefined) jumpToRow(index);
     },
-    [roundIndexByNumber, rowVirtualizer]
+    [rowIndexByRound, jumpToRow]
   );
 
   const scrollToBottom = useCallback(() => {
-    if (rounds.length > 0) {
-      rowVirtualizer.scrollToIndex(rounds.length - 1, { align: "end" });
-    }
-  }, [rounds.length, rowVirtualizer]);
+    cancelJump();
+    isAtBottomRef.current = true;
+    if (rows.length > 0) rowVirtualizer.scrollToIndex(rows.length - 1, { align: "end" });
+  }, [rows.length, rowVirtualizer, cancelJump]);
 
-  // Scroll to the latest round on first mount so the newest messages are shown.
   const didInitialScrollRef = useRef(false);
   useEffect(() => {
-    if (didInitialScrollRef.current || rounds.length === 0) {
+    if (didInitialScrollRef.current || rows.length === 0) return;
+    if (highlightedMessageId || dividerJumpTarget) {
+      didInitialScrollRef.current = true;
       return;
     }
-    didInitialScrollRef.current = true;
-    requestAnimationFrame(() => {
-      rowVirtualizer.scrollToIndex(rounds.length - 1, { align: "end" });
+    const frame = requestAnimationFrame(() => {
+      didInitialScrollRef.current = true;
+      scrollToBottom();
     });
-  }, [rounds.length, rowVirtualizer]);
+    return () => cancelAnimationFrame(frame);
+  }, [rows.length, scrollToBottom, highlightedMessageId, dividerJumpTarget]);
 
-  // Flash an element by id once mounted. Dividers are rendered inside their
-  // round, so this retries across frames exactly like flashMessage: the round is
-  // virtualized out until scrollToIndex mounts it.
-  const flashElementById = useCallback((elementId: string) => {
-    let attemptsLeft = 30;
-    const attempt = () => {
-      const el = document.getElementById(elementId);
-      if (el) {
-        el.scrollIntoView({ behavior: "instant", block: "center" });
-        el.classList.remove("animate-highlight");
-        void el.offsetWidth;
-        el.classList.add("animate-highlight");
-        window.setTimeout(() => el.classList.remove("animate-highlight"), 1500);
-        return;
-      }
-      if (attemptsLeft > 0) {
-        attemptsLeft -= 1;
-        requestAnimationFrame(attempt);
-      }
-    };
-    requestAnimationFrame(attempt);
-  }, []);
-
-  // Jump to a divider requested by a floating button. The round must be scrolled
-  // to first: until the virtualizer mounts it, the divider is not in the DOM and
-  // looking it up by id finds nothing.
   useEffect(() => {
-    if (!dividerJumpTarget) {
-      return;
-    }
-    const roundIdx = roundIndexByNumber.get(dividerJumpTarget.roundNumber);
-    const elementId = dividerJumpTarget.elementId;
-    if (roundIdx === undefined) {
-      return;
-    }
-    // Round heights are estimated until measured, so one scrollToIndex lands
-    // near the target rather than on it, and the offset keeps shifting as rounds
-    // are measured on the way. Re-issue it until the divider mounts — a distant
-    // jump (round 11 of 40) needs several passes to converge.
-    let attemptsLeft = 60;
-    const settle = () => {
-      rowVirtualizer.scrollToIndex(roundIdx, { align: "center" });
-      if (document.getElementById(elementId)) {
-        flashElementById(elementId);
-        return;
-      }
-      if (attemptsLeft > 0) {
-        attemptsLeft -= 1;
-        requestAnimationFrame(settle);
-      }
-    };
-    requestAnimationFrame(settle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- dividerJumpNonce forces a re-jump to the same divider
+    if (!dividerJumpTarget) return;
+    const index = rowIndexByRound.get(dividerJumpTarget.roundNumber);
+    if (index !== undefined)
+      jumpToRow(index, () => document.getElementById(dividerJumpTarget.elementId));
+    // The nonce is an explicit repeat request. Appended live rows must not re-jump.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dividerJumpTarget, dividerJumpNonce]);
 
-  // Scroll to a message flagged for highlight (e.g. from the branches viewer or
-  // a fork-point jump). Same round-then-flash path as an explicit jump.
   useEffect(() => {
-    if (!highlightedMessageId) {
-      return;
-    }
-    const roundIdx = roundIndexByMessageId.get(highlightedMessageId);
-    if (roundIdx !== undefined) {
-      rowVirtualizer.scrollToIndex(roundIdx, { align: "center" });
-    }
-    flashMessage(highlightedMessageId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- highlightNonce forces a re-jump to the same id
+    if (highlightedMessageId) jumpToMessage(highlightedMessageId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only jump on an explicit request
   }, [highlightedMessageId, highlightNonce]);
 
   return (
@@ -596,8 +488,7 @@ export function ChatPane({
         agentColorMap={agentColorMap}
         showReasoning={showReasoning}
         onShowReasoningChange={setShowReasoning}
-        showTools={showTools}
-        onShowToolsChange={setShowTools}
+        toolVisibility={toolVisibility}
         exportSlot={exportSlot}
       />
 
@@ -633,6 +524,8 @@ export function ChatPane({
         ref={scrollContainerRef}
         className="flex-1 overflow-y-auto overflow-x-hidden px-0 py-1"
         onScroll={handleScroll}
+        onWheel={cancelJump}
+        onTouchMove={cancelJump}
       >
         <div
           ref={innerContentRef}
@@ -646,15 +539,15 @@ export function ChatPane({
             hoveredCallId={hoveredCallId}
           />
           {virtualItems.map(virtualItem => {
-            const round = rounds[virtualItem.index];
-            if (round === undefined) {
+            const row = rows[virtualItem.index];
+            if (row === undefined) {
               return null;
             }
-            const roundIdx = virtualItem.index;
             return (
               <div
                 key={virtualItem.key}
                 data-index={virtualItem.index}
+                data-chat-row={row.kind}
                 ref={rowVirtualizer.measureElement}
                 style={{
                   position: "absolute",
@@ -664,310 +557,165 @@ export function ChatPane({
                   transform: `translateY(${virtualItem.start}px)`,
                 }}
               >
-                {scenarioMarkers
-                  .filter(marker => marker.roundNumber === round.roundNumber)
-                  .map(marker => (
-                    <ScenarioMarkerDivider key={marker.id} marker={marker} />
-                  ))}
-                {replaceAgentSource !== null &&
-                round.roundNumber === replaceAgentSource.round_start ? (
-                  <div
-                    id="replace-agent-divider"
-                    className="mx-4 my-4 rounded-md border-2 border-dashed border-sky-400/80 bg-sky-50 px-4 py-3 dark:border-sky-600/70 dark:bg-sky-950/50"
-                  >
-                    <div className="flex items-center justify-center gap-2 text-sky-800 dark:text-sky-200">
-                      <UserCog className="h-4 w-4" />
-                      <span className="text-sm font-semibold">
-                        {replaceAgentSource.replaced_agent_id} replaced with{" "}
-                        {replaceAgentSource.replacement_model}
-                      </span>
-                    </div>
-                    <div className="mt-1 text-center text-[11px] text-sky-700/80 dark:text-sky-300/80">
-                      Round {round.roundNumber} begins with the replacement on a fresh history.
-                      Other agents continue from their full reconstructed history.
-                    </div>
-                  </div>
-                ) : null}
-                {crossRunReplaceAgentSource !== null &&
-                round.roundNumber === crossRunReplaceAgentSource.round_start ? (
-                  <div
-                    id="cross-run-replace-agent-divider"
-                    className="mx-4 my-4 rounded-md border-2 border-dashed border-violet-400/80 bg-violet-50 px-4 py-3 dark:border-violet-600/70 dark:bg-violet-950/50"
-                  >
-                    <div className="flex items-center justify-center gap-2 text-violet-800 dark:text-violet-200">
-                      <UserCog className="h-4 w-4" />
-                      <span className="text-sm font-semibold">
-                        {crossRunReplaceAgentSource.replaced_agent_id} imported from{" "}
-                        <Link
-                          href={groupPath(`/runs/${crossRunReplaceAgentSource.source_b_run_id}`)}
-                          className="underline-offset-2 hover:underline"
-                        >
-                          {crossRunReplaceAgentSource.source_b_run_id}
-                        </Link>
-                      </span>
-                    </div>
-                    <div className="mt-1 text-center text-[11px] text-violet-700/80 dark:text-violet-300/80">
-                      Round {round.roundNumber} begins with the imported agent carrying its full
-                      history from source B; this timeline derives from source A{" "}
-                      <Link
-                        href={groupPath(`/runs/${crossRunReplaceAgentSource.source_a_run_id}`)}
-                        className="underline-offset-2 hover:underline"
+                {row.kind === "round-start" ? (
+                  <>
+                    {scenarioMarkers
+                      .filter(marker => marker.roundNumber === row.roundNumber)
+                      .map(marker => (
+                        <ScenarioMarkerDivider key={marker.id} marker={marker} />
+                      ))}
+                    {replaceAgentSource !== null &&
+                    row.roundNumber === replaceAgentSource.after_round + 1 ? (
+                      <div
+                        id="replace-agent-divider"
+                        className="mx-4 my-4 rounded-md border-2 border-dashed border-sky-400/80 bg-sky-50 px-4 py-3 dark:border-sky-600/70 dark:bg-sky-950/50"
                       >
-                        {crossRunReplaceAgentSource.source_a_run_id}
-                      </Link>
-                      . Other agents continue from this run.
-                    </div>
-                  </div>
-                ) : null}
-                {agentSwapDividers
-                  .filter(swap => swap.round_number === round.roundNumber)
-                  .map(swap => (
-                    <button
-                      key={swap.post_swap_instance_key}
-                      id={`agent-swap-divider-r${swap.round_number}-${swap.agent_id}`}
-                      type="button"
-                      onClick={() => onSelectAgent(swap.post_swap_instance_key)}
-                      className="mx-4 my-4 block w-[calc(100%-2rem)] rounded-md border-2 border-dashed border-indigo-400/80 bg-indigo-50 px-4 py-3 text-left transition-colors hover:bg-indigo-100/70 dark:border-indigo-600/70 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/50"
-                    >
-                      <div className="flex items-center justify-center gap-2 text-indigo-800 dark:text-indigo-200">
-                        <UserCog className="h-4 w-4" />
-                        <span className="text-sm font-semibold">
-                          {swap.role_name} swapped — {swap.old_model} → {swap.new_model}
-                        </span>
-                      </div>
-                      <div className="mt-1 text-center text-[11px] text-indigo-700/80 dark:text-indigo-300/80">
-                        Round {round.roundNumber} begins with reconstructed history. Click to open
-                        Gen {swap.generation}.
-                      </div>
-                    </button>
-                  ))}
-                {contextCompactionMarkers
-                  .filter(marker => marker.round_number === round.roundNumber)
-                  .map(marker => (
-                    <div
-                      key={`context-compaction-r${marker.round_number}-${marker.agent_id}`}
-                      id={`context-compaction-divider-r${marker.round_number}-${marker.agent_id}`}
-                      className="mx-4 my-4 rounded-md border-2 border-dashed border-amber-400/80 bg-amber-50 px-4 py-3 dark:border-amber-600/70 dark:bg-amber-950/50"
-                    >
-                      <div className="flex items-center justify-center gap-2 text-amber-800 dark:text-amber-200">
-                        <Archive className="h-4 w-4" />
-                        <span className="text-sm font-semibold">
-                          {marker.role_name} — context compacted ({marker.provider_name})
-                        </span>
-                      </div>
-                      <div className="mt-1 text-center text-[11px] text-amber-700/80 dark:text-amber-300/80">
-                        {marker.summary_text
-                          ? `Message history summarized into ${marker.summary_char_count.toLocaleString()} characters at round ${round.roundNumber}.`
-                          : `Message history compacted at round ${round.roundNumber}. ${marker.provider_name} stores the summary encrypted server-side, so its text is not available.`}
-                      </div>
-                      {marker.summary_text ? (
-                        <details className="mt-2 text-[11px] text-amber-800 dark:text-amber-200">
-                          <summary className="cursor-pointer text-center font-medium">
-                            Show summary
-                          </summary>
-                          <p className="mt-2 whitespace-pre-wrap rounded bg-amber-100/60 p-2 dark:bg-amber-900/30">
-                            {marker.summary_text}
-                          </p>
-                        </details>
-                      ) : null}
-                    </div>
-                  ))}
-                <div
-                  data-round-marker={round.roundNumber}
-                  className="flex items-center gap-2.5 px-4 pb-1.5 pt-3.5"
-                >
-                  <div className="h-px flex-1 bg-border" />
-                  <span className="whitespace-nowrap text-[11px] text-muted-foreground">
-                    Round {round.roundNumber}
-                  </span>
-                  <div className="h-px flex-1 bg-border" />
-                </div>
-
-                <RoundInjectionRow
-                  injections={(injectionsByRound.get(round.roundNumber) ?? []).filter(
-                    i => focusedAgentIds.size === 0 || focusedAgentIds.has(i.agent_id)
-                  )}
-                  roleNameForAgent={roleNameForAgent}
-                />
-
-                {round.turns.map((turn, turnIdx) => {
-                  const agent = agentMap.get(turn.agentId);
-                  const color = agentColorMap.get(turn.agentId);
-                  // Prefer a display name only when it differs from the agent_id:
-                  // legacy runs (recorded before sender_display_name existed) backfill
-                  // it with the raw agent_id, so fall through to the role name there.
-                  // Scenarios that rotate identity behind one agent_id still get their
-                  // distinct display name.
-                  const distinctDisplayName = turn.entries.find(
-                    e => e.sender_display_name && e.sender_display_name !== turn.agentId
-                  )?.sender_display_name;
-                  const turnDisplayName = distinctDisplayName ?? agent?.role_name ?? turn.agentId;
-
-                  const isPreResume =
-                    resumeCutoffTimestamp !== null && turn.timestamp < resumeCutoffTimestamp;
-                  return (
-                    <div
-                      key={`${roundIdx}-${turnIdx}-${turn.agentId}`}
-                      className={cn(
-                        "flex gap-2.5 px-4 py-1 transition-colors hover:bg-muted/50",
-                        isPreResume && "opacity-50"
-                      )}
-                    >
-                      <div className="flex w-7 shrink-0 flex-col items-start">
-                        <button
-                          aria-label={`Open agent ${turnDisplayName}`}
-                          className={cn(
-                            "flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-[10px] font-semibold transition-opacity hover:opacity-75",
-                            color?.bg,
-                            color?.fg
-                          )}
-                          onClick={() => onSelectAgent(turn.agentId)}
-                        >
-                          {agent ? deriveInitials(agent.role_name) : "??"}
-                        </button>
-                        <div className="flex flex-1 items-center justify-center self-stretch">
-                          <span className="text-[10px] font-medium leading-none text-muted-foreground/50">
-                            {turnIdx + 1}
+                        <div className="flex items-center justify-center gap-2 text-sky-800 dark:text-sky-200">
+                          <UserCog className="h-4 w-4" />
+                          <span className="text-sm font-semibold">
+                            {replaceAgentSource.replaced_agent_id} replaced with{" "}
+                            {replaceAgentSource.replacement_model}
                           </span>
                         </div>
-                      </div>
-                      <div className="min-w-0 flex-1 pr-4">
-                        <div className="mb-0.5 flex flex-wrap items-baseline gap-1.5">
-                          <button
-                            className="text-[13px] font-medium hover:underline"
-                            onClick={() => onSelectAgent(turn.agentId)}
-                          >
-                            {turnDisplayName}
-                          </button>
-                          <span className="text-[10px] text-muted-foreground">
-                            {formatTime(turn.timestamp)}
-                          </span>
+                        <div className="mt-1 text-center text-[11px] text-sky-700/80 dark:text-sky-300/80">
+                          Round {row.roundNumber} begins with the replacement on a fresh history.
+                          Other agents continue from their full reconstructed history.
                         </div>
-                        {turn.entries.map((entry, entryIdx) => {
-                          const entryChColor = channelColorMap.get(entry.channel_id);
-                          const displayText = entry.text;
-
-                          const entryKindKey = entry.is_reasoning
-                            ? "r"
-                            : entry.is_tool_use
-                              ? "t"
-                              : entry.is_notification_result
-                                ? "n"
-                                : entry.is_run_cycle_failure
-                                  ? "f"
-                                  : "m";
-                          const entryKey = `${entry.message_id}-${entryKindKey}-${entryIdx}`;
-                          const hasLinkedPair = entry.paired_message_id !== "";
-                          const isLinkHovered = hasLinkedPair && hoveredCallId === entry.call_id;
-
-                          return (
-                            <div
-                              key={entryKey}
-                              ref={el => {
-                                if (el) {
-                                  messageRefs.current.set(entry.message_id, el);
-                                } else {
-                                  messageRefs.current.delete(entry.message_id);
-                                }
-                              }}
-                              onMouseEnter={
-                                hasLinkedPair ? () => setHoveredCallId(entry.call_id) : undefined
-                              }
-                              onMouseLeave={
-                                hasLinkedPair ? () => setHoveredCallId(null) : undefined
-                              }
-                              onClick={
-                                hasLinkedPair
-                                  ? () => jumpToMessage(entry.paired_message_id)
-                                  : undefined
-                              }
-                              className={cn(
-                                "group/entry relative",
-                                entry.is_reasoning &&
-                                  "ml-4 rounded-md border border-border/60 bg-muted/35 px-2 py-1.5 text-muted-foreground dark:bg-muted/20",
-                                !entry.is_reasoning &&
-                                  !entry.is_tool_use &&
-                                  !entry.is_notification_result &&
-                                  !entry.is_run_cycle_failure &&
-                                  "rounded-md border border-border/70 bg-background px-2 py-1.5 shadow-sm",
-                                (entry.is_tool_use ||
-                                  entry.is_notification_result ||
-                                  entry.is_run_cycle_failure) &&
-                                  "ml-4",
-                                hasLinkedPair && "cursor-pointer",
-                                isLinkHovered &&
-                                  "rounded-md ring-2 ring-blue-400/40 dark:ring-blue-500/40",
-                                forkPointMessageId === entry.message_id &&
-                                  "rounded-md bg-blue-50/60 px-2 py-1.5 ring-1 ring-blue-300/50 dark:bg-blue-950/30 dark:ring-blue-700/40"
+                      </div>
+                    ) : null}
+                    {crossRunReplaceAgentSource !== null &&
+                    row.roundNumber === crossRunReplaceAgentSource.after_round + 1 ? (
+                      <div
+                        id="cross-run-replace-agent-divider"
+                        className="mx-4 my-4 rounded-md border-2 border-dashed border-violet-400/80 bg-violet-50 px-4 py-3 dark:border-violet-600/70 dark:bg-violet-950/50"
+                      >
+                        <div className="flex items-center justify-center gap-2 text-violet-800 dark:text-violet-200">
+                          <UserCog className="h-4 w-4" />
+                          <span className="text-sm font-semibold">
+                            {crossRunReplaceAgentSource.replaced_agent_id} imported from{" "}
+                            <Link
+                              href={groupPath(
+                                `/runs/${crossRunReplaceAgentSource.source_b_run_id}`
                               )}
+                              className="underline-offset-2 hover:underline"
                             >
-                              {forkPointMessageId === entry.message_id ? (
-                                <span className="mb-0.5 inline-block rounded-full bg-blue-100 px-1.5 py-px text-[10px] font-medium leading-relaxed text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
-                                  fork point (edited)
-                                </span>
-                              ) : null}
-
-                              {entry.is_reasoning ? (
-                                <span className="mb-1 inline-block rounded-full border border-border/70 bg-background/80 px-1.5 py-px text-[10px] font-medium text-muted-foreground">
-                                  reasoning
-                                </span>
-                              ) : entry.is_tool_use ||
-                                entry.is_notification_result ||
-                                entry.is_run_cycle_failure ? null : showChannelBadge ? (
-                                <span
-                                  className={cn(
-                                    "mb-0.5 inline-block rounded-full px-1.5 py-px text-[10px] font-medium leading-relaxed",
-                                    entryChColor?.bg,
-                                    entryChColor?.fg
-                                  )}
-                                >
-                                  #{entry.channel_id}
-                                </span>
-                              ) : null}
-
-                              {entry.is_tool_use || entry.is_notification_result ? (
-                                <ToolOrNotification entry={entry} />
-                              ) : entry.is_run_cycle_failure ? (
-                                <RunCycleFailureDisplay
-                                  errorType={entry.error_type}
-                                  message={entry.text}
-                                  cycle={entry.cycle}
-                                />
-                              ) : (
-                                <>
-                                  {displayText ? (
-                                    <ProseMarkdown
-                                      className={cn(
-                                        !entry.is_reasoning && "text-foreground",
-                                        "[&_em]:text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[11px]"
-                                      )}
-                                    >
-                                      {displayText.replace(/_/g, "\\_")}
-                                    </ProseMarkdown>
-                                  ) : null}
-                                  {!entry.is_reasoning &&
-                                  !entry.is_tool_use &&
-                                  !entry.is_notification_result &&
-                                  !entry.is_run_cycle_failure &&
-                                  entry.character_count > 0 ? (
-                                    <span className="mt-0.5 block text-[10px] text-muted-foreground/60">
-                                      {entry.character_count.toLocaleString()} characters
-                                    </span>
-                                  ) : null}
-                                </>
-                              )}
-                            </div>
-                          );
-                        })}
+                              {crossRunReplaceAgentSource.source_b_run_id}
+                            </Link>
+                          </span>
+                        </div>
+                        <div className="mt-1 text-center text-[11px] text-violet-700/80 dark:text-violet-300/80">
+                          Round {row.roundNumber} begins with the imported agent carrying its full
+                          history from source B; this timeline derives from source A{" "}
+                          <Link
+                            href={groupPath(`/runs/${crossRunReplaceAgentSource.source_a_run_id}`)}
+                            className="underline-offset-2 hover:underline"
+                          >
+                            {crossRunReplaceAgentSource.source_a_run_id}
+                          </Link>
+                          . Other agents continue from this run.
+                        </div>
                       </div>
+                    ) : null}
+                    {agentSwapDividers
+                      .filter(swap => swap.round_number === row.roundNumber)
+                      .map(swap => (
+                        <button
+                          key={swap.post_swap_instance_key}
+                          id={`agent-swap-divider-r${swap.round_number}-${swap.agent_id}`}
+                          type="button"
+                          onClick={() => onSelectAgent(swap.post_swap_instance_key)}
+                          className="mx-4 my-4 block w-[calc(100%-2rem)] rounded-md border-2 border-dashed border-indigo-400/80 bg-indigo-50 px-4 py-3 text-left transition-colors hover:bg-indigo-100/70 dark:border-indigo-600/70 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/50"
+                        >
+                          <div className="flex items-center justify-center gap-2 text-indigo-800 dark:text-indigo-200">
+                            <UserCog className="h-4 w-4" />
+                            <span className="text-sm font-semibold">
+                              {swap.role_name} swapped — {swap.old_model} → {swap.new_model}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-center text-[11px] text-indigo-700/80 dark:text-indigo-300/80">
+                            Round {row.roundNumber} begins with reconstructed history. Click to open
+                            Gen {swap.generation}.
+                          </div>
+                        </button>
+                      ))}
+                    {contextCompactionMarkers
+                      .filter(marker => marker.round_number === row.roundNumber)
+                      .map(marker => (
+                        <div
+                          key={`context-compaction-r${marker.round_number}-${marker.agent_id}`}
+                          id={`context-compaction-divider-r${marker.round_number}-${marker.agent_id}`}
+                          className="mx-4 my-4 rounded-md border-2 border-dashed border-amber-400/80 bg-amber-50 px-4 py-3 dark:border-amber-600/70 dark:bg-amber-950/50"
+                        >
+                          <div className="flex items-center justify-center gap-2 text-amber-800 dark:text-amber-200">
+                            <Archive className="h-4 w-4" />
+                            <span className="text-sm font-semibold">
+                              {marker.role_name} — context compacted ({marker.provider_name})
+                            </span>
+                          </div>
+                          <div className="mt-1 text-center text-[11px] text-amber-700/80 dark:text-amber-300/80">
+                            {marker.summary_text
+                              ? `Message history summarized into ${marker.summary_char_count.toLocaleString()} characters at round ${row.roundNumber}.`
+                              : `Message history compacted at round ${row.roundNumber}. ${marker.provider_name} stores the summary encrypted server-side, so its text is not available.`}
+                          </div>
+                          {marker.summary_text ? (
+                            <details className="mt-2 text-[11px] text-amber-800 dark:text-amber-200">
+                              <summary className="cursor-pointer text-center font-medium">
+                                Show summary
+                              </summary>
+                              <p className="mt-2 whitespace-pre-wrap rounded bg-amber-100/60 p-2 dark:bg-amber-900/30">
+                                {marker.summary_text}
+                              </p>
+                            </details>
+                          ) : null}
+                        </div>
+                      ))}
+                    <div
+                      data-round-marker={row.roundNumber}
+                      className="flex items-center gap-2.5 px-4 pb-1.5 pt-3.5"
+                    >
+                      <div className="h-px flex-1 bg-border" />
+                      <span className="whitespace-nowrap text-[11px] text-muted-foreground">
+                        Round {row.roundNumber}
+                      </span>
+                      <div className="h-px flex-1 bg-border" />
                     </div>
-                  );
-                })}
 
-                <RoundOutcomeRow
-                  results={resultsByRound.get(round.roundNumber) ?? []}
-                  trigger={endingByRound.get(round.roundNumber)?.trigger ?? null}
-                />
+                    <RoundInjectionRow
+                      injections={(injectionsByRound.get(row.roundNumber) ?? []).filter(
+                        i => focusedAgentIds.size === 0 || focusedAgentIds.has(i.agent_id)
+                      )}
+                      roleNameForAgent={roleNameForAgent}
+                    />
+                  </>
+                ) : null}
+
+                {row.kind === "entry" ? (
+                  <ChatEntryRow
+                    row={row}
+                    agent={agentMap.get(row.turn.agentId)}
+                    color={agentColorMap.get(row.turn.agentId)}
+                    entryChColor={channelColorMap.get(row.entry.channel_id)}
+                    isPreResume={
+                      resumeCutoffTimestamp !== null && row.turn.timestamp < resumeCutoffTimestamp
+                    }
+                    showChannelBadge={showChannelBadge}
+                    isLinkHovered={
+                      row.entry.paired_message_id !== "" && hoveredCallId === row.entry.call_id
+                    }
+                    forkPointMessageId={forkPointMessageId}
+                    messageRefs={messageRefs}
+                    onSelectAgent={onSelectAgent}
+                    setHoveredCallId={setHoveredCallId}
+                    jumpToMessage={jumpToMessage}
+                  />
+                ) : null}
+
+                {row.kind === "round-end" ? (
+                  <RoundOutcomeRow
+                    results={resultsByRound.get(row.roundNumber) ?? []}
+                    trigger={endingByRound.get(row.roundNumber)?.trigger ?? null}
+                  />
+                ) : null}
               </div>
             );
           })}
@@ -989,23 +737,5 @@ export function ChatPane({
         )}
       </div>
     </div>
-  );
-}
-
-/** Renders either the notification chip (for split notification-result entries)
- *  or the generic tool-call pill. The split between read_notifications call and
- *  its response happens upstream in mergeEntries; here we only pick a renderer. */
-function ToolOrNotification({ entry }: { entry: DisplayEntry }) {
-  if (entry.is_notification_result) {
-    return <NotificationDisplay result={entry.tool_result} />;
-  }
-  return (
-    <ToolCallDisplay
-      toolName={entry.tool_name}
-      arguments={entry.tool_arguments}
-      result={entry.tool_result}
-      judgeMetadata={entry.judge_metadata}
-      toolMetadata={entry.tool_metadata}
-    />
   );
 }

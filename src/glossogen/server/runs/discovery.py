@@ -8,26 +8,27 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, cast
 
 import orjson
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from glossogen.eval_manifest import read_eval_manifest
 from glossogen.event_parsing import parse_event_bytes
 from glossogen.models.event import RunStatus, SimulationEnded, SimulationStarted
+from glossogen.replace_manifest import boundary_round_of, rounds_after_of
 from glossogen.server.runs.manifest_sources import (
     read_cross_run_replace_agent_source,
+    read_fork_at_round_source,
     read_fork_source,
     read_replace_agent_source,
-    read_resume_at_round_source,
 )
 from glossogen.server.runs.models import (
     AgentModelSummary,
     CrossRunReplaceAgentSource,
+    ForkAtRoundSource,
     ForkSource,
     ReplaceAgentSource,
-    ResumeAtRoundSource,
     RunSummary,
 )
 from glossogen.stream_manifest import delete_manifest, read_manifest
@@ -200,10 +201,50 @@ _SUMMARY_CACHE_FILENAME = "run_summary_cache.json"
 class _SummaryCache(BaseModel):
     """Immutable fields of a completed run, persisted to avoid re-scanning JSONL.
 
-    ``resume_at_round_source`` is the only field with a default so that
-    caches written before the round-anchored-resume feature still load
-    without forcing a JSONL rescan. Every other field is mandatory.
+    Every field is mandatory, so a cache with an unrecognized shape fails
+    validation and the run is rescanned from its JSONL instead of silently
+    dropping provenance. Caches written before the fork-at-round rename are
+    the one recognized legacy shape: ``_translate_legacy_shape`` maps their
+    ``resume_at_round_source`` / ``round_start`` fields onto the current
+    ones, because invalidating them would rescan every previously recorded
+    run at once.
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _translate_legacy_shape(cls, data: Any) -> Any:
+        """Map a pre-rename cache onto the current field names.
+
+        ``resume_at_round_source`` becomes ``fork_at_round_source`` with
+        ``after_round = round_start - 1`` and ``rounds_after =
+        rounds_after_resume + 1``; the replace-agent and cross-run sources
+        gain ``after_round = round_start - 1``. Caches predating the
+        resume-at-round feature carry neither key and read as no fork.
+        """
+        if not isinstance(data, dict):
+            return data
+        translated = dict(cast(dict[str, Any], data))
+        if "fork_at_round_source" not in translated:
+            legacy_resume = translated.pop("resume_at_round_source", None)
+            if isinstance(legacy_resume, dict):
+                legacy = cast(dict[str, Any], legacy_resume)
+                translated["fork_at_round_source"] = {
+                    "source_run_id": legacy["source_run_id"],
+                    "after_round": boundary_round_of(entry_round=legacy["round_start"]),
+                    "rounds_after": rounds_after_of(stored_window=legacy["rounds_after_resume"]),
+                    "target_event_id": legacy["target_event_id"],
+                    "forked_at": legacy["resumed_at"],
+                }
+            else:
+                translated["fork_at_round_source"] = None
+        for key in ("replace_agent_source", "cross_run_replace_agent_source"):
+            source = translated.get(key)
+            if isinstance(source, dict):
+                typed = dict(cast(dict[str, Any], source))
+                if "after_round" not in typed and "round_start" in typed:
+                    typed["after_round"] = boundary_round_of(entry_round=typed.pop("round_start"))
+                    translated[key] = typed
+        return translated
 
     scenario_name: str
     scenario_description: str
@@ -219,19 +260,42 @@ class _SummaryCache(BaseModel):
     fork_source: ForkSource | None
     replace_agent_source: ReplaceAgentSource | None
     cross_run_replace_agent_source: CrossRunReplaceAgentSource | None
-    resume_at_round_source: ResumeAtRoundSource | None = None
+    fork_at_round_source: ForkAtRoundSource | None
+
+
+def _is_legacy_cache_shape(raw: Any) -> bool:
+    """Whether a parsed cache file still carries pre-rename field names."""
+    if not isinstance(raw, dict):
+        return False
+    typed = cast(dict[str, Any], raw)
+    if "fork_at_round_source" not in typed:
+        return True
+    for key in ("replace_agent_source", "cross_run_replace_agent_source"):
+        source = typed.get(key)
+        if isinstance(source, dict) and "round_start" in cast(dict[str, Any], source):
+            return True
+    return False
 
 
 def _read_summary_cache(run_dir: Path) -> _SummaryCache | None:
-    """Read the summary cache for a run directory, returning None if absent or invalid."""
+    """Read the summary cache for a run directory, returning None if absent or invalid.
+
+    A cache in the pre-rename shape is written back in the current shape after
+    a successful read, so its translation runs once per file rather than on
+    every listing.
+    """
     cache_path = run_dir / _SUMMARY_CACHE_FILENAME
     if not cache_path.exists():
         return None
     try:
-        return _SummaryCache.model_validate(orjson.loads(cache_path.read_bytes()))
+        raw = orjson.loads(cache_path.read_bytes())
+        cache = _SummaryCache.model_validate(raw)
     except Exception:
         logger.exception("Failed to read summary cache at %s", cache_path)
         return None
+    if _is_legacy_cache_shape(raw=raw):
+        _write_summary_cache(run_dir=run_dir, cache=cache)
+    return cache
 
 
 def _write_summary_cache(run_dir: Path, cache: _SummaryCache) -> None:
@@ -244,10 +308,16 @@ def _write_summary_cache(run_dir: Path, cache: _SummaryCache) -> None:
 
 
 class ResolvedRun(NamedTuple):
-    """Lightweight run location returned by ``resolve_run_or_404``."""
+    """Lightweight run location returned by ``resolve_run_or_404``.
+
+    ``db_labels`` is the run row's labels mirror when the lookup went through
+    the database, ``None`` on the filesystem path. Callers that read the run's
+    ``labels.json`` anyway compare the two and repair the mirror on drift.
+    """
 
     run_dir: Path
     scenario_name: str
+    db_labels: list[str] | None
 
 
 def compose_run_id(scenario_name: str, run_dir_name: str) -> str:
@@ -293,7 +363,7 @@ def _resolve_scenario_config(
     Resumed runs do not re-log ``SimulationStarted``, so the JSONL's first event
     carries the source run's scenario config — including its original
     ``round_count``. The replace-agent flow writes the merged config (with
-    ``round_count = round_start + rounds_after_swap``) to ``replace_config.json``
+    ``round_count = after_round + rounds_after``) to ``replace_config.json``
     in the new run directory; this helper reads that file when present so
     summaries and downstream consumers see the post-swap round budget.
     """
@@ -311,6 +381,10 @@ def _live_fields(
     """Read the four fields that can change after a run completes.
 
     Returns (labels, has_note, has_evaluation, evaluation_in_progress).
+
+    Labels here must stay a disk read even where the database mirrors them:
+    ``sync-metadata-to-prod`` computes label drift from the paginated ``/runs``
+    response, so a page row has to report what ``labels.json`` actually holds.
     """
     report_path = timestamp_dir / f"{scenario_name}_report.json"
     labels = read_run_labels(run_dir=timestamp_dir)
@@ -318,6 +392,47 @@ def _live_fields(
     has_evaluation = report_path.exists()
     eval_in_progress = read_eval_manifest(run_dir=timestamp_dir) is not None
     return labels, has_note, has_evaluation, eval_in_progress
+
+
+def read_scenario_config(scenario_name: str, timestamp_dir: Path) -> dict[str, Any] | None:
+    """The knobs a run recorded, without building its whole summary.
+
+    Filtering by knob needs the config and nothing else. Going through
+    :func:`build_summary` for it would also stat the labels, the note, the
+    report and the evaluation manifest, four filesystem calls per candidate for
+    fields the filter never reads, over every run in the cohort rather than over
+    the page. Returns None for a directory holding no run.
+
+    A completed run answers from its summary cache, one small read. A run still
+    going has no cache and is scanned, which is what enrichment would cost
+    anyway.
+
+    A directory whose log cannot be read answers None, the way
+    :func:`_build_summary_sync` does, so a filter drops it rather than failing
+    the listing. That is reachable without anything being wrong: ``claim_run_dir``
+    creates the directory and the log before the first event is written, so a
+    simulation launched while a filter is applied is briefly in this state. A
+    run killed mid-write stays in it. The scan raises three different types
+    across an empty file, an unparseable line and a line that is not an event,
+    which is why this catches broadly.
+    """
+    jsonl_path = timestamp_dir / f"{scenario_name}.jsonl"
+    if not jsonl_path.exists():
+        return None
+
+    cache = _read_summary_cache(run_dir=timestamp_dir)
+    if cache is not None:
+        return _resolve_scenario_config(run_dir=timestamp_dir, base_config=cache.scenario_config)
+
+    try:
+        scanned = _scan_jsonl_sync(file_path=jsonl_path)
+    except Exception:
+        logger.exception("Failed to read the scenario config at %s", timestamp_dir)
+        return None
+    return _resolve_scenario_config(
+        run_dir=timestamp_dir,
+        base_config=scanned.first_event.scenario_config,
+    )
 
 
 def _build_summary_sync(
@@ -364,7 +479,7 @@ def _build_summary_sync(
             fork_source=cache.fork_source,
             replace_agent_source=cache.replace_agent_source,
             cross_run_replace_agent_source=cache.cross_run_replace_agent_source,
-            resume_at_round_source=cache.resume_at_round_source,
+            fork_at_round_source=cache.fork_at_round_source,
             models=cache.models,
             provider=cache.provider,
             agent_models=cache.agent_models,
@@ -379,7 +494,7 @@ def _build_summary_sync(
     cross_run_replace_agent_source = read_cross_run_replace_agent_source(
         run_dir=timestamp_dir,
     )
-    resume_at_round_source = read_resume_at_round_source(run_dir=timestamp_dir)
+    fork_at_round_source = read_fork_at_round_source(run_dir=timestamp_dir)
 
     try:
         scan = _scan_jsonl_sync(file_path=jsonl_path)
@@ -402,7 +517,7 @@ def _build_summary_sync(
             fork_source is not None
             or replace_agent_source is not None
             or cross_run_replace_agent_source is not None
-            or resume_at_round_source is not None
+            or fork_at_round_source is not None
         )
         start_time = run_timestamp if derived else first_event.timestamp
         duration_seconds = (scan.last_event.timestamp - start_time).total_seconds()
@@ -423,7 +538,7 @@ def _build_summary_sync(
                 fork_source=fork_source,
                 replace_agent_source=replace_agent_source,
                 cross_run_replace_agent_source=cross_run_replace_agent_source,
-                resume_at_round_source=resume_at_round_source,
+                fork_at_round_source=fork_at_round_source,
             ),
         )
         return RunSummary(
@@ -442,7 +557,7 @@ def _build_summary_sync(
             fork_source=fork_source,
             replace_agent_source=replace_agent_source,
             cross_run_replace_agent_source=cross_run_replace_agent_source,
-            resume_at_round_source=resume_at_round_source,
+            fork_at_round_source=fork_at_round_source,
             models=scan.unique_models,
             provider=first_event.provider,
             agent_models=scan.agent_models,
@@ -468,7 +583,7 @@ def _build_summary_sync(
         run_id=run_id,
         scenario_name=first_event.scenario_name,
         scenario_description=first_event.scenario_description,
-        scenario_config=first_event.scenario_config,
+        scenario_config=resolved_scenario_config,
         timestamp=run_timestamp,
         total_messages=scan.message_count,
         total_cost_usd=scan.cost_usd,
@@ -480,7 +595,7 @@ def _build_summary_sync(
         fork_source=fork_source,
         replace_agent_source=replace_agent_source,
         cross_run_replace_agent_source=cross_run_replace_agent_source,
-        resume_at_round_source=resume_at_round_source,
+        fork_at_round_source=fork_at_round_source,
         models=scan.unique_models,
         provider=first_event.provider,
         agent_models=scan.agent_models,
@@ -523,13 +638,16 @@ class RunDescriptor(NamedTuple):
     call to the page actually returned. ``evaluation_content_hash`` is
     pre-fetched from the ``runs`` row (``None`` in no-DB local mode) so
     ``build_summary`` can populate the sync-drift signal without a second
-    DB round-trip per enrichment.
+    DB round-trip per enrichment. ``labels`` is the row's labels mirror,
+    ``None`` when the row has not been mirrored yet or the listing came from
+    the filesystem; the label filter falls back to ``labels.json`` then.
     """
 
     scenario_name: str
     run_dir_name: str
     timestamp: datetime
     evaluation_content_hash: str | None
+    labels: list[str] | None
 
 
 def discover_run_descriptors(runs_dir: Path) -> list[RunDescriptor]:
@@ -560,6 +678,7 @@ def discover_run_descriptors(runs_dir: Path) -> list[RunDescriptor]:
                     run_dir_name=timestamp_dir.name,
                     timestamp=_timestamp_from_dir(dir_name=timestamp_dir.name),
                     evaluation_content_hash=None,
+                    labels=None,
                 )
             )
 

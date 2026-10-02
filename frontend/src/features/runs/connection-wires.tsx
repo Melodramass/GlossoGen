@@ -118,13 +118,8 @@ export function ConnectionWires({
         }
         return prev;
       });
-      // Refs on large runs can attach across many paints. Keep retrying on
-      // animation frames until every pair is measured, then stop. Further
-      // updates come from the ResizeObserver for layout shifts.
-      if (next.length < pairs.length && attemptsLeft > 0) {
-        attemptsLeft -= 1;
-        rafId = requestAnimationFrame(recompute);
-      }
+      // Offscreen endpoints intentionally have no DOM node. Observer events
+      // will remeasure when they mount; retrying every frame wastes layout work.
     }
 
     recompute();

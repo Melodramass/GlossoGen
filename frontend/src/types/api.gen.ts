@@ -20,7 +20,10 @@ export interface paths {
          *     semantics); ``run_id_contains`` keeps runs whose ``scenario/run_dir_name``
          *     id contains the substring (case-insensitive); ``status`` restricts to a
          *     final status; ``contains_agent_id`` keeps runs that registered that agent
-         *     (used by the cross-run replace-agent picker). Paging is keyset: pass the
+         *     (used by the cross-run replace-agent picker); each ``knob`` is one
+         *     ``<knob><operator><value>`` condition on the run's recorded
+         *     ``scenario_config``, such as ``round_time_budget_seconds>=200`` or
+         *     ``postmortem_enabled=true``, and every one must hold. Paging is keyset: pass the
          *     previous response's ``next_cursor`` as ``cursor`` for the next page (omit
          *     for the first page); ``limit`` caps the page size and ``total`` is the count
          *     matching the filters before paging.
@@ -410,6 +413,186 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/g/{group_slug}/runs/export/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Multi Run Export
+         * @description Describe what a selection would export, without building anything.
+         */
+        post: operations["preview_multi_run_export_api_g__group_slug__runs_export_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/g/{group_slug}/runs/export/raw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Runs Raw
+         * @description Export the selected runs' folders as one zip.
+         */
+        post: operations["export_runs_raw_api_g__group_slug__runs_export_raw_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/g/{group_slug}/runs/export/csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Runs Csv
+         * @description Export the selected runs as CSV tables.
+         */
+        post: operations["export_runs_csv_api_g__group_slug__runs_export_csv_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/g/{group_slug}/runs/analysis/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analysis Fields
+         * @description Describe what this selection can be grouped, filtered, and measured by.
+         */
+        post: operations["analysis_fields_api_g__group_slug__runs_analysis_fields_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/g/{group_slug}/runs/analysis/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analysis Query
+         * @description Group and aggregate this selection, one row per group.
+         */
+        post: operations["analysis_query_api_g__group_slug__runs_analysis_query_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/g/{group_slug}/dashboards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Dashboards
+         * @description List the group's dashboards, most recently updated first.
+         */
+        get: operations["list_dashboards_api_g__group_slug__dashboards_get"];
+        put?: never;
+        /**
+         * Create Dashboard
+         * @description Save a new dashboard for the group.
+         */
+        post: operations["create_dashboard_api_g__group_slug__dashboards_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/g/{group_slug}/dashboards/{dashboard_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Dashboard
+         * @description Read one of the group's dashboards.
+         */
+        get: operations["get_dashboard_api_g__group_slug__dashboards__dashboard_id__get"];
+        /**
+         * Update Dashboard
+         * @description Replace a dashboard's name, description, selection, filters, and charts.
+         */
+        put: operations["update_dashboard_api_g__group_slug__dashboards__dashboard_id__put"];
+        post?: never;
+        /**
+         * Delete Dashboard
+         * @description Delete one of the group's dashboards.
+         */
+        delete: operations["delete_dashboard_api_g__group_slug__dashboards__dashboard_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/g/{group_slug}/labels/descriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Label Descriptions
+         * @description List the group's label descriptions, sorted by label.
+         */
+        get: operations["list_label_descriptions_api_g__group_slug__labels_descriptions_get"];
+        /**
+         * Set Label Description
+         * @description Record what a label means, replacing any previous description of it.
+         */
+        put: operations["set_label_description_api_g__group_slug__labels_descriptions_put"];
+        post?: never;
+        /**
+         * Delete Label Description
+         * @description Remove a label's description.
+         */
+        delete: operations["delete_label_description_api_g__group_slug__labels_descriptions_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/g/{group_slug}/scenarios": {
         parameters: {
             query?: never;
@@ -422,6 +605,30 @@ export interface paths {
          * @description List all available scenarios with their knobs files and supported providers.
          */
         get: operations["list_scenarios_api_g__group_slug__scenarios_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/g/{group_slug}/scenarios/{scenario_name}/filterable-knobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Filterable Knobs
+         * @description List the scenario's scalar knobs, which are the ones the runs list can filter on.
+         *
+         *     Each carries the type its filter control should offer: a number takes the
+         *     ordering operators, a boolean takes true or false, an enum takes one of its
+         *     own values. Knobs holding a list or a mapping are not listed.
+         */
+        get: operations["get_filterable_knobs_api_g__group_slug__scenarios__scenario_name__filterable_knobs_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -450,52 +657,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/clerk/webhook": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Receive Webhook
-         * @description Receive and act on a Clerk webhook event.
-         *
-         *     Returns 200 even for ignored event types so Clerk does not retry them.
-         */
-        post: operations["receive_webhook_api_clerk_webhook_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/mcp/consent/approve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Approve Consent
-         * @description Verify the caller's Clerk JWT and materialize the parked OAuth code.
-         *
-         *     The group the token will be bound to is taken from the JWT's active
-         *     ``org_slug`` claim (Clerk's ``organizationSyncOptions`` keeps that
-         *     aligned with whichever org the user just selected on the FE).
-         */
-        post: operations["approve_consent_mcp_consent_approve_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/mcp/whoami": {
         parameters: {
             query?: never;
@@ -507,9 +668,9 @@ export interface paths {
          * Whoami
          * @description Return the group bound to the calling OAuth access token.
          *
-         *     Lets the CLI learn its ``group_slug`` after the OAuth exchange so it
-         *     can store it in ``~/.glossogen/credentials.json`` and address per-group
-         *     REST endpoints without prompting the user.
+         *     Lets the CLI learn its ``group_slug`` after the OAuth exchange so it can store it
+         *     in ``~/.glossogen/credentials.json`` and address per-group REST endpoints without
+         *     prompting the user.
          */
         get: operations["whoami_mcp_whoami_get"];
         put?: never;
@@ -678,12 +839,206 @@ export interface components {
             system_prompt: string;
         };
         /**
+         * Aggregate
+         * @description How the values in one group are reduced to a single number.
+         * @enum {string}
+         */
+        Aggregate: "mean" | "median" | "sum" | "count" | "min" | "max" | "stddev" | "sem";
+        /**
+         * AggregateCell
+         * @description One measure's aggregate within one group, with what it was computed over.
+         */
+        AggregateCell: {
+            /** Value */
+            value: number | null;
+            /** Observation Count */
+            observation_count: number;
+            /** Missing Count */
+            missing_count: number;
+        };
+        /**
          * AllLabelsResponse
          * @description Response containing all unique labels across all runs.
          */
         AllLabelsResponse: {
             /** Labels */
             labels: string[];
+        };
+        /**
+         * AnalysisDimension
+         * @description One dimension a selection can be grouped or filtered by.
+         *
+         *     ``values`` is capped, and ``distinct_count`` says how many there really are, so
+         *     a picker can offer the common ones and say what it left out.
+         */
+        AnalysisDimension: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Group */
+            group: string;
+            /** Rows With Value */
+            rows_with_value: number;
+            /** Distinct Count */
+            distinct_count: number;
+            /** Values */
+            values: components["schemas"]["AnalysisDimensionValue"][];
+        };
+        /**
+         * AnalysisDimensionValue
+         * @description One value a dimension takes in the selection, and how many rows carry it.
+         */
+        AnalysisDimensionValue: {
+            /** Value */
+            value: string;
+            /** Observation Count */
+            observation_count: number;
+        };
+        /**
+         * AnalysisFieldCatalog
+         * @description Everything a client needs to build a query over one selection.
+         *
+         *     Computed from the same table the query reads, so a dimension offered here is
+         *     one a group-by can actually key on, and a measure offered is one that has
+         *     numbers in it.
+         */
+        AnalysisFieldCatalog: {
+            grain: components["schemas"]["AnalysisGrain"];
+            /** Run Count */
+            run_count: number;
+            /** Observation Count */
+            observation_count: number;
+            /** Runs Without Report */
+            runs_without_report: string[];
+            /** Missing Run Ids */
+            missing_run_ids: string[];
+            /** Dimensions */
+            dimensions: components["schemas"]["AnalysisDimension"][];
+            /** Measures */
+            measures: components["schemas"]["AnalysisMeasureField"][];
+            /** Max Dimension Values */
+            max_dimension_values: number;
+            /** Max Group By Keys */
+            max_group_by_keys: number;
+            /** Max Result Rows */
+            max_result_rows: number;
+        };
+        /**
+         * AnalysisFieldsRequest
+         * @description Body for the field catalog: which runs, and at which grain.
+         */
+        AnalysisFieldsRequest: {
+            /** Selection */
+            selection: components["schemas"]["FilterRunSelection"] | components["schemas"]["ExplicitRunSelection"];
+            grain: components["schemas"]["AnalysisGrain"];
+        };
+        /**
+         * AnalysisGrain
+         * @description The unit of observation a query groups and aggregates over.
+         * @enum {string}
+         */
+        AnalysisGrain: "run" | "round" | "agent" | "keyed";
+        /**
+         * AnalysisMeasureField
+         * @description One measurable quantity a selection carries.
+         */
+        AnalysisMeasureField: {
+            /** Source */
+            source: string;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Score Unit */
+            score_unit: string;
+            /** Rows With Value */
+            rows_with_value: number;
+        };
+        /**
+         * AnalysisQueryRequest
+         * @description Body for the analysis query endpoint: which runs, and what to ask of them.
+         */
+        AnalysisQueryRequest: {
+            /** Selection */
+            selection: components["schemas"]["FilterRunSelection"] | components["schemas"]["ExplicitRunSelection"];
+            query: components["schemas"]["AnalysisQuerySpec"];
+        };
+        /**
+         * AnalysisQuerySpec
+         * @description A question about a set of runs, without saying which runs.
+         *
+         *     ``sort_measure_index`` says which measure a measure sort orders by. It is required
+         *     rather than optional because a spec that sorts by a measure without naming it is
+         *     not answerable, and a default would hide that.
+         */
+        AnalysisQuerySpec: {
+            grain: components["schemas"]["AnalysisGrain"];
+            /** Filters */
+            filters: components["schemas"]["DimensionFilter"][];
+            /** Group By */
+            group_by: string[];
+            /** Measures */
+            measures: components["schemas"]["MeasureSpec"][];
+            sort: components["schemas"]["ResultSort"];
+            /** Sort Measure Index */
+            sort_measure_index: number;
+            /** Limit */
+            limit: number;
+        };
+        /**
+         * AnalysisResult
+         * @description The answer to one query.
+         *
+         *     ``truncated`` says the row ceiling clipped the answer, so a client can say the
+         *     chart is partial rather than showing a confident subset.
+         *
+         *     ``missing_run_ids`` names runs the selection asked for that no longer resolve.
+         *     A saved dashboard outlives the runs it was built on, so a deleted run has to be
+         *     reported rather than silently dropped from the numbers.
+         */
+        AnalysisResult: {
+            grain: components["schemas"]["AnalysisGrain"];
+            /** Group By */
+            group_by: string[];
+            /** Measures */
+            measures: components["schemas"]["AnalysisResultMeasure"][];
+            /** Rows */
+            rows: components["schemas"]["AnalysisResultRow"][];
+            /** Run Count */
+            run_count: number;
+            /** Observation Count */
+            observation_count: number;
+            /** Truncated */
+            truncated: boolean;
+            /** Missing Run Ids */
+            missing_run_ids: string[];
+        };
+        /**
+         * AnalysisResultMeasure
+         * @description A measure as it appears in the result, labelled for an axis.
+         */
+        AnalysisResultMeasure: {
+            /** Column Key */
+            column_key: string;
+            /** Label */
+            label: string;
+            /** Score Unit */
+            score_unit: string;
+            /** Aggregate */
+            aggregate: string;
+        };
+        /**
+         * AnalysisResultRow
+         * @description One group: its values for the group-by keys, then one cell per measure.
+         */
+        AnalysisResultRow: {
+            /** Group Values */
+            group_values: string[];
+            /** Run Count */
+            run_count: number;
+            /** Cells */
+            cells: components["schemas"]["AggregateCell"][];
         };
         /**
          * AnthropicMessage
@@ -757,24 +1112,6 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        /**
-         * ApproveConsentRequest
-         * @description Body for ``POST /mcp/consent/approve``: the parked request to materialize.
-         */
-        ApproveConsentRequest: {
-            /** Request Id */
-            request_id: string;
-        };
-        /**
-         * ApproveConsentResponse
-         * @description Response for ``POST /mcp/consent/approve``: where the browser should go next.
-         */
-        ApproveConsentResponse: {
-            /** Redirect Url */
-            redirect_url: string;
-            /** Group Slug */
-            group_slug: string;
-        };
         /** Body_import_run_bundle_api_g__group_slug__runs_import_post */
         Body_import_run_bundle_api_g__group_slug__runs_import_post: {
             /** File */
@@ -797,7 +1134,7 @@ export interface components {
          * @description One source run that has been used as a derivation parent.
          *
          *     ``source_run`` is the parent's full summary; ``derived_count`` is how many
-         *     runs (replace-agent, resume-at-round, cross-run-replace-agent source A)
+         *     runs (replace-agent, fork-at-round, cross-run-replace-agent source A)
          *     branch from it.
          */
         BranchSourceSummary: {
@@ -829,6 +1166,60 @@ export interface components {
             round_number: number;
             /** Token Count */
             token_count: number;
+        };
+        /**
+         * ChartEncoding
+         * @description Which of a query's measures the chart's axes read.
+         *
+         *     ``measure_index`` is the measure a bar, line, or heatmap draws when the query
+         *     groups by two keys and the second is the series. ``y_measure_index`` is the
+         *     scatter's second axis. Both index into the query's ``measures`` list, so a
+         *     reordered query keeps its chart pointing at the same position rather than at a
+         *     name that may no longer be there.
+         *
+         *     ``error_measure_index`` names a second measure over the same metric, usually its
+         *     standard error, drawn as error bars on the measure at ``measure_index``. It is
+         *     ``None`` when the chart carries none, which is not the same as zero spread: a bar
+         *     with no error bars says nothing about its spread, and one with a zero-length bar
+         *     says the spread was measured and was zero.
+         *
+         *     It is the one field here with a default, and the reason is that this model is
+         *     stored. A dashboard saved last month has to keep opening after a field is added,
+         *     and a required field would turn every one of them into a validation error on read.
+         *     Fields added to a stored spec from here on carry the same kind of default.
+         */
+        ChartEncoding: {
+            /** Measure Index */
+            measure_index: number;
+            /** Y Measure Index */
+            y_measure_index: number;
+            /** Error Measure Index */
+            error_measure_index?: number | null;
+        };
+        /**
+         * ChartKind
+         * @description How one chart draws its result.
+         * @enum {string}
+         */
+        ChartKind: "bar" | "line" | "scatter" | "heatmap" | "table";
+        /**
+         * ChartSpec
+         * @description One chart: a title, a form, and the query behind it.
+         *
+         *     The encoding is validated against the query it belongs to. An index pointing past
+         *     the measures is not a visible error: every cell it reads comes back missing, so
+         *     the chart draws an empty frame under a header still reporting its groups and runs.
+         *     That is worse than a refusal, and it is what a saved chart does after a measure is
+         *     removed from it.
+         */
+        ChartSpec: {
+            /** Chart Id */
+            chart_id: string;
+            /** Title */
+            title: string;
+            kind: components["schemas"]["ChartKind"];
+            query: components["schemas"]["AnalysisQuerySpec"];
+            encoding: components["schemas"]["ChartEncoding"];
         };
         /**
          * ContainerYardAttribute
@@ -993,8 +1384,8 @@ export interface components {
             source_a_run_id: string;
             /** Source B Run Id */
             source_b_run_id: string;
-            /** Round Start */
-            round_start: number;
+            /** After Round */
+            after_round: number;
             /** Source B Round End */
             source_b_round_end: number;
             /** Target Event Id */
@@ -1010,6 +1401,114 @@ export interface components {
              * Format: date-time
              */
             replaced_at: string;
+        };
+        /**
+         * CsvExportRequest
+         * @description Body for the CSV export.
+         *
+         *     ``frames`` picks which tables to emit. ``columns`` names the run-context
+         *     columns to carry, and ``metrics`` the evaluator metrics, which are one column
+         *     each on every table that carries scores. ``repeat_run_columns`` copies the run
+         *     context onto every row of the per-round, per-agent and per-message tables so
+         *     they read without joining back to the run-level table.
+         *     ``include_metric_summaries`` adds each metric's unit and one-line rollup at run
+         *     level and its per-observation note on the other tables, which roughly triples
+         *     the run-level table's width.
+         *
+         *     ``metrics`` reaches neither the message nor the round-context table, whose
+         *     cells are what an agent said and what it was told rather than measurements.
+         */
+        CsvExportRequest: {
+            /** Selection */
+            selection: components["schemas"]["FilterRunSelection"] | components["schemas"]["ExplicitRunSelection"];
+            /** Frames */
+            frames: components["schemas"]["ExportFrame"][];
+            /** Columns */
+            columns: string[];
+            /** Metrics */
+            metrics: string[];
+            /** Repeat Run Columns */
+            repeat_run_columns: boolean;
+            /** Include Metric Summaries */
+            include_metric_summaries: boolean;
+        };
+        /**
+         * Dashboard
+         * @description A stored dashboard, with who made it and when it last changed.
+         */
+        Dashboard: {
+            /**
+             * Dashboard Id
+             * Format: uuid
+             */
+            dashboard_id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Selection */
+            selection: components["schemas"]["FilterRunSelection"] | components["schemas"]["ExplicitRunSelection"];
+            /** Filters */
+            filters: components["schemas"]["DimensionFilter"][];
+            /** Charts */
+            charts: components["schemas"]["ChartSpec"][];
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * DashboardContent
+         * @description Everything a dashboard is, before it has an identity or a history.
+         */
+        DashboardContent: {
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Selection */
+            selection: components["schemas"]["FilterRunSelection"] | components["schemas"]["ExplicitRunSelection"];
+            /** Filters */
+            filters: components["schemas"]["DimensionFilter"][];
+            /** Charts */
+            charts: components["schemas"]["ChartSpec"][];
+        };
+        /**
+         * DashboardSummary
+         * @description One row of the dashboard list, without the charts.
+         */
+        DashboardSummary: {
+            /**
+             * Dashboard Id
+             * Format: uuid
+             */
+            dashboard_id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Chart Count */
+            chart_count: number;
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /**
          * DebugLogEntry
@@ -1039,9 +1538,11 @@ export interface components {
          *
          *     A child is any run whose timeline parent is this run: created via
          *     ``replace-agent`` (``derivation_type == "replace_agent"``),
-         *     ``resume-at-round`` (``"resume_at_round"``), or
+         *     ``fork-at-round`` (``"fork_at_round"``), or
          *     ``cross-run-replace-agent`` with this run as source A
          *     (``"cross_run_replace_agent"``). Source-B-only usage is not represented.
+         *     ``after_round`` is the fork boundary and ``rounds_after`` the number of
+         *     new rounds the child plays past it.
          */
         DerivedRunReference: {
             /** Run Id */
@@ -1050,13 +1551,11 @@ export interface components {
              * Derivation Type
              * @enum {string}
              */
-            derivation_type: "replace_agent" | "resume_at_round" | "cross_run_replace_agent";
-            /** Round Start */
-            round_start: number;
-            /** Rounds After Swap */
-            rounds_after_swap: number | null;
-            /** Rounds After Resume */
-            rounds_after_resume: number | null;
+            derivation_type: "replace_agent" | "fork_at_round" | "cross_run_replace_agent";
+            /** After Round */
+            after_round: number;
+            /** Rounds After */
+            rounds_after: number;
             /** Replaced Agent Id */
             replaced_agent_id: string | null;
             /** Replacement Model */
@@ -1091,6 +1590,27 @@ export interface components {
             has_evaluation: boolean;
             /** Headline Measurements */
             headline_measurements: components["schemas"]["HeadlineMeasurement"][];
+        };
+        /**
+         * DimensionFilter
+         * @description One condition on one dimension.
+         *
+         *     ``values`` holds the alternatives for ``in`` / ``not_in``, the substring for
+         *     ``contains``, and the bound for the numeric operators. The emptiness operators
+         *     ignore it.
+         *
+         *     A comparing operator with no value is refused rather than applied. Empty is not a
+         *     neutral filter: ``in`` with no values matches nothing and ``not_in`` with none
+         *     matches everything, so a half-built filter would silently blank every chart on a
+         *     dashboard one way and silently do nothing the other. The CLI already refused this
+         *     spec by name; the refusal belongs on the model so every caller gets it.
+         */
+        DimensionFilter: {
+            /** Key */
+            key: string;
+            operator: components["schemas"]["FilterOperator"];
+            /** Values */
+            values: string[];
         };
         /**
          * DriveModuleCaseStageDTO
@@ -1256,6 +1776,192 @@ export interface components {
             cache_creation_input_tokens: number;
         };
         /**
+         * ExplicitRunSelection
+         * @description Runs named one by one as ``scenario/run_dir_name`` ids.
+         */
+        ExplicitRunSelection: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "explicit";
+            /** Run Ids */
+            run_ids: string[];
+        };
+        /**
+         * ExportFrame
+         * @description One CSV table shape an export can emit.
+         * @enum {string}
+         */
+        ExportFrame: "run_level" | "round_level" | "agent_level" | "message_level" | "round_context";
+        /**
+         * ExportMetricColumn
+         * @description One evaluator metric an export can carry.
+         *
+         *     ``rounds_reported`` is how many round observations this metric carries across
+         *     the selection. It is not a row count: every metric is a column, so metrics
+         *     share the rows they fall on. The largest of them is what a caller estimates
+         *     the round table's height from, since one metric's rounds are usually a subset
+         *     of another's rather than disjoint.
+         *
+         *     There is no per-metric agent count. The agent table is keyed on the run's
+         *     registered roster, so its height is ``agent_row_count`` on the selection and
+         *     no choice of metrics moves it.
+         */
+        ExportMetricColumn: {
+            /** Metric Name */
+            metric_name: string;
+            /** Label */
+            label: string;
+            /** Score Unit */
+            score_unit: string;
+            /** Runs With Value */
+            runs_with_value: number;
+            /** Rounds Reported */
+            rounds_reported: number;
+        };
+        /**
+         * ExportPreviewRequest
+         * @description Body for the export preview.
+         *
+         *     ``include_raw_size_estimate`` opts into walking the selected run directories
+         *     for their on-disk size. It is the only part of the preview that costs one
+         *     filesystem stat per file, so the CSV side leaves it off.
+         *
+         *     ``include_logs`` is what the estimate is taken with. The logs are roughly half
+         *     the size of a run folder again, so an estimate that ignored it would sit under
+         *     the checkbox that changes it and never move.
+         */
+        ExportPreviewRequest: {
+            /** Selection */
+            selection: components["schemas"]["FilterRunSelection"] | components["schemas"]["ExplicitRunSelection"];
+            /** Include Raw Size Estimate */
+            include_raw_size_estimate: boolean;
+            /** Include Logs */
+            include_logs: boolean;
+        };
+        /**
+         * ExportValueColumn
+         * @description One run-context column an export can carry.
+         *
+         *     ``group`` is which family it came from, used to lay out a column picker.
+         *     ``runs_with_value`` is how many runs in the selection have a non-empty cell.
+         *     ``always_included`` marks the identity columns, which every frame emits.
+         */
+        ExportValueColumn: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Group */
+            group: string;
+            /** Runs With Value */
+            runs_with_value: number;
+            /** Always Included */
+            always_included: boolean;
+        };
+        /**
+         * FilterOperator
+         * @description How a filter compares a dimension cell against the values it carries.
+         * @enum {string}
+         */
+        FilterOperator: "in" | "not_in" | "contains" | "is_empty" | "is_not_empty" | "gte" | "lte";
+        /**
+         * FilterRunSelection
+         * @description Runs named by the same filters the runs list uses.
+         *
+         *     Mirrors the runs list without paging: ``scenario`` is OR-matched, ``labels``
+         *     are AND-matched, ``run_id_contains`` is a case-insensitive substring of
+         *     ``scenario/run_dir_name``, ``status`` restricts to one run status, and
+         *     ``contains_agent_id`` keeps runs that registered that agent. Each ``knob``
+         *     entry is one ``<knob><operator><value>`` condition on the run's recorded
+         *     ``scenario_config``, and every one of them has to hold.
+         *
+         *     Every filter empty means every run the caller can see.
+         *
+         *     The set matches the list's own filters, so any selection the list can show is one
+         *     the export can reproduce.
+         */
+        FilterRunSelection: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "filters";
+            /** Scenario */
+            scenario: string[];
+            /** Labels */
+            labels: string[];
+            /** Run Id Contains */
+            run_id_contains: string | null;
+            status: components["schemas"]["RunStatus"] | null;
+            /** Contains Agent Id */
+            contains_agent_id: string | null;
+            /** Knob */
+            knob?: string[];
+        };
+        /**
+         * FilterableKnob
+         * @description One knob the runs list can filter on.
+         *
+         *     ``enum_values`` is populated only for :attr:`FilterableKnobType.ENUM`, and
+         *     is the full set of values the knob accepts.
+         *
+         *     ``nullable`` says the knob may be left unset, so a filter control should
+         *     offer "not set" alongside the values. A run recording null there is still
+         *     filterable, with ``null`` as the value a condition compares against.
+         */
+        FilterableKnob: {
+            /** Name */
+            name: string;
+            knob_type: components["schemas"]["FilterableKnobType"];
+            /** Enum Values */
+            enum_values: string[] | null;
+            /** Nullable */
+            nullable: boolean;
+        };
+        /**
+         * FilterableKnobType
+         * @description The widget and operator set a knob's filter control should use.
+         * @enum {string}
+         */
+        FilterableKnobType: "integer" | "number" | "boolean" | "string" | "enum";
+        /**
+         * FilterableKnobsResponse
+         * @description The knobs of one scenario that the runs list can filter on.
+         */
+        FilterableKnobsResponse: {
+            /** Scenario Name */
+            scenario_name: string;
+            /** Knobs */
+            knobs: components["schemas"]["FilterableKnob"][];
+        };
+        /**
+         * ForkAtRoundSource
+         * @description Provenance for a run created via the fork-at-round endpoint.
+         *
+         *     Rounds 1..``after_round`` stay complete and the fork plays
+         *     ``rounds_after`` new rounds from ``after_round + 1``. No agent is
+         *     replaced: every agent keeps its full reconstructed history, and the
+         *     fork differs from the source only via merged knob overrides (e.g.
+         *     ``postmortem_enabled``, ``scheduled_events``, ``round_count``).
+         */
+        ForkAtRoundSource: {
+            /** Source Run Id */
+            source_run_id: string;
+            /** After Round */
+            after_round: number;
+            /** Rounds After */
+            rounds_after: number;
+            /** Target Event Id */
+            target_event_id: string;
+            /**
+             * Forked At
+             * Format: date-time
+             */
+            forked_at: string;
+        };
+        /**
          * ForkSource
          * @description Provenance information for a forked simulation run.
          */
@@ -1340,11 +2046,45 @@ export interface components {
             };
         };
         /**
+         * LabelDescription
+         * @description One label and the meaning its group recorded for it.
+         */
+        LabelDescription: {
+            /** Label */
+            label: string;
+            /** Description */
+            description: string;
+        };
+        /**
+         * LabelDescriptionsResponse
+         * @description Every label description the group has recorded, sorted by label.
+         */
+        LabelDescriptionsResponse: {
+            /** Descriptions */
+            descriptions: components["schemas"]["LabelDescription"][];
+        };
+        /**
          * LaunchStatus
          * @description Status value for subprocess launch responses.
          * @enum {string}
          */
         LaunchStatus: "started";
+        /**
+         * MeasureSource
+         * @description Where a measure's numbers come from.
+         * @enum {string}
+         */
+        MeasureSource: "metric" | "run_column";
+        /**
+         * MeasureSpec
+         * @description One measured quantity and how its values are reduced within a group.
+         */
+        MeasureSpec: {
+            source: components["schemas"]["MeasureSource"];
+            /** Key */
+            key: string;
+            aggregate: components["schemas"]["Aggregate"];
+        };
         /**
          * Measurement
          * @description Numeric measurement result for a single metric applied to a run.
@@ -1396,6 +2136,59 @@ export interface components {
             model_prefix: string;
             /** Provider */
             provider: string;
+        };
+        /**
+         * MultiRunExportPreview
+         * @description Everything a client needs to describe an export before requesting it.
+         *
+         *     ``raw_bytes_estimate`` is the on-disk size of the run folders a raw export
+         *     would carry, and is ``None`` when it was not asked for. ``missing_run_ids``
+         *     lists explicitly named ids that no longer resolve to a run this group owns.
+         *
+         *     ``agent_row_count`` and ``message_row_count`` are what the agent and message
+         *     tables would hold. Both are run-level totals rather than per-metric ones: an
+         *     agent row is an agent and a message row is a message, so no choice of metrics
+         *     changes either. The agent count is the registered roster, which is what that
+         *     table is keyed on.
+         *
+         *     ``round_context_row_estimate`` is the rounds the selection played, which is
+         *     what a table of one row per run and round holds. It is an estimate and named
+         *     one, because a round nothing was injected in has no row and the preview does
+         *     not open the event logs to find out.
+         */
+        MultiRunExportPreview: {
+            /** Run Count */
+            run_count: number;
+            /** Run Ids */
+            run_ids: string[];
+            /** Scenario Names */
+            scenario_names: string[];
+            /** Evaluated Run Count */
+            evaluated_run_count: number;
+            /** In Progress Run Count */
+            in_progress_run_count: number;
+            /** Runs Without Report */
+            runs_without_report: string[];
+            /** Missing Run Ids */
+            missing_run_ids: string[];
+            /** Raw Bytes Estimate */
+            raw_bytes_estimate: number | null;
+            /** Agent Row Count */
+            agent_row_count: number;
+            /** Message Row Count */
+            message_row_count: number;
+            /** Round Context Row Estimate */
+            round_context_row_estimate: number;
+            /** Columns */
+            columns: components["schemas"]["ExportValueColumn"][];
+            /** Metrics */
+            metrics: components["schemas"]["ExportMetricColumn"][];
+            /** Max Run Count */
+            max_run_count: number;
+            /** Max Raw Bytes */
+            max_raw_bytes: number;
+            /** Max Csv Bytes */
+            max_csv_bytes: number;
         };
         /**
          * NoteResponse
@@ -1545,6 +2338,16 @@ export interface components {
             };
         };
         /**
+         * RawExportRequest
+         * @description Body for the raw run-folder zip.
+         */
+        RawExportRequest: {
+            /** Selection */
+            selection: components["schemas"]["FilterRunSelection"] | components["schemas"]["ExplicitRunSelection"];
+            /** Include Logs */
+            include_logs: boolean;
+        };
+        /**
          * ReasoningEntry
          * @description An LLM reasoning/thinking entry from an agent's turn.
          *
@@ -1573,16 +2376,15 @@ export interface components {
          * ReplaceAgentSource
          * @description Provenance for a run created via the replace-agent endpoint.
          *
-         *     The replacement boundary is the start of round ``round_start``.
-         *     ``target_event_id`` is the resolved anchor inside the source run's
-         *     JSONL event log (the ``RoundAdvanced`` event for ``round_start``),
-         *     kept for traceability.
+         *     Rounds 1..``after_round`` stay complete and the replacement agent
+         *     enters round ``after_round + 1``. ``target_event_id`` is the resolved
+         *     anchor inside the source run's JSONL event log, kept for traceability.
          */
         ReplaceAgentSource: {
             /** Source Run Id */
             source_run_id: string;
-            /** Round Start */
-            round_start: number;
+            /** After Round */
+            after_round: number;
             /** Target Event Id */
             target_event_id: string;
             /** Replaced Agent Id */
@@ -1598,30 +2400,11 @@ export interface components {
             replaced_at: string;
         };
         /**
-         * ResumeAtRoundSource
-         * @description Provenance for a run created via the resume-at-round endpoint.
-         *
-         *     The resume boundary is the start of round ``round_start``. No agent
-         *     is replaced — every agent keeps its full reconstructed history; the
-         *     resumed simulation differs from the source only via merged knob
-         *     overrides (e.g. ``postmortem_enabled``, ``scheduled_events``,
-         *     ``round_count``).
+         * ResultSort
+         * @description How the result rows are ordered.
+         * @enum {string}
          */
-        ResumeAtRoundSource: {
-            /** Source Run Id */
-            source_run_id: string;
-            /** Round Start */
-            round_start: number;
-            /** Rounds After Resume */
-            rounds_after_resume: number;
-            /** Target Event Id */
-            target_event_id: string;
-            /**
-             * Resumed At
-             * Format: date-time
-             */
-            resumed_at: string;
-        };
+        ResultSort: "group" | "measure_ascending" | "measure_descending";
         /**
          * RoundEnding
          * @description Reason a round's main phase ended.
@@ -1763,7 +2546,7 @@ export interface components {
             fork_source: components["schemas"]["ForkSource"] | null;
             replace_agent_source: components["schemas"]["ReplaceAgentSource"] | null;
             cross_run_replace_agent_source: components["schemas"]["CrossRunReplaceAgentSource"] | null;
-            resume_at_round_source: components["schemas"]["ResumeAtRoundSource"] | null;
+            fork_at_round_source: components["schemas"]["ForkAtRoundSource"] | null;
             /** Children */
             children: components["schemas"]["DerivedRunReference"][];
             /** Labels */
@@ -1838,7 +2621,7 @@ export interface components {
             fork_source: components["schemas"]["ForkSource"] | null;
             replace_agent_source: components["schemas"]["ReplaceAgentSource"] | null;
             cross_run_replace_agent_source: components["schemas"]["CrossRunReplaceAgentSource"] | null;
-            resume_at_round_source: components["schemas"]["ResumeAtRoundSource"] | null;
+            fork_at_round_source: components["schemas"]["ForkAtRoundSource"] | null;
             /** Models */
             models: string[];
             /** Provider */
@@ -2709,16 +3492,6 @@ export interface components {
             swapped_observer_display_names: string[];
         };
         /**
-         * WebhookAccepted
-         * @description Response payload returned for every accepted Clerk webhook.
-         */
-        WebhookAccepted: {
-            /** Accepted */
-            accepted: boolean;
-            /** Event Type */
-            event_type: string;
-        };
-        /**
          * WhoAmIResponse
          * @description Response for ``GET /mcp/whoami``: the group bound to the calling OAuth token.
          */
@@ -2745,6 +3518,7 @@ export interface operations {
                 status?: components["schemas"]["RunStatus"] | null;
                 labels?: string[] | null;
                 run_id_contains?: string | null;
+                knob?: string[] | null;
                 cursor?: string | null;
                 limit?: number;
             };
@@ -3380,6 +4154,404 @@ export interface operations {
             };
         };
     };
+    preview_multi_run_export_api_g__group_slug__runs_export_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MultiRunExportPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_runs_raw_api_g__group_slug__runs_export_raw_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RawExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Zip of the selected run folders, nested per scenario and run. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                    "application/zip": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_runs_csv_api_g__group_slug__runs_export_csv_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CsvExportRequest"];
+            };
+        };
+        responses: {
+            /** @description One CSV when a single table was asked for, otherwise a zip of them. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                    "text/csv": unknown;
+                    "application/zip": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analysis_fields_api_g__group_slug__runs_analysis_fields_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalysisFieldsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisFieldCatalog"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analysis_query_api_g__group_slug__runs_analysis_query_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalysisQueryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_dashboards_api_g__group_slug__dashboards_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardSummary"][];
+                };
+            };
+        };
+    };
+    create_dashboard_api_g__group_slug__dashboards_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardContent"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dashboard"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dashboard_api_g__group_slug__dashboards__dashboard_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dashboard_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dashboard"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_dashboard_api_g__group_slug__dashboards__dashboard_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dashboard_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardContent"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dashboard"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_dashboard_api_g__group_slug__dashboards__dashboard_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dashboard_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_label_descriptions_api_g__group_slug__labels_descriptions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabelDescriptionsResponse"];
+                };
+            };
+        };
+    };
+    set_label_description_api_g__group_slug__labels_descriptions_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabelDescription"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabelDescription"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_label_description_api_g__group_slug__labels_descriptions_delete: {
+        parameters: {
+            query: {
+                label: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_scenarios_api_g__group_slug__scenarios_get: {
         parameters: {
             query?: never;
@@ -3396,6 +4568,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScenariosResponse"];
+                };
+            };
+        };
+    };
+    get_filterable_knobs_api_g__group_slug__scenarios__scenario_name__filterable_knobs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenario_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilterableKnobsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3419,59 +4622,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KnobsContentResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    receive_webhook_api_clerk_webhook_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WebhookAccepted"];
-                };
-            };
-        };
-    };
-    approve_consent_mcp_consent_approve_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ApproveConsentRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApproveConsentResponse"];
                 };
             };
             /** @description Validation Error */

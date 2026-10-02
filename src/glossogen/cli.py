@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, NamedTuple, cast
 
 import uvicorn
+from pydantic import ValidationError
 
 from glossogen.autonomous_supervisor import AutonomousSupervisor
 from glossogen.config_overrides import (
@@ -32,8 +33,7 @@ from glossogen.config_overrides import (
 )
 from glossogen.cross_run_replace_agent import CrossRunReplaceAgentRequest as CrossRunCoreRequest
 from glossogen.cross_run_replace_agent import cross_run_replace_agent_in_run
-from glossogen.cross_run_replace_manifest import read_cross_run_replace_manifest
-from glossogen.db.local_tenant import LOCAL_GROUP_SLUG
+from glossogen.db.local_tenant import LOCAL_GROUP_ID, LOCAL_GROUP_SLUG
 from glossogen.db.run_registry import register_run_standalone
 from glossogen.dotenv_loader import load_env_from_working_directory
 from glossogen.eval_manifest import delete_eval_manifest, write_eval_manifest
@@ -48,50 +48,77 @@ from glossogen.frontend_container import (
     start_frontend_container,
     stop_frontend_container,
 )
+from glossogen.knob_filter import knob_filter_problem
 from glossogen.knobs_resolution import resolve_knobs_config, resolve_knobs_overrides
-from glossogen.logging_format import EventBusLogHandler, JsonLineFormatter
-from glossogen.message_rewind import (
-    AgentHistoryFilter,
-    ImportedHistory,
-    RewindState,
-    build_rewind_state_at_event,
-    build_rewind_state_from_last_message,
+from glossogen.label_descriptions.filesystem_label_description_store import (
+    FilesystemLabelDescriptionStore,
 )
+from glossogen.label_descriptions.label_description_models import LabelDescription
+from glossogen.logging_format import EventBusLogHandler, JsonLineFormatter
+from glossogen.message_rewind import RewindState
 from glossogen.models.agent_config import AgentConfig
 from glossogen.models.event import (
     AgentRegistered,
     RoundAdvanced,
     RunStatus,
-    SimulationEvent,
     SimulationStarted,
 )
 from glossogen.oauth_client import CREDENTIALS_PATH, run_login
 from glossogen.port_allocator import find_free_port
 from glossogen.prod_metadata_sync import MetadataSyncSpec, run_metadata_sync
 from glossogen.prod_push import PushSpec, run_push_to_prod
+from glossogen.provider_credentials import require_reachable_models
 from glossogen.replace_agent import ReplaceAgentRequest as ReplaceAgentCoreRequest
 from glossogen.replace_agent import replace_agent_in_run
-from glossogen.replace_manifest import read_replace_manifest
 from glossogen.resume_context_writer import write_resume_context_files
+from glossogen.resume_state_loader import load_resume_state, resume_first_round
+from glossogen.run_analysis.analysis_field_catalog import build_field_catalog
+from glossogen.run_analysis.analysis_grain import AnalysisGrain
+from glossogen.run_analysis.analysis_limits import MAX_RESULT_ROWS as MAX_ANALYSIS_RESULT_ROWS
+from glossogen.run_analysis.analysis_query_engine import run_analysis_query
+from glossogen.run_analysis.analysis_query_models import AnalysisQuerySpec, ResultSort
+from glossogen.run_analysis.analysis_run_record import load_analysis_records
+from glossogen.run_analysis.analysis_spec_parsing import (
+    AnalysisSpecError,
+    parse_filter,
+    parse_measure,
+)
+from glossogen.run_analysis.analysis_text_table import render_field_catalog, render_text_table
 from glossogen.run_archive import claim_run_dir
 from glossogen.run_config_validation import validate_run_config
+from glossogen.run_export.csv_export_archive import (
+    build_export_frames,
+    build_legend_frame,
+    write_frames_to_directory,
+)
+from glossogen.run_export.export_column_catalog import build_export_preview
+from glossogen.run_export.export_limits import MAX_EXPORT_RUN_COUNT, ExportTooLargeError
+from glossogen.run_export.export_request_models import (
+    CsvExportRequest,
+    ExplicitRunSelection,
+    ExportFrame,
+    FilterRunSelection,
+    RunSelection,
+)
+from glossogen.run_export.export_run_record import load_export_run_records
+from glossogen.run_export.run_selection_resolution import resolve_selection
+from glossogen.run_export.runs_zip_archive import write_runs_zip
 from glossogen.runners.pydantic_ai_runner import PydanticAIRunner
 from glossogen.runtime.game_clock import minimum_duration_elapsed, wall_clock_phase_timeout
 from glossogen.runtime.mcp_transport import ServeOverHttp
-from glossogen.runtime.scheduled_events import (
-    ChannelVisibility,
-    ChannelVisibilityFromRound,
-    ChannelVisibilityFull,
-    ChannelVisibilityNone,
-)
-from glossogen.scenario_conformance import check_scenario, failures
+from glossogen.scenario_conformance import CheckOutcome, check_scenario, failures
 from glossogen.scenario_loader import available_scenario_names, get_scenario_class
+from glossogen.scenario_package_checks import check_scenario_package
+from glossogen.scenario_path_loader import registered_for_checks
 from glossogen.scenario_protocol import SimulationScenario
 from glossogen.scenario_scaffold import (
     ScaffoldError,
     default_glossogen_ref,
     write_scenario_package,
 )
+from glossogen.scenario_target import ScenarioPathError, resolve_check_target
+from glossogen.server.runs.discovery import discover_runs
+from glossogen.server.runs.models import RunSummary
 from glossogen.simulation_server import start_simulation_server, stop_simulation_server
 from glossogen.telemetry_bootstrap import flush_telemetry, init_langfuse_telemetry
 from glossogen.telemetry_settings import load_telemetry_settings
@@ -99,7 +126,7 @@ from glossogen.thread_export.export_agent_thread import (
     ThreadExportFormat,
     export_agent_thread_from_run_dir,
 )
-from glossogen.token_pricing import SELF_HOSTED_PROVIDER, list_providers
+from glossogen.token_pricing import list_providers
 
 logger = logging.getLogger(__name__)
 
@@ -121,8 +148,10 @@ def _build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--runs-dir",
         type=str,
-        required=True,
-        help="Root directory for runs (output goes to runs-dir/scenario/timestamp/)",
+        help=(
+            "Root directory for runs (output goes to runs-dir/scenario/timestamp/). "
+            "Required unless --resume is given, which names the directory itself"
+        ),
     )
     run_parser.add_argument("--model", type=str, required=True, help="LLM model identifier")
     run_parser.add_argument(
@@ -221,8 +250,10 @@ def _build_parser() -> argparse.ArgumentParser:
         type=str,
         default=None,
         help=(
-            "Path to a consolidated communication-feature ontology JSON file. "
-            "Required when --metrics includes communication_feature_presence."
+            "Path to a consolidated communication-feature ontology JSON file, "
+            "pinning communication_feature_presence to one ontology. Omit it and "
+            "the metric reads the most recently modified JSON under "
+            "runs/<scenario>/_ontology/."
         ),
     )
     evaluate_parser.add_argument(
@@ -236,6 +267,151 @@ def _build_parser() -> argparse.ArgumentParser:
             "required knob after the run was created (e.g. veyru's "
             "easy_round_numbers on pre-existing baselines)."
         ),
+    )
+
+    export_parser = subparsers.add_parser(
+        "export",
+        help="Export many runs as CSV tables or as a zip of their run folders",
+    )
+    export_parser.add_argument(
+        "--runs-dir",
+        type=str,
+        default="./runs",
+        help="Directory holding the run data (default: ./runs)",
+    )
+    export_parser.add_argument(
+        "--out",
+        type=str,
+        required=True,
+        help="Directory to write the export into (created if absent)",
+    )
+    _add_run_selection_flags(parser=export_parser, verb="Export")
+    export_parser.add_argument(
+        "--frames",
+        type=str,
+        default="run_level,round_level,agent_level",
+        help=(
+            "Comma-separated tables to emit: run_level, round_level, agent_level, "
+            "message_level, round_context (default: the first three; the last two "
+            "read every run's event log)"
+        ),
+    )
+    export_parser.add_argument(
+        "--include-metric-summaries",
+        action="store_true",
+        help=(
+            "Add each metric's unit and one-line summary at run level, and its "
+            "per-observation note on the round and agent tables"
+        ),
+    )
+    export_parser.add_argument(
+        "--no-repeat-run-columns",
+        dest="repeat_run_columns",
+        action="store_false",
+        help="Keep the long tables narrow, joining back on run_id instead",
+    )
+    export_parser.add_argument(
+        "--raw",
+        action="store_true",
+        help="Also write a zip of the selected runs' folders",
+    )
+    export_parser.add_argument(
+        "--include-logs",
+        action="store_true",
+        help="Keep debug and stdout logs in the raw zip (they are dropped by default)",
+    )
+    export_parser.add_argument(
+        "--max-runs",
+        type=int,
+        default=MAX_EXPORT_RUN_COUNT,
+        help=f"Refuse a selection larger than this (default: {MAX_EXPORT_RUN_COUNT})",
+    )
+
+    analyze_parser = subparsers.add_parser(
+        "analyze",
+        help="Group and aggregate many runs' metrics into one table",
+    )
+    analyze_parser.add_argument(
+        "--runs-dir",
+        type=str,
+        default="./runs",
+        help="Directory holding the run data (default: ./runs)",
+    )
+    _add_run_selection_flags(parser=analyze_parser, verb="Analyze")
+    analyze_parser.add_argument(
+        "--grain",
+        type=str,
+        default=AnalysisGrain.RUN.value,
+        choices=[grain.value for grain in AnalysisGrain],
+        help="What one observation is (default: run)",
+    )
+    analyze_parser.add_argument(
+        "--group-by",
+        action="append",
+        default=[],
+        metavar="DIMENSION",
+        help=(
+            "Group on this dimension (repeatable, at most two: the x axis then the "
+            "series). Omit to aggregate the whole selection into one row."
+        ),
+    )
+    analyze_parser.add_argument(
+        "--measure",
+        action="append",
+        default=[],
+        metavar="SPEC",
+        help=(
+            "What to aggregate, as key:aggregate (a metric) or source:key:aggregate "
+            "(e.g. run_column:total_cost_usd:sum). Repeatable."
+        ),
+    )
+    analyze_parser.add_argument(
+        "--filter",
+        action="append",
+        default=[],
+        dest="dimension_filter",
+        metavar="SPEC",
+        help=(
+            "Narrow the observations, as key:operator[:values] "
+            "(e.g. knob.round_time_budget_seconds:gte:1000). Repeatable."
+        ),
+    )
+    analyze_parser.add_argument(
+        "--sort",
+        type=str,
+        default=ResultSort.GROUP.value,
+        choices=[sort.value for sort in ResultSort],
+        help="Row order (default: by the group values, numerically where they are numbers)",
+    )
+    analyze_parser.add_argument(
+        "--sort-measure",
+        type=int,
+        default=0,
+        metavar="INDEX",
+        help="Which --measure a measure sort orders by, counting from 0 (default: 0)",
+    )
+    analyze_parser.add_argument(
+        "--limit",
+        type=int,
+        default=MAX_ANALYSIS_RESULT_ROWS,
+        help=f"Keep at most this many groups (default: {MAX_ANALYSIS_RESULT_ROWS})",
+    )
+    analyze_parser.add_argument(
+        "--list-fields",
+        action="store_true",
+        help="Print the dimensions and measures this selection carries, and stop",
+    )
+    analyze_parser.add_argument(
+        "--json",
+        dest="as_json",
+        action="store_true",
+        help="Print the result as JSON instead of an aligned table",
+    )
+    analyze_parser.add_argument(
+        "--max-runs",
+        type=int,
+        default=MAX_EXPORT_RUN_COUNT,
+        help=f"Refuse a selection larger than this (default: {MAX_EXPORT_RUN_COUNT})",
     )
 
     export_thread_parser = subparsers.add_parser(
@@ -308,15 +484,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Write the export JSON to this path. Omit to print it to stdout.",
     )
 
-    check_parser = subparsers.add_parser(
-        "check-scenario",
+    validate_parser = subparsers.add_parser(
+        "validate",
         help="Check a scenario against the contract, without launching it",
     )
-    check_parser.add_argument(
-        "scenario_name",
+    validate_parser.add_argument(
+        "target",
         type=str,
-        choices=scenario_names,
-        help="Name of the scenario to check",
+        help=(
+            "An installed scenario's name, or the directory holding a package's "
+            "pyproject.toml, which is the one `new-scenario` created rather than the "
+            f"module inside it. Installed: {', '.join(scenario_names)}"
+        ),
     )
 
     new_scenario_parser = subparsers.add_parser(
@@ -390,13 +569,13 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Path to the source run directory (e.g. runs/veyru/1742234567)",
     )
     replace_parser.add_argument(
-        "--round-start",
-        dest="round_start",
+        "--after-round",
+        dest="after_round",
         type=int,
         required=True,
         help=(
-            "Round number that the resumed simulation should re-enter "
-            "fresh. Rewinds to the last message before this round began."
+            "The fork boundary: rounds 1..N stay complete, verdict and "
+            "postmortem included, and the replacement agent enters round N+1."
         ),
     )
     replace_parser.add_argument(
@@ -429,7 +608,9 @@ def _build_parser() -> argparse.ArgumentParser:
         type=str,
         help=(
             "Optional scenario knob overrides: a preset name the scenario "
-            "ships, or a path to a JSON file"
+            "ships, or a path to a JSON file. A round_count inside it sets "
+            "the fork's total rounds when --rounds-after is omitted, and "
+            "must agree with it when both are given"
         ),
     )
     replace_parser.add_argument(
@@ -446,16 +627,17 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     replace_parser.add_argument(
-        "--rounds-after-swap",
-        dest="rounds_after_swap",
+        "--rounds-after",
+        dest="rounds_after",
         type=int,
         default=None,
         help=(
-            "Number of rounds the resumed simulation will play after the "
-            "replacement boundary. round_count is set to round_start + "
-            "rounds_after_swap. When omitted, defaults to "
-            "source_round_count - round_start (the remaining rounds in the "
-            "original run)."
+            "Number of new rounds the fork plays. round_count is set to "
+            "after_round + rounds_after. When omitted, a round_count carried "
+            "by --knobs sets the total instead, and with neither the default "
+            "is source_round_count - after_round (the source rounds past the "
+            "boundary); forking after the source's final round requires one "
+            "of the explicit forms."
         ),
     )
     replace_parser.add_argument(
@@ -467,8 +649,9 @@ def _build_parser() -> argparse.ArgumentParser:
             "Window the replaced agent's visible-channel history: it sees those "
             "channels only from this round onward (read_channel returns dropped, "
             "send_message kept from this round). Applies to every channel in the "
-            "resolved visible set. For the previous N rounds before the swap, pass "
-            "round_start - N. When omitted, visible channels keep full prior history."
+            "resolved visible set. For the previous P rounds before the boundary, "
+            "pass after_round - P + 1. When omitted, visible channels keep full "
+            "prior history."
         ),
     )
     replace_parser.add_argument(
@@ -504,13 +687,13 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Path to the run directory the imported agent comes from",
     )
     cross_run_parser.add_argument(
-        "--round-start",
-        dest="round_start",
+        "--after-round",
+        dest="after_round",
         type=int,
         required=True,
         help=(
-            "Round number in source A that the resumed simulation should "
-            "re-enter. Rewinds source A to the boundary just before this round."
+            "The fork boundary in source A: rounds 1..N stay complete and the "
+            "imported agent enters round N+1."
         ),
     )
     cross_run_parser.add_argument(
@@ -520,7 +703,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Last round of source B whose events feed into the imported "
-            "agent's history. Defaults to min(round_start - 1, B_max_round) "
+            "agent's history. Defaults to min(after_round, B_max_round) "
             "so the imported agent gets all of B's history without exceeding "
             "what B actually played."
         ),
@@ -558,7 +741,9 @@ def _build_parser() -> argparse.ArgumentParser:
         type=str,
         help=(
             "Optional scenario knob overrides: a preset name the scenario "
-            "ships, or a path to a JSON file"
+            "ships, or a path to a JSON file. A round_count inside it sets "
+            "the fork's total rounds when --rounds-after is omitted, and "
+            "must agree with it when both are given"
         ),
     )
     cross_run_parser.add_argument(
@@ -574,15 +759,15 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     cross_run_parser.add_argument(
-        "--rounds-after-swap",
-        dest="rounds_after_swap",
+        "--rounds-after",
+        dest="rounds_after",
         type=int,
         default=None,
         help=(
-            "Number of rounds the resumed simulation will play after the "
-            "replacement boundary. round_count is set to round_start + "
-            "rounds_after_swap. When omitted, defaults to "
-            "source_a_round_count - round_start."
+            "Number of new rounds the fork plays. round_count is set to "
+            "after_round + rounds_after. When omitted, a round_count carried "
+            "by --knobs sets the total instead, and with neither the default "
+            "is source_a_round_count - after_round."
         ),
     )
     cross_run_parser.add_argument(
@@ -592,69 +777,72 @@ def _build_parser() -> argparse.ArgumentParser:
         help=f"Tenant group slug that owns the new run (default: {LOCAL_GROUP_SLUG})",
     )
 
-    resume_parser = subparsers.add_parser(
-        "resume-at-round",
+    fork_parser = subparsers.add_parser(
+        "fork-at-round",
         help=(
-            "Clone a finished run at the start of a chosen round and resume "
-            "without replacing any agent; every agent keeps its full "
-            "reconstructed history. Optional knob overrides are merged onto "
-            "the source's scenario_config so the resumed simulation can flip "
-            "postmortem, add scheduled_events, extend round_count, etc."
+            "Clone a finished run keeping rounds 1..N complete and play round "
+            "N+1 onward in a new run directory, without replacing any agent; "
+            "every agent keeps its full reconstructed history. --rounds-after "
+            "sets how far it plays, past the source's own end included; a "
+            "round_count carried by --knobs does the same when the flag is "
+            "omitted, and must agree with it when both are given."
         ),
     )
-    resume_parser.add_argument(
+    fork_parser.add_argument(
         "scenario_name",
         type=str,
         choices=scenario_names,
         help="Name of the scenario the source run belongs to",
     )
-    resume_parser.add_argument(
+    fork_parser.add_argument(
         "--source-run-dir",
         type=str,
         required=True,
         help="Path to the source run directory (e.g. runs/veyru/1742234567)",
     )
-    resume_parser.add_argument(
-        "--round-start",
-        dest="round_start",
+    fork_parser.add_argument(
+        "--after-round",
+        dest="after_round",
         type=int,
         required=True,
         help=(
-            "Round number that the resumed simulation should re-enter. "
-            "Rewinds to the source's RoundAdvanced commit for that round."
+            "The fork boundary: rounds 1..N stay complete, verdict and "
+            "postmortem included, and the fork plays round N+1 onward."
         ),
     )
-    resume_parser.add_argument(
+    fork_parser.add_argument(
         "--runs-dir",
         type=str,
         required=True,
         help="Root directory where the new run is written",
     )
-    resume_parser.add_argument(
+    fork_parser.add_argument(
         "--knobs",
         type=str,
         help=(
             "Optional scenario knob overrides: a preset name the scenario "
             "ships, or a path to a JSON file. "
             "Shallow-merged onto the source's scenario_config; useful for "
-            "flipping postmortem_enabled, scheduling post-hoc swaps via "
-            "scheduled_events, or extending round_count beyond the source."
+            "flipping postmortem_enabled or scheduling post-hoc swaps via "
+            "scheduled_events. A round_count in the payload sets the fork's "
+            "total rounds when --rounds-after is omitted, and must agree "
+            "with it when both are given."
         ),
     )
-    resume_parser.add_argument(
-        "--rounds-after-resume",
-        dest="rounds_after_resume",
+    fork_parser.add_argument(
+        "--rounds-after",
+        dest="rounds_after",
         type=int,
         default=None,
         help=(
-            "Number of rounds the resumed simulation will play after the "
-            "resume boundary. round_count is set to round_start + "
-            "rounds_after_resume. When omitted, defaults to "
-            "source_round_count - round_start (the remaining rounds in the "
-            "original run after the resume boundary)."
+            "Number of new rounds the fork plays. round_count is set to "
+            "after_round + rounds_after. When omitted, defaults to "
+            "source_round_count - after_round (the source rounds past the "
+            "boundary); forking after the source's final round requires an "
+            "explicit value."
         ),
     )
-    resume_parser.add_argument(
+    fork_parser.add_argument(
         "--group-slug",
         type=str,
         default=LOCAL_GROUP_SLUG,
@@ -665,7 +853,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "login",
         help=(
             "Authenticate the CLI against a remote glossogen server via OAuth 2.0 "
-            "PKCE. Opens a browser to the Clerk-gated consent page; the CLI's "
+            "PKCE. Opens a browser to the consent page; the CLI's "
             "loopback server collects the code and writes the resulting tokens "
             "to ~/.glossogen/credentials.json."
         ),
@@ -746,7 +934,7 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         default=1,
         help=(
-            "Max concurrent uploads (default 1, hard-capped at 4). The export "
+            "Max concurrent uploads (default 1, hard-capped at 16). The export "
             "side holds the bundle bytes in memory, so high concurrency can "
             "overwhelm the laptop on bundles that are still large."
         ),
@@ -755,13 +943,14 @@ def _build_parser() -> argparse.ArgumentParser:
     sync_metadata_parser = subparsers.add_parser(
         "sync-metadata-to-prod",
         help=(
-            "Sync local labels onto runs that already exist on prod. Walks "
-            "local runs/, diffs each run's labels.json against the labels "
-            "the remote returns from /runs, and PUTs the local list onto "
-            "/api/g/{slug}/runs/{scenario}/{run_dir_name}/labels for every "
-            "drifted run. Local is the source of truth — the PUT replaces "
-            "the remote list (use `push-to-prod` for runs that aren't yet "
-            "on prod at all)."
+            "Sync local run metadata onto runs that already exist on prod. "
+            "Walks local runs/, diffs each run's labels.json and evaluation "
+            "report against what the remote returns from /runs, and PUTs "
+            "the drifted ones. Also PUTs every local label description the "
+            "remote glossary is missing or records differently; descriptions "
+            "only the remote has are left alone. Local is the source of "
+            "truth (use `push-to-prod` for runs that aren't yet on prod at "
+            "all)."
         ),
     )
     sync_metadata_parser.add_argument(
@@ -799,6 +988,53 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    describe_label_parser = subparsers.add_parser(
+        "describe-label",
+        help=(
+            "Record what a label means, or delete the recorded meaning. Writes "
+            "the local group's glossary under <runs-dir>/_label_descriptions/, "
+            "the same file the no-database server reads."
+        ),
+    )
+    describe_label_parser.add_argument(
+        "label",
+        type=str,
+        help="The exact label string (e.g. baseline_oss or budget=800).",
+    )
+    describe_label_action = describe_label_parser.add_mutually_exclusive_group(required=True)
+    describe_label_action.add_argument(
+        "--description",
+        dest="description",
+        type=str,
+        default=None,
+        help="What the label means.",
+    )
+    describe_label_action.add_argument(
+        "--delete",
+        dest="delete",
+        action="store_true",
+        help="Remove the label's recorded description instead of setting one.",
+    )
+    describe_label_parser.add_argument(
+        "--runs-dir",
+        dest="runs_dir",
+        type=str,
+        default="./runs",
+        help="Root directory of local runs (default: ./runs).",
+    )
+
+    list_label_descriptions_parser = subparsers.add_parser(
+        "list-label-descriptions",
+        help="Print the local group's label glossary, one label per line.",
+    )
+    list_label_descriptions_parser.add_argument(
+        "--runs-dir",
+        dest="runs_dir",
+        type=str,
+        default="./runs",
+        help="Root directory of local runs (default: ./runs).",
+    )
+
     return parser
 
 
@@ -833,9 +1069,9 @@ def main() -> None:
         asyncio.run(_run_cross_run_replace_agent(args=args))
         return
 
-    if known_args.command == "resume-at-round":
+    if known_args.command == "fork-at-round":
         args = parser.parse_args()
-        asyncio.run(_run_resume_at_round(args=args))
+        asyncio.run(_run_fork_at_round(args=args))
         return
 
     if known_args.command == "login":
@@ -853,14 +1089,34 @@ def main() -> None:
         asyncio.run(_run_sync_metadata_to_prod(args=args))
         return
 
-    if known_args.command == "check-scenario":
+    if known_args.command == "describe-label":
         args = parser.parse_args()
-        _run_check_scenario(args=args)
+        asyncio.run(_run_describe_label(args=args))
+        return
+
+    if known_args.command == "list-label-descriptions":
+        args = parser.parse_args()
+        asyncio.run(_run_list_label_descriptions(args=args))
+        return
+
+    if known_args.command == "validate":
+        args = parser.parse_args()
+        _run_validate(args=args)
         return
 
     if known_args.command == "new-scenario":
         args = parser.parse_args()
         _run_new_scenario(args=args)
+        return
+
+    if known_args.command == "export":
+        args = parser.parse_args()
+        asyncio.run(_run_export(args=args))
+        return
+
+    if known_args.command == "analyze":
+        args = parser.parse_args()
+        asyncio.run(_run_analyze(args=args))
         return
 
     if known_args.command == "export-thread":
@@ -874,7 +1130,13 @@ def main() -> None:
     args, remaining = parser.parse_known_args()
 
     if args.command == "run":
+        if args.resume is None and args.runs_dir is None:
+            parser.error("--runs-dir is required unless --resume is given")
         config = _build_run_config(args=args, remaining=remaining, scenario_cls=scenario_cls)
+        if args.resume is None:
+            resume_dir = None
+        else:
+            resume_dir = Path(args.resume)
         try:
             validated = validate_run_config(
                 scenario_cls=scenario_cls,
@@ -885,6 +1147,20 @@ def main() -> None:
             scenario = scenario_cls.create_from_config(config=validated.scenario_config)
         except (SystemExit, ValueError, TypeError, KeyError) as exc:
             raise SystemExit(f"Invalid run configuration: {exc}") from exc
+        try:
+            require_reachable_models(
+                scenario_cls=scenario_cls,
+                scenario_config=validated.scenario_config,
+                agent_overrides=validated.normalized_agent_overrides,
+                default_model=args.model,
+                default_provider=args.provider,
+                first_round=resume_first_round(
+                    resume_dir=resume_dir,
+                    scenario_name=scenario_cls.name(),
+                ),
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
         asyncio.run(
             _run_simulation(
                 args=args,
@@ -983,7 +1259,7 @@ async def _register_derived_run(
     source_run_dir_name: str,
     group_slug: str,
 ) -> None:
-    """Insert a ``runs`` row for a derived run (replace-agent / resume-at-round / cross-run).
+    """Insert a ``runs`` row for a derived run (replace-agent / fork-at-round / cross-run).
 
     The detached ``glossogen run --resume`` subprocess that actually executes the
     derived simulation skips registration (it inherits the run dir from this
@@ -1036,100 +1312,6 @@ def _teardown_logging(
     logging.getLogger().removeHandler(bus_log_handler)
 
 
-class _ReplaceManifestInfo(NamedTuple):
-    """Replace-agent / round-anchored resume manifest fields needed at resume time.
-
-    ``replaced_agent_id`` is ``None`` for a round-anchored resume; the
-    resume code path then treats every agent as a non-replaced agent
-    (full reconstructed history, no channel-visibility filtering).
-    """
-
-    replaced_agent_id: str | None
-    channel_visibility: dict[str, ChannelVisibility]
-    target_event_id: str
-    round_start: int
-    replacement_provider: str | None
-
-
-def _channel_visibility_from_manifest(
-    visible_channels: list[str],
-    blocked_channels: list[str],
-    history_floors: dict[str, int],
-) -> dict[str, ChannelVisibility]:
-    """Translate replace-agent manifest channel lists into a visibility dict.
-
-    ``visible_channels`` (channels whose prior history remains visible)
-    map to ``ChannelVisibilityFull``, except channels named in
-    ``history_floors`` which map to ``ChannelVisibilityFromRound`` (their
-    history is windowed from the floor round onward). ``blocked_channels``
-    (channels whose tool calls are stripped from the predecessor's
-    history) map to ``ChannelVisibilityNone``. Channels not in any list
-    are omitted (caller decides default behaviour).
-    """
-    result: dict[str, ChannelVisibility] = {}
-    for channel_id in visible_channels:
-        floor = history_floors.get(channel_id)
-        if floor is None:
-            result[channel_id] = ChannelVisibilityFull()
-        else:
-            result[channel_id] = ChannelVisibilityFromRound(round_floor=floor)
-    for channel_id in blocked_channels:
-        result[channel_id] = ChannelVisibilityNone()
-    return result
-
-
-def read_replace_manifest_info(run_dir: Path) -> _ReplaceManifestInfo | None:
-    """Read ``replace_manifest.json`` if present and project to resume fields."""
-    manifest = read_replace_manifest(run_dir=run_dir)
-    if manifest is None:
-        return None
-    return _ReplaceManifestInfo(
-        replaced_agent_id=manifest.replaced_agent_id,
-        channel_visibility=_channel_visibility_from_manifest(
-            visible_channels=list(manifest.channels_with_visible_history),
-            blocked_channels=list(manifest.blocked_tool_call_channels),
-            history_floors=dict(manifest.channel_history_floors),
-        ),
-        target_event_id=manifest.target_event_id,
-        round_start=manifest.round_start,
-        replacement_provider=manifest.replacement_provider,
-    )
-
-
-class _CrossRunManifestInfo(NamedTuple):
-    """Cross-run replace-agent manifest fields needed to configure resume."""
-
-    replaced_agent_id: str
-    channel_visibility: dict[str, ChannelVisibility]
-    target_event_id: str
-    round_start: int
-    imported_history_path: Path
-    source_b_round_end: int
-    source_b_cutoff_event_id: str
-    imported_provider: str
-
-
-def _read_cross_run_manifest(run_dir: Path) -> _CrossRunManifestInfo | None:
-    """Read ``cross_run_replace_manifest.json`` if present and project to resume fields."""
-    manifest = read_cross_run_replace_manifest(run_dir=run_dir)
-    if manifest is None:
-        return None
-    return _CrossRunManifestInfo(
-        replaced_agent_id=manifest.replaced_agent_id,
-        channel_visibility=_channel_visibility_from_manifest(
-            visible_channels=list(manifest.channels_with_visible_history),
-            blocked_channels=list(manifest.blocked_tool_call_channels),
-            history_floors={},
-        ),
-        target_event_id=manifest.target_event_id,
-        round_start=manifest.round_start,
-        imported_history_path=run_dir / manifest.imported_history_source,
-        source_b_round_end=manifest.source_b_round_end,
-        source_b_cutoff_event_id=manifest.source_b_cutoff_event_id,
-        imported_provider=manifest.imported_provider,
-    )
-
-
 async def _run_simulation(
     args: argparse.Namespace,
     scenario: SimulationScenario,
@@ -1179,70 +1361,18 @@ async def _run_simulation(
     if resuming:
         logger.info("Loading rewind state from %s", log_path)
         events = await load_events(log_path=log_path)
-        replace_info = read_replace_manifest_info(run_dir=run_dir)
-        cross_run_info = _read_cross_run_manifest(run_dir=run_dir)
-        agent_filters: dict[str, AgentHistoryFilter] = {}
-        if cross_run_info is not None:
-            cross_run_resume = await _build_cross_run_resume_state(
-                events=events,
-                run_dir=run_dir,
-                cross_run_info=cross_run_info,
-            )
-            resume_state = cross_run_resume
+        resume_state = await load_resume_state(run_dir=run_dir, events=events)
+        if resume_state.enter_round_by_advancing:
             logger.info(
-                "Cross-run replace-agent run detected: %s resuming with full Sim B "
-                "history (cutoff round=%d), channel_visibility=%s",
-                cross_run_info.replaced_agent_id,
-                cross_run_info.source_b_round_end,
-                cross_run_info.channel_visibility,
+                "Rewind state loaded: round %d is complete, advancing into round %d",
+                resume_state.round_number,
+                resume_state.round_number + 1,
             )
-        elif replace_info is not None:
-            if replace_info.replaced_agent_id is None:
-                resume_state = build_rewind_state_at_event(
-                    events=events,
-                    target_event_id=replace_info.target_event_id,
-                    cutoff_round=None,
-                    agent_filters={},
-                )
-                logger.info(
-                    "Round-anchored resume detected: resuming at round %d "
-                    "with full reconstructed history for every agent",
-                    replace_info.round_start,
-                )
-            else:
-                agent_filters[replace_info.replaced_agent_id] = AgentHistoryFilter(
-                    tool_calls_only=True,
-                    channel_visibility=replace_info.channel_visibility,
-                    imported=None,
-                    split_parallel_tool_calls=replace_info.replacement_provider
-                    == SELF_HOSTED_PROVIDER,
-                )
-                base_state = build_rewind_state_at_event(
-                    events=events,
-                    target_event_id=replace_info.target_event_id,
-                    cutoff_round=replace_info.round_start,
-                    agent_filters=agent_filters,
-                )
-                resume_state = base_state._replace(
-                    replaced_agent_ids=frozenset({replace_info.replaced_agent_id}),
-                    replaced_agent_channel_visibility={
-                        replace_info.replaced_agent_id: replace_info.channel_visibility,
-                    },
-                )
-                logger.info(
-                    "Replace-agent run detected: %s resuming with channel_visibility=%s",
-                    replace_info.replaced_agent_id,
-                    replace_info.channel_visibility,
-                )
         else:
-            resume_state = build_rewind_state_from_last_message(
-                events=events,
-                agent_filters=agent_filters,
+            logger.info(
+                "Rewind state loaded: resuming from round %d",
+                resume_state.round_number,
             )
-        logger.info(
-            "Rewind state loaded: resuming from round %d",
-            resume_state.round_number,
-        )
         scenario.restore_state_from_events(events=events)
         write_resume_context_files(
             run_dir=run_dir,
@@ -1364,6 +1494,278 @@ async def _run_evaluation(
         delete_eval_manifest(run_dir=run_dir)
 
 
+def _add_run_selection_flags(parser: argparse.ArgumentParser, verb: str) -> None:
+    """Add the flags :func:`_export_selection_from_args` reads.
+
+    Shared by `export` and `analyze` because that function reads them off
+    whichever namespace it is given: a parser missing one raises AttributeError
+    on every invocation of its command, not only on the ones that pass it.
+
+    ``verb`` names the command in the ``--run-id`` help, the one line that
+    differed between the two copies this replaced.
+    """
+    parser.add_argument(
+        "--scenario",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="Only these scenarios (repeatable). Omit for every scenario.",
+    )
+    parser.add_argument(
+        "--label",
+        action="append",
+        default=[],
+        metavar="LABEL",
+        help="Only runs carrying every one of these labels (repeatable)",
+    )
+    parser.add_argument(
+        "--run-id-contains",
+        type=str,
+        default=None,
+        help="Only runs whose scenario/run_dir_name id contains this substring",
+    )
+    parser.add_argument(
+        "--run-id",
+        action="append",
+        default=[],
+        metavar="ID",
+        help=(
+            f"{verb} exactly these run ids (repeatable, e.g. veyru/1777638061). "
+            "Cannot be combined with the filter flags."
+        ),
+    )
+    parser.add_argument(
+        "--knob",
+        action="append",
+        default=[],
+        metavar="CONDITION",
+        help=(
+            "Only runs whose recorded scenario_config satisfies this condition, "
+            "written <knob><operator><value> with the operator one of "
+            "= != >= <= > <. Quote it, or the shell reads > and < as redirection: "
+            "--knob 'round_time_budget_seconds>=200' --knob postmortem_enabled=true. "
+            "Repeatable; every condition must hold."
+        ),
+    )
+    parser.add_argument(
+        "--contains-agent-id",
+        type=str,
+        default=None,
+        metavar="AGENT_ID",
+        help="Only runs that registered this agent (e.g. field_observer)",
+    )
+    parser.add_argument(
+        "--status",
+        type=str,
+        default=None,
+        choices=[status.value for status in RunStatus],
+        help="Only runs in this state (e.g. scenario_complete to skip crashed runs)",
+    )
+
+
+def _export_selection_from_args(args: argparse.Namespace) -> RunSelection:
+    """Build the selection the flags describe, refusing a mix of the two forms."""
+    filter_flags_used = bool(
+        args.scenario
+        or args.label
+        or args.run_id_contains
+        or args.status is not None
+        or args.contains_agent_id is not None
+        or args.knob
+    )
+    if args.run_id and filter_flags_used:
+        raise SystemExit(
+            "Pass either --run-id or the filter flags (--scenario / --label / "
+            "--run-id-contains / --status / --contains-agent-id / --knob), not both."
+        )
+    if args.run_id:
+        return ExplicitRunSelection(kind="explicit", run_ids=list(args.run_id))
+    status = None
+    if args.status is not None:
+        status = RunStatus(args.status)
+    # Checked before building, so the model's own validator never fires here. It
+    # would raise, and reporting a mistyped flag through an exception means either
+    # a pydantic traceback on stderr or a logging rule broken to avoid one.
+    problem = knob_filter_problem(raw_filters=list(args.knob))
+    if problem is not None:
+        raise SystemExit(problem)
+    return FilterRunSelection(
+        kind="filters",
+        scenario=list(args.scenario),
+        labels=list(args.label),
+        run_id_contains=args.run_id_contains,
+        status=status,
+        contains_agent_id=args.contains_agent_id,
+        knob=list(args.knob),
+    )
+
+
+def _requested_frames(raw: str) -> list[ExportFrame]:
+    """Parse the --frames flag, naming any value that is not a table."""
+    names = [part.strip() for part in raw.split(",") if part.strip()]
+    if not names:
+        raise SystemExit("--frames needs at least one table name.")
+    valid = {frame.value for frame in ExportFrame}
+    unknown = [name for name in names if name not in valid]
+    if unknown:
+        raise SystemExit(
+            f"Unknown table(s): {', '.join(unknown)}. Choose from {', '.join(sorted(valid))}."
+        )
+    return [ExportFrame(name) for name in names]
+
+
+async def _run_export(args: argparse.Namespace) -> None:
+    """Export many runs as CSV tables, and optionally as a zip of their folders.
+
+    Reads the runs directory directly, so it needs no server and no database. It
+    covers runs that were never evaluated and runs still in progress; their metric
+    cells are empty rather than zero.
+    """
+    frames_requested = _requested_frames(raw=args.frames)
+    if args.include_logs and not args.raw:
+        raise SystemExit("--include-logs only affects the raw zip; pass --raw as well.")
+
+    selection, summaries = await _resolved_local_runs(args=args)
+    records = await load_export_run_records(runs=summaries)
+    preview = build_export_preview(
+        records=records,
+        missing_run_ids=[],
+        raw_bytes_estimate=None,
+    )
+    logger.info(
+        "Exporting %d runs across %s: %d columns, %d metrics",
+        preview.run_count,
+        ", ".join(preview.scenario_names),
+        len(preview.columns),
+        len(preview.metrics),
+    )
+    if preview.runs_without_report:
+        logger.info(
+            "%d of them have no evaluation report, so their metric cells are empty",
+            len(preview.runs_without_report),
+        )
+
+    request = CsvExportRequest(
+        selection=selection,
+        frames=frames_requested,
+        columns=list(dict.fromkeys(column.key for column in preview.columns)),
+        metrics=[metric.metric_name for metric in preview.metrics],
+        repeat_run_columns=args.repeat_run_columns,
+        include_metric_summaries=args.include_metric_summaries,
+    )
+    out_dir = Path(args.out).resolve()
+    written = write_frames_to_directory(
+        frames=build_export_frames(records=records, request=request),
+        legend=build_legend_frame(records=records, request=request),
+        out_dir=out_dir,
+    )
+    for path in written:
+        print(path)
+
+    if args.raw:
+        zip_path = out_dir / "runs.zip"
+        try:
+            with zip_path.open("wb") as handle:
+                tally = write_runs_zip(
+                    runs=summaries,
+                    include_logs=args.include_logs,
+                    destination=handle,
+                )
+        except ExportTooLargeError as exc:
+            zip_path.unlink(missing_ok=True)
+            raise SystemExit(str(exc)) from exc
+        logger.info("Raw zip: %d runs, %d files", tally.run_count, tally.file_count)
+        print(zip_path)
+
+
+class LocalSelection(NamedTuple):
+    """The selection the flags describe, and the runs it resolves to on disk."""
+
+    selection: RunSelection
+    summaries: list[RunSummary]
+
+
+async def _resolved_local_runs(args: argparse.Namespace) -> LocalSelection:
+    """Resolve the selection the flags describe against a runs directory on disk.
+
+    Shared by the export and the analysis commands: both read the runs directory
+    directly, so neither needs a server or a database, and both refuse the same
+    three ways (a named run that is not there, a selection matching nothing, and one
+    over the run ceiling).
+    """
+    selection = _export_selection_from_args(args=args)
+    runs_dir = Path(args.runs_dir).resolve()
+    if not runs_dir.is_dir():
+        raise SystemExit(f"No runs directory at {runs_dir}")
+    summaries = await discover_runs(runs_dir=runs_dir)
+    resolved = resolve_selection(candidates=summaries, selection=selection)
+
+    if resolved.missing_run_ids:
+        raise SystemExit(f"No run found for: {', '.join(sorted(resolved.missing_run_ids))}")
+    if not resolved.summaries:
+        raise SystemExit("That selection matches no runs.")
+    if len(resolved.summaries) > args.max_runs:
+        raise SystemExit(
+            f"That selection is {len(resolved.summaries)} runs, over the --max-runs "
+            f"limit of {args.max_runs}."
+        )
+    return LocalSelection(selection=selection, summaries=resolved.summaries)
+
+
+def _analysis_spec_from_args(args: argparse.Namespace) -> AnalysisQuerySpec:
+    """Build the query spec the flags describe, naming what could not be read."""
+    if not args.measure:
+        raise SystemExit(
+            "Pass at least one --measure (e.g. --measure round_success:mean). "
+            "Run with --list-fields to see what this selection carries."
+        )
+    try:
+        measures = [parse_measure(text=text) for text in args.measure]
+        filters = [parse_filter(text=text) for text in args.dimension_filter]
+    except AnalysisSpecError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    try:
+        return AnalysisQuerySpec(
+            grain=AnalysisGrain(args.grain),
+            filters=filters,
+            group_by=list(args.group_by),
+            measures=measures,
+            sort=ResultSort(args.sort),
+            sort_measure_index=args.sort_measure,
+            limit=args.limit,
+        )
+    except ValidationError as exc:
+        raise SystemExit(str(exc)) from exc
+
+
+async def _run_analyze(args: argparse.Namespace) -> None:
+    """Group and aggregate the selected runs into one table.
+
+    Reads the runs directory directly, so it needs no server and no database, and runs
+    the same engine the web UI's charts do.
+    """
+    summaries = (await _resolved_local_runs(args=args)).summaries
+    grain = AnalysisGrain(args.grain)
+    records = await load_analysis_records(
+        runs=summaries, read_sidecars=grain is AnalysisGrain.KEYED
+    )
+
+    if args.list_fields:
+        catalog = build_field_catalog(records=records, grain=grain)
+        if args.as_json:
+            print(catalog.model_dump_json(indent=2))
+            return
+        print(render_field_catalog(catalog=catalog))
+        return
+
+    result = run_analysis_query(records=records, spec=_analysis_spec_from_args(args=args))
+    if args.as_json:
+        print(result.model_dump_json(indent=2))
+        return
+    print(render_text_table(result=result))
+
+
 async def _run_export_thread(args: argparse.Namespace) -> None:
     """Export one agent's reconstructed thread as a provider-native request body.
 
@@ -1402,28 +1804,55 @@ async def _run_export_thread(args: argparse.Namespace) -> None:
     )
 
 
-def _run_check_scenario(args: argparse.Namespace) -> None:
-    """Check one scenario against the contract and report what failed.
+def _run_validate(args: argparse.Namespace) -> None:
+    """Check a scenario against the contract and report everything that failed.
 
-    Exits non-zero when anything failed, so this is usable as a CI step in the
-    package that ships the scenario.
+    Takes a name or a directory. Which one it was decides only how the class is
+    found: the contract checks are the same either way. A directory additionally
+    gets the package checks, which are about the distribution around the scenario
+    and so have nothing to look at once that distribution is installed.
+
+    Exits non-zero when anything failed, so this works as a CI step in whichever
+    package ships the scenario.
+
+    Needs no API key, and checks no model's reachability: describing a scenario
+    must not require a credential, and a launch checks what it can reach where the
+    run's own model and provider are known.
     """
-    scenario_cls = get_scenario_class(name=args.scenario_name)
-    outcomes = check_scenario(scenario_cls=scenario_cls)
+    try:
+        target = resolve_check_target(target=args.target)
+    except (ScenarioPathError, ValueError) as refusal:
+        raise SystemExit(f"FAIL {args.target}: {refusal}") from refusal
+
+    notes = list(target.notes)
+    outcomes: list[CheckOutcome] = []
+    if target.loaded is None:
+        outcomes.extend(check_scenario(scenario_cls=target.scenario_cls))
+    else:
+        # The package checks run first and outside the registration below, because
+        # the collision check has to see the registry as it really is.
+        package = check_scenario_package(loaded=target.loaded)
+        notes.extend(package.notes)
+        with registered_for_checks(loaded=target.loaded):
+            outcomes.extend(package.outcomes)
+            outcomes.extend(check_scenario(scenario_cls=target.scenario_cls))
+
     failed = failures(outcomes)
     for outcome in failed:
-        where = f"{args.scenario_name}"
+        where = target.label
         if outcome.preset:
             where = f"{where} [{outcome.preset}]"
         print(f"FAIL {where}: {outcome.check} — {outcome.detail}")
-    presets = scenario_cls.knobs_preset_names()
+    for note in notes:
+        print(f"NOTE {target.label}: {note}")
     if failed:
         # Printed rather than raised with a message, so the summary lands after
         # the failures it counts rather than ahead of them on another stream.
-        print(f"{len(failed)} of {len(outcomes)} checks failed for {args.scenario_name}.")
+        print(f"{len(failed)} of {len(outcomes)} checks failed for {target.label}.")
         raise SystemExit(1)
+    presets = target.scenario_cls.knobs_preset_names()
     print(
-        f"{args.scenario_name}: {len(outcomes)} checks passed "
+        f"{target.label}: {len(outcomes)} checks passed "
         f"across {len(presets)} preset(s): {', '.join(presets)}"
     )
 
@@ -1431,10 +1860,9 @@ def _run_check_scenario(args: argparse.Namespace) -> None:
 def _run_new_scenario(args: argparse.Namespace) -> None:
     """Write a new scenario package and print what to do with it.
 
-    The next steps are printed rather than left to the README, because the
-    install is what registers the scenario: an author who runs `check-scenario`
-    against an uninstalled source tree is told the name resolves to nothing, and
-    the reason is a step they have not taken yet.
+    The next steps are printed rather than left to the README, because their order
+    is not obvious: `validate` reads the package's own declaration and so works on
+    what was just written, while `pytest` needs the install for the harness.
     """
     ref = args.glossogen_ref
     if ref is None:
@@ -1454,8 +1882,8 @@ def _run_new_scenario(args: argparse.Namespace) -> None:
     # passed, and it is what the generated package installs glossogen from.
     print(f"Pinned to glossogen {ref}; pass --glossogen-ref to pin another.")
     print(f"  cd {package.package_dir}")
+    print("  glossogen validate .            # the contract, before installing anything")
     print('  pip install -e ".[testing]"')
-    print(f"  glossogen check-scenario {args.scenario_name}")
     print("  pytest")
 
 
@@ -1553,8 +1981,8 @@ async def _run_replace_agent(args: argparse.Namespace) -> None:
     request = ReplaceAgentCoreRequest(
         source_run_dir=source_run_dir,
         scenario_name=args.scenario_name,
-        round_start=args.round_start,
-        rounds_after_swap=args.rounds_after_swap,
+        after_round=args.after_round,
+        rounds_after=args.rounds_after,
         replaced_agent_id=args.replaced_agent_id,
         model=args.model,
         provider=args.provider,
@@ -1579,29 +2007,29 @@ async def _run_replace_agent(args: argparse.Namespace) -> None:
     print(f"new_run_dir={result.new_run_dir}")
 
 
-async def _run_resume_at_round(args: argparse.Namespace) -> None:
-    """Drive the round-anchored resume operation from the CLI.
+async def _run_fork_at_round(args: argparse.Namespace) -> None:
+    """Drive the fork-at-round operation from the CLI.
 
     Loads optional knob overrides from ``--knobs`` and forwards them to
     the shared replace-agent core with ``replaced_agent_id=None`` so no
     agent is restarted. Every agent keeps its full reconstructed history
-    on resume.
+    in the fork.
     """
     knobs = _resolve_knob_overrides(args=args)
 
     source_run_dir = Path(args.source_run_dir).resolve()
 
     logger.info(
-        "Resume-at-round: source=%s round_start=%d",
+        "Fork-at-round: source=%s after_round=%d",
         source_run_dir,
-        args.round_start,
+        args.after_round,
     )
 
     request = ReplaceAgentCoreRequest(
         source_run_dir=source_run_dir,
         scenario_name=args.scenario_name,
-        round_start=args.round_start,
-        rounds_after_swap=args.rounds_after_resume,
+        after_round=args.after_round,
+        rounds_after=args.rounds_after,
         replaced_agent_id=None,
         model=None,
         provider=None,
@@ -1613,7 +2041,7 @@ async def _run_resume_at_round(args: argparse.Namespace) -> None:
     try:
         result = await replace_agent_in_run(request=request)
     except ValueError as exc:
-        raise SystemExit(f"resume-at-round failed: {exc}") from exc
+        raise SystemExit(f"fork-at-round failed: {exc}") from exc
 
     await _register_derived_run(
         scenario=args.scenario_name,
@@ -1705,7 +2133,7 @@ async def _run_cross_run_replace_agent(args: argparse.Namespace) -> None:
     Loads optional knob overrides from ``--knobs`` and resolves the
     visible-history channel list (explicit ``--visible-history-channel``
     flags, or source A's per-channel defaults), defaults
-    ``--source-b-round-end`` to ``min(round_start - 1, B_max_round)``
+    ``--source-b-round-end`` to ``min(after_round, B_max_round)``
     so the imported agent gets the largest possible slice of source B's
     history without exceeding what B actually played, calls the shared
     helper, and prints the new run ID and run dir on success.
@@ -1729,7 +2157,7 @@ async def _run_cross_run_replace_agent(args: argparse.Namespace) -> None:
             source_b_run_dir=source_b_run_dir,
             scenario_name=args.scenario_name,
         )
-        source_b_round_end = min(args.round_start - 1, source_b_max_round)
+        source_b_round_end = min(args.after_round, source_b_max_round)
     else:
         source_b_round_end = args.source_b_round_end
 
@@ -1749,10 +2177,10 @@ async def _run_cross_run_replace_agent(args: argparse.Namespace) -> None:
         provider = args.provider
 
     logger.info(
-        "Cross-run replace-agent: replaced=%s round_start=%d source_b_round_end=%d "
+        "Cross-run replace-agent: replaced=%s after_round=%d source_b_round_end=%d "
         "visible_channels=%s model=%s provider=%s",
         args.replaced_agent_id,
-        args.round_start,
+        args.after_round,
         source_b_round_end,
         visible_channels,
         model,
@@ -1763,9 +2191,9 @@ async def _run_cross_run_replace_agent(args: argparse.Namespace) -> None:
         source_a_run_dir=source_a_run_dir,
         source_b_run_dir=source_b_run_dir,
         scenario_name=args.scenario_name,
-        round_start=args.round_start,
+        after_round=args.after_round,
         source_b_round_end=source_b_round_end,
-        rounds_after_swap=args.rounds_after_swap,
+        rounds_after=args.rounds_after,
         replaced_agent_id=args.replaced_agent_id,
         model=model,
         provider=provider,
@@ -1787,58 +2215,6 @@ async def _run_cross_run_replace_agent(args: argparse.Namespace) -> None:
     )
     print(f"new_run_id={result.new_run_id}")
     print(f"new_run_dir={result.new_run_dir}")
-
-
-async def _build_cross_run_resume_state(
-    events: list[SimulationEvent],
-    run_dir: Path,
-    cross_run_info: _CrossRunManifestInfo,
-) -> RewindState:
-    """Build the rewind state for a cross-run replace-agent resume.
-
-    Loads source B's events from ``imported_history_path``, computes
-    the cutoff timestamp (Sim B's ``RoundAdvanced(source_b_round_end +
-    1)`` event, or Sim B's last event when Sim B did not advance
-    further), and constructs an ``AgentHistoryFilter`` that redirects
-    the imported agent's history reconstruction to source B's events.
-    Replaced-agent channel visibility on source A is applied by the
-    caller via ``replaced_agent_channel_visibility``.
-    """
-    imported_events = await load_events(log_path=cross_run_info.imported_history_path)
-    if cross_run_info.source_b_cutoff_event_id:
-        imported_target_timestamp = next(
-            event.timestamp
-            for event in imported_events
-            if event.event_id == cross_run_info.source_b_cutoff_event_id
-        )
-    else:
-        imported_target_timestamp = imported_events[-1].timestamp
-
-    agent_filters: dict[str, AgentHistoryFilter] = {
-        cross_run_info.replaced_agent_id: AgentHistoryFilter(
-            tool_calls_only=False,
-            channel_visibility=cross_run_info.channel_visibility,
-            imported=ImportedHistory(
-                events=tuple(imported_events),
-                target_timestamp=imported_target_timestamp,
-                cutoff_round=cross_run_info.source_b_round_end + 1,
-            ),
-            split_parallel_tool_calls=cross_run_info.imported_provider == SELF_HOSTED_PROVIDER,
-        )
-    }
-    base_state = build_rewind_state_at_event(
-        events=events,
-        target_event_id=cross_run_info.target_event_id,
-        cutoff_round=cross_run_info.round_start,
-        agent_filters=agent_filters,
-    )
-    _ = run_dir
-    return base_state._replace(
-        replaced_agent_ids=frozenset({cross_run_info.replaced_agent_id}),
-        replaced_agent_channel_visibility={
-            cross_run_info.replaced_agent_id: cross_run_info.channel_visibility,
-        },
-    )
 
 
 async def _run_login(args: argparse.Namespace) -> None:
@@ -1895,7 +2271,35 @@ async def _run_sync_metadata_to_prod(args: argparse.Namespace) -> None:
     tally = await run_metadata_sync(spec=spec)
     print(
         f"Done. labels={len(tally.synced_labels)}  eval={len(tally.synced_eval)}  "
+        f"descriptions={len(tally.synced_descriptions)}  "
         f"unchanged={len(tally.unchanged)}  failed={len(tally.failed)}"
     )
     if tally.failed:
         raise SystemExit(1)
+
+
+async def _run_describe_label(args: argparse.Namespace) -> None:
+    """Drive the ``glossogen describe-label`` subcommand."""
+    store = FilesystemLabelDescriptionStore(runs_dir=Path(args.runs_dir))
+    if args.delete:
+        deleted = await store.delete_description(group_id=LOCAL_GROUP_ID, label=args.label)
+        if not deleted:
+            raise SystemExit(f"No description recorded for label {args.label!r}.")
+        print(f"Deleted the description of label {args.label!r}.")
+        return
+    if not args.description.strip():
+        raise SystemExit("--description must not be empty.")
+    entry = LabelDescription(label=args.label, description=args.description)
+    await store.set_description(group_id=LOCAL_GROUP_ID, entry=entry)
+    print(f"{entry.label}: {entry.description}")
+
+
+async def _run_list_label_descriptions(args: argparse.Namespace) -> None:
+    """Drive the ``glossogen list-label-descriptions`` subcommand."""
+    store = FilesystemLabelDescriptionStore(runs_dir=Path(args.runs_dir))
+    descriptions = await store.list_descriptions(group_id=LOCAL_GROUP_ID)
+    if not descriptions:
+        print("No label descriptions recorded.")
+        return
+    for entry in descriptions:
+        print(f"{entry.label}\t{entry.description}")

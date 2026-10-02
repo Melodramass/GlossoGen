@@ -13,9 +13,9 @@ import { setActiveGroupSlug } from "@/shared/lib/api-client";
  * ``params.path.group_slug``.
  *
  * The slug is set from the URL segment in ``/g/[groupSlug]/layout.tsx``.
- * The Clerk JWT proves membership; the URL declares the active group.
- * No ``setActive`` calls — multi-org users can browse multiple groups
- * concurrently in separate tabs.
+ * The caller's credential proves membership; the URL declares the active
+ * group. Nothing mutates shared session state, so someone belonging to
+ * several groups can browse them concurrently in separate tabs.
  */
 type GroupContextValue = {
   slug: string;
@@ -43,6 +43,20 @@ export function useActiveGroupSlug(): string {
   const ctx = useContext(GroupContext);
   if (ctx === null) {
     throw new Error("useActiveGroupSlug must be used inside <GroupProvider>");
+  }
+  return ctx.slug;
+}
+
+/**
+ * The active group slug, or ``null`` outside any group context.
+ *
+ * For components that render both inside a group (the run viewer) and outside
+ * one (the public ``/demo`` page) and skip group-scoped requests in the latter.
+ */
+export function useOptionalActiveGroupSlug(): string | null {
+  const ctx = useContext(GroupContext);
+  if (ctx === null) {
+    return null;
   }
   return ctx.slug;
 }

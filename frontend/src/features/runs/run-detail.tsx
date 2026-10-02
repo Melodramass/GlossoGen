@@ -31,31 +31,23 @@ import { AgentDrawer } from "./agent-drawer";
 import { resolveSelectedInstance } from "./agent-instance";
 import { ChatPane } from "./chat-pane";
 import type { DividerJumpTarget } from "./chat-pane";
-import { CollapsibleConfigBadges } from "./collapsible-config-badges";
 import { LabelBadges } from "./eval-label-group";
 import { EvalLogPanel } from "./eval-log-panel";
 import { EvalPanel } from "./eval-panel";
 import { ForkBadge } from "./fork-badge";
+import { RunInfoDropdown } from "./run-info-dropdown";
+import { RunKnobsDropdown } from "./run-knobs-dropdown";
 import { RunTimelineFabs } from "./run-timeline-fabs";
 import { StartEvaluationModal } from "./start-evaluation-modal";
-import {
-  elapsedSince,
-  formatConfigValue,
-  formatConfigValueFull,
-  formatCost,
-  formatDayHeader,
-  formatDuration,
-  humanize,
-  sortConfigEntries,
-} from "./format";
-import { LogPanel } from "./log-panel";
+import { elapsedSince, formatDuration, humanize } from "./format";
+import { RunDebugLogs } from "./run-debug-logs";
 import { RunSidebar } from "./run-sidebar";
 import { getScenarioPlugin } from "./scenario-registry";
 import { useRunDetailData } from "./use-run-detail-data";
 import { ScenarioDescriptionModal } from "./scenario-description-modal";
 import { ReplaceAgentBadge } from "./replace-agent-badge";
 import { CrossRunReplaceAgentBadge } from "./cross-run-replace-agent-badge";
-import { ResumeAtRoundBadge } from "./resume-at-round-badge";
+import { ForkAtRoundBadge } from "./fork-at-round-badge";
 import { DerivedRunsSection } from "./derived-runs-section";
 import { ConfigValueModal } from "./config-value-modal";
 import { LabelPickerModal } from "./label-picker-modal";
@@ -105,7 +97,7 @@ export function RunDetail({ scenario, runDirName }: { scenario: string; runDirNa
     contextCompactionMarkers,
     agentColorMap,
     channelColorMap,
-    allDebugLogs,
+    liveDebugLogs,
     scenarioMarkers,
     swapEvents,
     maxRound,
@@ -169,7 +161,6 @@ export function RunDetail({ scenario, runDirName }: { scenario: string; runDirNa
 
   const evaluation = restData.evaluation;
   const evaluationInProgress = restData.evaluation_in_progress || evalJustLaunched;
-  const hasLogs = allDebugLogs.length > 0;
   const hasEvalLogs = evaluationInProgress || evaluation !== null || restData.has_eval_log_file;
   const activeInstance = resolveSelectedInstance(selectedAgent, agentInstances);
   const activeAgentColor = activeInstance ? agentColorMap.get(activeInstance.agent_id) : undefined;
@@ -207,7 +198,7 @@ export function RunDetail({ scenario, runDirName }: { scenario: string; runDirNa
       {/* Back link */}
       <Link
         href={groupPath("/runs")}
-        className="mb-2 inline-flex shrink-0 items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground"
+        className="mb-2 inline-flex shrink-0 items-center gap-1.5 self-start text-[13px] text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-3.5 w-3.5" /> back to runs
       </Link>
@@ -227,7 +218,7 @@ export function RunDetail({ scenario, runDirName }: { scenario: string; runDirNa
               sourceRunId={restData.replace_agent_source.source_run_id}
               replacedAgentId={restData.replace_agent_source.replaced_agent_id}
               replacementModel={restData.replace_agent_source.replacement_model}
-              roundStart={restData.replace_agent_source.round_start}
+              afterRound={restData.replace_agent_source.after_round}
             />
           ) : null}
           {restData.cross_run_replace_agent_source ? (
@@ -236,15 +227,15 @@ export function RunDetail({ scenario, runDirName }: { scenario: string; runDirNa
               sourceBRunId={restData.cross_run_replace_agent_source.source_b_run_id}
               replacedAgentId={restData.cross_run_replace_agent_source.replaced_agent_id}
               importedModel={restData.cross_run_replace_agent_source.imported_model}
-              roundStart={restData.cross_run_replace_agent_source.round_start}
+              afterRound={restData.cross_run_replace_agent_source.after_round}
               sourceBRoundEnd={restData.cross_run_replace_agent_source.source_b_round_end}
             />
           ) : null}
-          {restData.resume_at_round_source ? (
-            <ResumeAtRoundBadge
-              sourceRunId={restData.resume_at_round_source.source_run_id}
-              roundStart={restData.resume_at_round_source.round_start}
-              roundsAfterResume={restData.resume_at_round_source.rounds_after_resume}
+          {restData.fork_at_round_source ? (
+            <ForkAtRoundBadge
+              sourceRunId={restData.fork_at_round_source.source_run_id}
+              afterRound={restData.fork_at_round_source.after_round}
+              roundsAfter={restData.fork_at_round_source.rounds_after}
             />
           ) : null}
           <span className="group/help relative">
@@ -281,24 +272,26 @@ export function RunDetail({ scenario, runDirName }: { scenario: string; runDirNa
           </span>
         </span>
         <span className="text-[13px] text-muted-foreground">
-          {formatDayHeader(restData.timestamp)} · {maxRound} rounds · {channelMessages} messages ·{" "}
-          {timelineEntries} events · {allAgents.length} agents
-          {totalCostUsd > 0 ? <> · {formatCost(totalCostUsd)}</> : null}
-          {durationSeconds > 0 ? <> · {formatDuration(durationSeconds)}</> : null}
-          {" · "}
-          <span className="group relative cursor-default">
-            {modelLabel}
-            <span className="pointer-events-none absolute right-0 top-full z-20 mt-1 hidden w-max rounded-md border border-border bg-background px-3 py-2 text-xs shadow-lg group-hover:block">
-              {allAgents.map(a => (
-                <div key={a.agent_id} className="flex justify-between gap-4 py-0.5">
-                  <span className="text-muted-foreground">{a.role_name}</span>
-                  <span className="font-mono">
-                    {a.provider}:{a.model}
-                  </span>
-                </div>
-              ))}
-            </span>
-          </span>
+          <RunInfoDropdown
+            timestamp={restData.timestamp}
+            roundCount={maxRound}
+            messageCount={channelMessages}
+            eventCount={timelineEntries}
+            agents={allAgents}
+            totalCostUsd={totalCostUsd}
+            durationSeconds={durationSeconds}
+            modelLabel={modelLabel}
+          />
+          {Object.keys(restData.scenario_config).length > 0 ? (
+            <>
+              {" · "}
+              <RunKnobsDropdown
+                scenarioConfig={restData.scenario_config}
+                align="right"
+                onOpenValue={(key, value) => setConfigPreview({ key, value })}
+              />
+            </>
+          ) : null}
           {!isInProgress && !evaluationInProgress && runCompleted && evaluationsEnabled ? (
             <>
               {" · "}
@@ -339,26 +332,6 @@ export function RunDetail({ scenario, runDirName }: { scenario: string; runDirNa
 
       {/* Derived runs (children) */}
       <DerivedRunsSection derivedRuns={restData.children} />
-
-      {/* Scenario config */}
-      {restData.scenario_config && Object.keys(restData.scenario_config).length > 0 ? (
-        <CollapsibleConfigBadges
-          containerClassName="mb-3 shrink-0"
-          entries={sortConfigEntries(Object.entries(restData.scenario_config))}
-          toggleClassName="inline-flex items-center rounded-md border border-border bg-muted/50 px-2 py-0.5 text-[12px] text-muted-foreground transition-colors hover:border-primary hover:bg-primary/5"
-          renderBadge={([key, value]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setConfigPreview({ key, value: formatConfigValueFull(value) })}
-              className="inline-flex max-w-full items-center gap-1 rounded-md border border-border bg-muted/50 px-2 py-0.5 text-[12px] transition-colors hover:border-primary hover:bg-primary/5"
-            >
-              <span className="shrink-0 text-muted-foreground">{humanize(key)}</span>
-              <span className="max-w-64 truncate font-medium">{formatConfigValue(value)}</span>
-            </button>
-          )}
-        />
-      ) : null}
 
       {/* Regular labels (eval:* legacy labels are filtered out) */}
       {restData.labels.some(label => !label.startsWith("eval:")) ? (
@@ -433,7 +406,6 @@ export function RunDetail({ scenario, runDirName }: { scenario: string; runDirNa
           selectedAgent={selectedAgent}
           showLogs={showLogs}
           showEvalLogs={showEvalLogs}
-          hasLogs={hasLogs}
           hasEvalLogs={hasEvalLogs}
           agentColorMap={agentColorMap}
           onSelectChannel={handleSelectChannel}
@@ -452,7 +424,7 @@ export function RunDetail({ scenario, runDirName }: { scenario: string; runDirNa
 
         {/* Main content: chat, logs, or eval logs */}
         {showLogs ? (
-          <LogPanel logs={allDebugLogs} />
+          <RunDebugLogs runId={runId} liveLogs={liveDebugLogs} />
         ) : showEvalLogs ? (
           <EvalLogPanel runId={runId} evaluationInProgress={evaluationInProgress} />
         ) : (
@@ -481,7 +453,7 @@ export function RunDetail({ scenario, runDirName }: { scenario: string; runDirNa
                     Export PDF
                   </span>
                 </span>
-                <Tooltip label="Export run bundle">
+                <Tooltip label="Export run bundle" wrap={false}>
                   <button
                     aria-label="Export bundle"
                     className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"

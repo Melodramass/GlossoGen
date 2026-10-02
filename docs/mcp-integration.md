@@ -38,11 +38,14 @@ Every token is bound to one group at consent time, so each tool call is scoped
 automatically:
 
 - **Local mode** auto-approves to the synthetic `local` group.
-- **Clerk mode** parks the authorization request, redirects the browser to the
-  frontend at `/mcp-consent?request_id=...` where Clerk forces sign-in, and the
-  user picks which organization to authorize. The frontend posts back with a fresh
-  Clerk JWT; the backend resolves the active org to a group, mints the code bound
-  to that `group_id`, and redirects to the client's callback.
+- **Multi-tenant mode** parks the authorization request and redirects the
+  browser to the frontend at `/mcp-consent?request_id=...`, where the user signs
+  in and picks which organization to authorize. The page posts the choice back,
+  the backend mints the code bound to that `group_id`, and redirects to the
+  client's callback. The parking, the consent page and the code minting are
+  platform code; the sign-in and the endpoint that verifies the posted session
+  come from the installed
+  [identity provider](creating-an-identity-provider.md).
 
 Access tokens last an hour, refresh tokens thirty days. Token state lives in
 Postgres, or in memory in no-database local mode, where re-authenticating after a
@@ -50,7 +53,7 @@ restart is the only consequence.
 
 ## Tools
 
-| Tool | |
+| Tool | Does |
 |---|---|
 | `list_scenarios` | Available scenarios with their knobs presets, metrics and supported models |
 | `list_runs` | Paginated, filterable by scenario, model, fork status, run status and labels |
@@ -60,7 +63,7 @@ restart is the only consequence.
 | `get_knobs_schema` | A scenario's knobs JSON Schema plus its preset names |
 | `get_knobs_preset` | One preset's payload |
 | `start_run` | Launch a simulation with scenario, model, provider and knobs |
-| `export_run_artifacts` | Download URL for a zip of the run's artifacts |
+| `export_run_artifacts` | Download URL for a tar.gz bundle of the run directory |
 | `export_agent_thread` | One agent's thread as a drop-in Anthropic or OpenAI request body |
 
 A run-start conversation usually goes: `get_knobs_schema` to see the fields and
@@ -74,12 +77,12 @@ runs than a grouping label that spans a whole experiment family.
 
 ## From the CLI
 
-The same OAuth flow gives the CLI a way to talk to a deployed, Clerk-protected
-backend. It calls the existing REST endpoints; there is no separate upload feature
+The same OAuth flow gives the CLI a way to talk to a deployed, authenticated
+backend. It calls the existing REST endpoints. There is no separate upload feature
 on the server.
 
 ```bash
-# One-time: sign in. Opens the browser to the Clerk-gated consent page; the CLI's
+# One-time: sign in. Opens the browser to the consent page; the CLI's
 # loopback server collects the code and writes ~/.glossogen/credentials.json (0600).
 glossogen login --url https://your-backend.example.com
 
@@ -95,11 +98,11 @@ glossogen push-to-prod --label baseline --runs-dir ./runs
 
 - `--scenario <name>` (repeatable) restricts to specific scenarios.
 - `--label <label>` (repeatable, AND) requires every listed label.
-- `--include-incomplete` allows runs with no evaluation report; by default those
+- `--include-incomplete` allows runs with no evaluation report. By default those
   are skipped, which is what keeps crashed runs out.
 - `--dry-run` prints the diff without sending bytes.
-- `--concurrency N` (default 1, max 4) parallelizes uploads. Keep it small: each
-  upload holds its bundle in memory.
+- `--concurrency N` (default 1, clamped to 16) parallelizes uploads. Keep it small:
+  each upload holds its bundle in memory.
 
 For runs already on the remote whose local labels or report have since changed:
 
@@ -109,7 +112,7 @@ glossogen sync-metadata-to-prod --runs-dir ./runs
 
 It PUTs local labels when they differ from the remote's, and PUTs the local
 evaluation report unconditionally, treating local as the source of truth. Same
-`--scenario` and `--dry-run` flags; `--concurrency` defaults to 4 (max 8), higher
+`--scenario` and `--dry-run` flags. `--concurrency` defaults to 4 (clamped to 8), higher
 than `push-to-prod` because the bodies are a label list and a JSON report rather
 than a bundle.
 

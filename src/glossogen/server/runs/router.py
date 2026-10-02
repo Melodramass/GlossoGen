@@ -14,12 +14,17 @@ import orjson
 from fastapi import APIRouter, HTTPException, Query, Request
 from starlette.responses import StreamingResponse
 
-from glossogen.db.queries import update_run_evaluation_content_hash
+from glossogen.db.queries import update_run_evaluation_content_hash, update_run_labels
 from glossogen.eval_manifest import read_eval_manifest
 from glossogen.evaluation.reports.evaluation_report import (
     EvaluationReport,
     compute_measurements_hash,
     write_report,
+)
+from glossogen.knob_filter import (
+    KnobFilter,
+    KnobFilterParseError,
+    parse_knob_filters,
 )
 from glossogen.models.event import RunStatus, SimulationEnded
 from glossogen.run_archive import move_run_to_trash
@@ -34,6 +39,7 @@ from glossogen.server.runs.detail_reader import (
     load_run_detail,
 )
 from glossogen.server.runs.discovery import compose_run_id, scan_jsonl
+from glossogen.server.runs.label_mirror import heal_run_labels_after_read
 from glossogen.server.runs.listing import (
     invalidate_labels_cache,
     list_all_labels_for_group,
@@ -72,6 +78,25 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/g/{group_slug}")
 
 
+def _parse_knob_filters_or_422(raw_filters: list[str]) -> list[KnobFilter]:
+    """Parse the ``knob`` query parameters, answering 422 for one that is malformed.
+
+    Malformed means the string carries no operator, so there is no condition to
+    apply. Dropping it silently would answer with runs the caller did not ask
+    for, which is worse than refusing.
+
+    A well-formed condition on a knob name nothing recorded is not an error and
+    answers with no runs. Knob names belong to one scenario's schema, a filter
+    may span scenarios, and a run's own recorded config is the only authority on
+    what it can be asked, so there is no name list to check against here.
+    """
+    try:
+        return parse_knob_filters(raw_filters=raw_filters)
+    except KnobFilterParseError as exc:
+        logger.exception("Rejected a malformed knob filter")
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/runs", response_model=RunListResponse)
 async def list_runs(
     request: Request,
@@ -80,6 +105,7 @@ async def list_runs(
     status: RunStatus | None = None,
     labels: list[str] | None = Query(default=None),
     run_id_contains: str | None = None,
+    knob: list[str] | None = Query(default=None),
     cursor: str | None = None,
     limit: int = 50,
 ) -> RunListResponse:
@@ -90,7 +116,10 @@ async def list_runs(
     semantics); ``run_id_contains`` keeps runs whose ``scenario/run_dir_name``
     id contains the substring (case-insensitive); ``status`` restricts to a
     final status; ``contains_agent_id`` keeps runs that registered that agent
-    (used by the cross-run replace-agent picker). Paging is keyset: pass the
+    (used by the cross-run replace-agent picker); each ``knob`` is one
+    ``<knob><operator><value>`` condition on the run's recorded
+    ``scenario_config``, such as ``round_time_budget_seconds>=200`` or
+    ``postmortem_enabled=true``, and every one must hold. Paging is keyset: pass the
     previous response's ``next_cursor`` as ``cursor`` for the next page (omit
     for the first page); ``limit`` caps the page size and ``total`` is the count
     matching the filters before paging.
@@ -102,6 +131,7 @@ async def list_runs(
         run_id_contains=run_id_contains,
         status=status,
         contains_agent_id=contains_agent_id,
+        knob_filters=_parse_knob_filters_or_422(raw_filters=knob or []),
         cursor=cursor,
         limit=limit,
     )
@@ -139,7 +169,14 @@ async def get_run_detail(
         parent_scenario=resolved.scenario_name,
         parent_run_dir_name=run_dir_name,
     )
-    return await load_run_detail(log_path=log_path, children=children)
+    detail = await load_run_detail(log_path=log_path, children=children)
+    await heal_run_labels_after_read(
+        request=request,
+        resolved=resolved,
+        run_dir_name=run_dir_name,
+        disk_labels=detail.labels,
+    )
+    return detail
 
 
 @router.get(
@@ -545,6 +582,16 @@ async def update_labels(
     labels_path = resolved.run_dir / "labels.json"
     labels_path.write_bytes(orjson.dumps(body.labels))
     identity = get_identity(request=request)
+    pool = request.app.state.db_pool
+    if pool is not None:
+        async with pool.connection() as conn:
+            await update_run_labels(
+                conn=conn,
+                group_id=identity.active_group_id,
+                scenario=scenario,
+                run_dir_name=run_dir_name,
+                labels=body.labels,
+            )
     invalidate_labels_cache(group_id=identity.active_group_id)
     logger.info("Updated labels for run %s: %s", run_id, body.labels)
     return UpdateLabelsResponse(labels=body.labels)

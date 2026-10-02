@@ -9,7 +9,7 @@ import orjson
 
 from glossogen.eval_manifest import read_eval_manifest
 from glossogen.evaluation.log_reader import load_events
-from glossogen.evaluation.reports.evaluation_report import EvaluationReport
+from glossogen.evaluation.reports.evaluation_report import load_report_tolerant
 from glossogen.models.event import (
     AgentRegistered,
     AgentRunCycleFailed,
@@ -31,9 +31,9 @@ from glossogen.models.event import (
 )
 from glossogen.server.runs.manifest_sources import (
     read_cross_run_replace_agent_source,
+    read_fork_at_round_source,
     read_fork_source,
     read_replace_agent_source,
-    read_resume_at_round_source,
 )
 from glossogen.server.runs.models import (
     AgentObservationResponse,
@@ -64,29 +64,9 @@ logger = logging.getLogger(__name__)
 
 async def load_evaluation_report(report_path: Path) -> EvalReportResponse | None:
     """Load and parse an evaluation report JSON file, returning None if it does not exist."""
-    if not report_path.exists():
+    report = await load_report_tolerant(report_path=report_path)
+    if report is None:
         return None
-
-    async with aiofiles.open(report_path, mode="rb") as f:
-        raw_bytes = await f.read()
-
-    raw = orjson.loads(raw_bytes)
-
-    # Backfill for reports written before cost tracking was added.
-    if "evaluation_cost" not in raw:
-        raw["evaluation_cost"] = {
-            "usage": {
-                "input_tokens": 0,
-                "output_tokens": 0,
-                "cache_read_input_tokens": 0,
-                "cache_creation_input_tokens": 0,
-            },
-            "estimated_cost_usd": 0.0,
-            "model": "unknown",
-            "provider_name": "unknown",
-        }
-
-    report = EvaluationReport.model_validate(raw)
 
     measurements = [
         MeasurementResponse(
@@ -209,7 +189,7 @@ async def load_run_detail(
     fork_source = read_fork_source(run_dir=run_dir)
     replace_agent_source = read_replace_agent_source(run_dir=run_dir)
     cross_run_replace_agent_source = read_cross_run_replace_agent_source(run_dir=run_dir)
-    resume_at_round_source = read_resume_at_round_source(run_dir=run_dir)
+    fork_at_round_source = read_fork_at_round_source(run_dir=run_dir)
 
     run_id = ""
     scenario_name = ""
@@ -515,8 +495,8 @@ async def load_run_detail(
         timestamp = replace_agent_source.replaced_at
     elif cross_run_replace_agent_source is not None:
         timestamp = cross_run_replace_agent_source.replaced_at
-    elif resume_at_round_source is not None:
-        timestamp = resume_at_round_source.resumed_at
+    elif fork_at_round_source is not None:
+        timestamp = fork_at_round_source.forked_at
 
     return RunDetailResponse(
         run_id=run_id,
@@ -544,7 +524,7 @@ async def load_run_detail(
         fork_source=fork_source,
         replace_agent_source=replace_agent_source,
         cross_run_replace_agent_source=cross_run_replace_agent_source,
-        resume_at_round_source=resume_at_round_source,
+        fork_at_round_source=fork_at_round_source,
         children=children,
         labels=labels,
         note=note,

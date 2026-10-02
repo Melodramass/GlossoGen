@@ -13,11 +13,11 @@ import type { ScenarioPlugin } from "./scenario-plugin";
 /**
  * Fetch + derive everything the run-detail view renders.
  *
- * Owns the REST snapshot query, the debug-log query, the stop mutation, and the
- * live SSE stream, then merges REST + SSE into the deduplicated display state
- * (messages/reasoning/tool-use, agents, channels, swap dividers, compaction
- * markers, debug logs). ``RunDetail`` keeps only view state (selection,
- * modals, highlight) and renders from this hook's output.
+ * Owns the REST snapshot query, stop mutation, and live SSE stream, merging
+ * snapshots and live events into the display state. Debug log fetching and
+ * merging belong to RunDebugLogs, which mounts only when Logs is opened.
+ * ``RunDetail`` keeps view state (selection, modals, highlight) and renders
+ * from this hook's output.
  */
 export function useRunDetailData({
   scenario,
@@ -41,9 +41,12 @@ export function useRunDetailData({
     error,
   } = useQuery({
     queryKey: ["run", runId],
-    queryFn: async () => {
+    // Large snapshots should not accumulate for minutes as researchers browse runs.
+    gcTime: 30_000,
+    queryFn: async ({ signal }) => {
       const { data, error } = await api.GET("/api/g/{group_slug}/runs/{scenario}/{run_dir_name}", {
         params: { path: { scenario, run_dir_name: runDirName } },
+        signal,
       });
       if (error) {
         throw new Error("Failed to fetch run detail");
@@ -116,24 +119,6 @@ export function useRunDetailData({
       queryClient.invalidateQueries({ queryKey: ["run-debug-logs", runId] });
     }
   }, [hasSimEnded, queryClient, runId]);
-
-  // Debug logs fetched separately to keep the main response small
-  const { data: debugLogsData } = useQuery({
-    queryKey: ["run-debug-logs", runId],
-    queryFn: async () => {
-      const { data, error } = await api.GET(
-        "/api/g/{group_slug}/runs/{scenario}/{run_dir_name}/debug-logs",
-        {
-          params: { path: { scenario, run_dir_name: runDirName } },
-        }
-      );
-      if (error) {
-        throw new Error("Failed to fetch debug logs");
-      }
-      return data;
-    },
-    refetchInterval: false,
-  });
 
   // If SSE was enabled (REST said in_progress) but failed to connect, the
   // simulation likely ended between the REST fetch and SSE attempt. Refetch
@@ -305,14 +290,6 @@ export function useRunDetailData({
   );
   const channelColorMap = useMemo(() => buildChannelColorMap(allChannelIds), [allChannelIds]);
 
-  const allDebugLogs = useMemo(() => {
-    const restLogs = debugLogsData?.entries ?? [];
-    if (sse.debugLogs.length === 0) return restLogs;
-    const seen = new Set(restLogs.map(l => `${l.timestamp}|${l.message}`));
-    const newLogs = sse.debugLogs.filter(l => !seen.has(`${l.timestamp}|${l.message}`));
-    return [...restLogs, ...newLogs];
-  }, [debugLogsData?.entries, sse.debugLogs]);
-
   const maxRound = displayEntries.reduce((max, m) => Math.max(max, m.round_number), 0);
   const scenarioMarkers = scenarioPlugin.getTimelineMarkers({
     extras: restData?.scenario_extras ?? null,
@@ -353,7 +330,7 @@ export function useRunDetailData({
     contextCompactionMarkers,
     agentColorMap,
     channelColorMap,
-    allDebugLogs,
+    liveDebugLogs: sse.debugLogs,
     scenarioMarkers,
     swapEvents,
     maxRound,

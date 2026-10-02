@@ -8,7 +8,7 @@
     "/api/g/{group_slug}/runs": {
       "get": {
         "summary": "List Runs",
-        "description": "List one keyset page of simulation runs owned by the active group, newest-first.\n\nFilters: ``scenario`` keeps runs in any of the listed scenarios (OR\nsemantics); ``labels`` keeps runs carrying every listed label (AND\nsemantics); ``run_id_contains`` keeps runs whose ``scenario/run_dir_name``\nid contains the substring (case-insensitive); ``status`` restricts to a\nfinal status; ``contains_agent_id`` keeps runs that registered that agent\n(used by the cross-run replace-agent picker). Paging is keyset: pass the\nprevious response's ``next_cursor`` as ``cursor`` for the next page (omit\nfor the first page); ``limit`` caps the page size and ``total`` is the count\nmatching the filters before paging.",
+        "description": "List one keyset page of simulation runs owned by the active group, newest-first.\n\nFilters: ``scenario`` keeps runs in any of the listed scenarios (OR\nsemantics); ``labels`` keeps runs carrying every listed label (AND\nsemantics); ``run_id_contains`` keeps runs whose ``scenario/run_dir_name``\nid contains the substring (case-insensitive); ``status`` restricts to a\nfinal status; ``contains_agent_id`` keeps runs that registered that agent\n(used by the cross-run replace-agent picker); each ``knob`` is one\n``<knob><operator><value>`` condition on the run's recorded\n``scenario_config``, such as ``round_time_budget_seconds>=200`` or\n``postmortem_enabled=true``, and every one must hold. Paging is keyset: pass the\nprevious response's ``next_cursor`` as ``cursor`` for the next page (omit\nfor the first page); ``limit`` caps the page size and ``total`` is the count\nmatching the filters before paging.",
         "operationId": "list_runs_api_g__group_slug__runs_get",
         "parameters": [
           {
@@ -95,6 +95,25 @@
                 }
               ],
               "title": "Run Id Contains"
+            }
+          },
+          {
+            "name": "knob",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Knob"
             }
           },
           {
@@ -1179,6 +1198,470 @@
         }
       }
     },
+    "/api/g/{group_slug}/runs/export/preview": {
+      "post": {
+        "summary": "Preview Multi Run Export",
+        "description": "Describe what a selection would export, without building anything.",
+        "operationId": "preview_multi_run_export_api_g__group_slug__runs_export_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MultiRunExportPreview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/g/{group_slug}/runs/export/raw": {
+      "post": {
+        "summary": "Export Runs Raw",
+        "description": "Export the selected runs' folders as one zip.",
+        "operationId": "export_runs_raw_api_g__group_slug__runs_export_raw_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RawExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Zip of the selected run folders, nested per scenario and run.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "application/zip": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/g/{group_slug}/runs/export/csv": {
+      "post": {
+        "summary": "Export Runs Csv",
+        "description": "Export the selected runs as CSV tables.",
+        "operationId": "export_runs_csv_api_g__group_slug__runs_export_csv_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CsvExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "One CSV when a single table was asked for, otherwise a zip of them.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "text/csv": {},
+              "application/zip": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/g/{group_slug}/runs/analysis/fields": {
+      "post": {
+        "summary": "Analysis Fields",
+        "description": "Describe what this selection can be grouped, filtered, and measured by.",
+        "operationId": "analysis_fields_api_g__group_slug__runs_analysis_fields_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalysisFieldsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisFieldCatalog"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/g/{group_slug}/runs/analysis/query": {
+      "post": {
+        "summary": "Analysis Query",
+        "description": "Group and aggregate this selection, one row per group.",
+        "operationId": "analysis_query_api_g__group_slug__runs_analysis_query_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalysisQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/g/{group_slug}/dashboards": {
+      "get": {
+        "summary": "List Dashboards",
+        "description": "List the group's dashboards, most recently updated first.",
+        "operationId": "list_dashboards_api_g__group_slug__dashboards_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DashboardSummary"
+                  },
+                  "type": "array",
+                  "title": "Response List Dashboards Api G  Group Slug  Dashboards Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Dashboard",
+        "description": "Save a new dashboard for the group.",
+        "operationId": "create_dashboard_api_g__group_slug__dashboards_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DashboardContent"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dashboard"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/g/{group_slug}/dashboards/{dashboard_id}": {
+      "get": {
+        "summary": "Get Dashboard",
+        "description": "Read one of the group's dashboards.",
+        "operationId": "get_dashboard_api_g__group_slug__dashboards__dashboard_id__get",
+        "parameters": [
+          {
+            "name": "dashboard_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Dashboard Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dashboard"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update Dashboard",
+        "description": "Replace a dashboard's name, description, selection, filters, and charts.",
+        "operationId": "update_dashboard_api_g__group_slug__dashboards__dashboard_id__put",
+        "parameters": [
+          {
+            "name": "dashboard_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Dashboard Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DashboardContent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dashboard"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Dashboard",
+        "description": "Delete one of the group's dashboards.",
+        "operationId": "delete_dashboard_api_g__group_slug__dashboards__dashboard_id__delete",
+        "parameters": [
+          {
+            "name": "dashboard_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Dashboard Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/g/{group_slug}/labels/descriptions": {
+      "get": {
+        "summary": "List Label Descriptions",
+        "description": "List the group's label descriptions, sorted by label.",
+        "operationId": "list_label_descriptions_api_g__group_slug__labels_descriptions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabelDescriptionsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Set Label Description",
+        "description": "Record what a label means, replacing any previous description of it.",
+        "operationId": "set_label_description_api_g__group_slug__labels_descriptions_put",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabelDescription"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabelDescription"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Label Description",
+        "description": "Remove a label's description.",
+        "operationId": "delete_label_description_api_g__group_slug__labels_descriptions_delete",
+        "parameters": [
+          {
+            "name": "label",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Label"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/g/{group_slug}/scenarios": {
       "get": {
         "summary": "List Scenarios",
@@ -1191,6 +1674,46 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ScenariosResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/g/{group_slug}/scenarios/{scenario_name}/filterable-knobs": {
+      "get": {
+        "summary": "Get Filterable Knobs",
+        "description": "List the scenario's scalar knobs, which are the ones the runs list can filter on.\n\nEach carries the type its filter control should offer: a number takes the\nordering operators, a boolean takes true or false, an enum takes one of its\nown values. Knobs holding a list or a mapping are not listed.",
+        "operationId": "get_filterable_knobs_api_g__group_slug__scenarios__scenario_name__filterable_knobs_get",
+        "parameters": [
+          {
+            "name": "scenario_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scenario Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilterableKnobsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1247,71 +1770,10 @@
         }
       }
     },
-    "/api/clerk/webhook": {
-      "post": {
-        "tags": [
-          "clerk"
-        ],
-        "summary": "Receive Webhook",
-        "description": "Receive and act on a Clerk webhook event.\n\nReturns 200 even for ignored event types so Clerk does not retry them.",
-        "operationId": "receive_webhook_api_clerk_webhook_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WebhookAccepted"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/mcp/consent/approve": {
-      "post": {
-        "summary": "Approve Consent",
-        "description": "Verify the caller's Clerk JWT and materialize the parked OAuth code.\n\nThe group the token will be bound to is taken from the JWT's active\n``org_slug`` claim (Clerk's ``organizationSyncOptions`` keeps that\naligned with whichever org the user just selected on the FE).",
-        "operationId": "approve_consent_mcp_consent_approve_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ApproveConsentRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApproveConsentResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/mcp/whoami": {
       "get": {
         "summary": "Whoami",
-        "description": "Return the group bound to the calling OAuth access token.\n\nLets the CLI learn its ``group_slug`` after the OAuth exchange so it\ncan store it in ``~/.glossogen/credentials.json`` and address per-group\nREST endpoints without prompting the user.",
+        "description": "Return the group bound to the calling OAuth access token.\n\nLets the CLI learn its ``group_slug`` after the OAuth exchange so it can store it\nin ``~/.glossogen/credentials.json`` and address per-group REST endpoints without\nprompting the user.",
         "operationId": "whoami_mcp_whoami_get",
         "responses": {
           "200": {
@@ -1580,6 +2042,52 @@
         "title": "AgentSwapEventDTO",
         "description": "One in-run agent swap, surfaced for per-instance tab rendering on the FE.\n\nEach ``AgentSwappedMidRun`` event in the run's JSONL becomes one DTO.\nThe FE groups consecutive events by ``agent_id`` to derive an ordered\nlist of agent instances (generations) and split message visibility\nby round range."
       },
+      "Aggregate": {
+        "type": "string",
+        "enum": [
+          "mean",
+          "median",
+          "sum",
+          "count",
+          "min",
+          "max",
+          "stddev",
+          "sem"
+        ],
+        "title": "Aggregate",
+        "description": "How the values in one group are reduced to a single number."
+      },
+      "AggregateCell": {
+        "properties": {
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "observation_count": {
+            "type": "integer",
+            "title": "Observation Count"
+          },
+          "missing_count": {
+            "type": "integer",
+            "title": "Missing Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "observation_count",
+          "missing_count"
+        ],
+        "title": "AggregateCell",
+        "description": "One measure's aggregate within one group, with what it was computed over."
+      },
       "AllLabelsResponse": {
         "properties": {
           "labels": {
@@ -1596,6 +2104,416 @@
         ],
         "title": "AllLabelsResponse",
         "description": "Response containing all unique labels across all runs."
+      },
+      "AnalysisDimension": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "group": {
+            "type": "string",
+            "title": "Group"
+          },
+          "rows_with_value": {
+            "type": "integer",
+            "title": "Rows With Value"
+          },
+          "distinct_count": {
+            "type": "integer",
+            "title": "Distinct Count"
+          },
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/AnalysisDimensionValue"
+            },
+            "type": "array",
+            "title": "Values"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "group",
+          "rows_with_value",
+          "distinct_count",
+          "values"
+        ],
+        "title": "AnalysisDimension",
+        "description": "One dimension a selection can be grouped or filtered by.\n\n``values`` is capped, and ``distinct_count`` says how many there really are, so\na picker can offer the common ones and say what it left out."
+      },
+      "AnalysisDimensionValue": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "observation_count": {
+            "type": "integer",
+            "title": "Observation Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "observation_count"
+        ],
+        "title": "AnalysisDimensionValue",
+        "description": "One value a dimension takes in the selection, and how many rows carry it."
+      },
+      "AnalysisFieldCatalog": {
+        "properties": {
+          "grain": {
+            "$ref": "#/components/schemas/AnalysisGrain"
+          },
+          "run_count": {
+            "type": "integer",
+            "title": "Run Count"
+          },
+          "observation_count": {
+            "type": "integer",
+            "title": "Observation Count"
+          },
+          "runs_without_report": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Runs Without Report"
+          },
+          "missing_run_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Run Ids"
+          },
+          "dimensions": {
+            "items": {
+              "$ref": "#/components/schemas/AnalysisDimension"
+            },
+            "type": "array",
+            "title": "Dimensions"
+          },
+          "measures": {
+            "items": {
+              "$ref": "#/components/schemas/AnalysisMeasureField"
+            },
+            "type": "array",
+            "title": "Measures"
+          },
+          "max_dimension_values": {
+            "type": "integer",
+            "title": "Max Dimension Values"
+          },
+          "max_group_by_keys": {
+            "type": "integer",
+            "title": "Max Group By Keys"
+          },
+          "max_result_rows": {
+            "type": "integer",
+            "title": "Max Result Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grain",
+          "run_count",
+          "observation_count",
+          "runs_without_report",
+          "missing_run_ids",
+          "dimensions",
+          "measures",
+          "max_dimension_values",
+          "max_group_by_keys",
+          "max_result_rows"
+        ],
+        "title": "AnalysisFieldCatalog",
+        "description": "Everything a client needs to build a query over one selection.\n\nComputed from the same table the query reads, so a dimension offered here is\none a group-by can actually key on, and a measure offered is one that has\nnumbers in it."
+      },
+      "AnalysisFieldsRequest": {
+        "properties": {
+          "selection": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FilterRunSelection"
+              },
+              {
+                "$ref": "#/components/schemas/ExplicitRunSelection"
+              }
+            ],
+            "title": "Selection",
+            "discriminator": {
+              "propertyName": "kind",
+              "mapping": {
+                "explicit": "#/components/schemas/ExplicitRunSelection",
+                "filters": "#/components/schemas/FilterRunSelection"
+              }
+            }
+          },
+          "grain": {
+            "$ref": "#/components/schemas/AnalysisGrain"
+          }
+        },
+        "type": "object",
+        "required": [
+          "selection",
+          "grain"
+        ],
+        "title": "AnalysisFieldsRequest",
+        "description": "Body for the field catalog: which runs, and at which grain."
+      },
+      "AnalysisGrain": {
+        "type": "string",
+        "enum": [
+          "run",
+          "round",
+          "agent",
+          "keyed"
+        ],
+        "title": "AnalysisGrain",
+        "description": "The unit of observation a query groups and aggregates over."
+      },
+      "AnalysisMeasureField": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "score_unit": {
+            "type": "string",
+            "title": "Score Unit"
+          },
+          "rows_with_value": {
+            "type": "integer",
+            "title": "Rows With Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "key",
+          "label",
+          "score_unit",
+          "rows_with_value"
+        ],
+        "title": "AnalysisMeasureField",
+        "description": "One measurable quantity a selection carries."
+      },
+      "AnalysisQueryRequest": {
+        "properties": {
+          "selection": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FilterRunSelection"
+              },
+              {
+                "$ref": "#/components/schemas/ExplicitRunSelection"
+              }
+            ],
+            "title": "Selection",
+            "discriminator": {
+              "propertyName": "kind",
+              "mapping": {
+                "explicit": "#/components/schemas/ExplicitRunSelection",
+                "filters": "#/components/schemas/FilterRunSelection"
+              }
+            }
+          },
+          "query": {
+            "$ref": "#/components/schemas/AnalysisQuerySpec"
+          }
+        },
+        "type": "object",
+        "required": [
+          "selection",
+          "query"
+        ],
+        "title": "AnalysisQueryRequest",
+        "description": "Body for the analysis query endpoint: which runs, and what to ask of them."
+      },
+      "AnalysisQuerySpec": {
+        "properties": {
+          "grain": {
+            "$ref": "#/components/schemas/AnalysisGrain"
+          },
+          "filters": {
+            "items": {
+              "$ref": "#/components/schemas/DimensionFilter"
+            },
+            "type": "array",
+            "title": "Filters"
+          },
+          "group_by": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Group By"
+          },
+          "measures": {
+            "items": {
+              "$ref": "#/components/schemas/MeasureSpec"
+            },
+            "type": "array",
+            "title": "Measures"
+          },
+          "sort": {
+            "$ref": "#/components/schemas/ResultSort"
+          },
+          "sort_measure_index": {
+            "type": "integer",
+            "title": "Sort Measure Index"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grain",
+          "filters",
+          "group_by",
+          "measures",
+          "sort",
+          "sort_measure_index",
+          "limit"
+        ],
+        "title": "AnalysisQuerySpec",
+        "description": "A question about a set of runs, without saying which runs.\n\n``sort_measure_index`` says which measure a measure sort orders by. It is required\nrather than optional because a spec that sorts by a measure without naming it is\nnot answerable, and a default would hide that."
+      },
+      "AnalysisResult": {
+        "properties": {
+          "grain": {
+            "$ref": "#/components/schemas/AnalysisGrain"
+          },
+          "group_by": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Group By"
+          },
+          "measures": {
+            "items": {
+              "$ref": "#/components/schemas/AnalysisResultMeasure"
+            },
+            "type": "array",
+            "title": "Measures"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/AnalysisResultRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "run_count": {
+            "type": "integer",
+            "title": "Run Count"
+          },
+          "observation_count": {
+            "type": "integer",
+            "title": "Observation Count"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated"
+          },
+          "missing_run_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Run Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grain",
+          "group_by",
+          "measures",
+          "rows",
+          "run_count",
+          "observation_count",
+          "truncated",
+          "missing_run_ids"
+        ],
+        "title": "AnalysisResult",
+        "description": "The answer to one query.\n\n``truncated`` says the row ceiling clipped the answer, so a client can say the\nchart is partial rather than showing a confident subset.\n\n``missing_run_ids`` names runs the selection asked for that no longer resolve.\nA saved dashboard outlives the runs it was built on, so a deleted run has to be\nreported rather than silently dropped from the numbers."
+      },
+      "AnalysisResultMeasure": {
+        "properties": {
+          "column_key": {
+            "type": "string",
+            "title": "Column Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "score_unit": {
+            "type": "string",
+            "title": "Score Unit"
+          },
+          "aggregate": {
+            "type": "string",
+            "title": "Aggregate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "column_key",
+          "label",
+          "score_unit",
+          "aggregate"
+        ],
+        "title": "AnalysisResultMeasure",
+        "description": "A measure as it appears in the result, labelled for an axis."
+      },
+      "AnalysisResultRow": {
+        "properties": {
+          "group_values": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Group Values"
+          },
+          "run_count": {
+            "type": "integer",
+            "title": "Run Count"
+          },
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/AggregateCell"
+            },
+            "type": "array",
+            "title": "Cells"
+          }
+        },
+        "type": "object",
+        "required": [
+          "group_values",
+          "run_count",
+          "cells"
+        ],
+        "title": "AnalysisResultRow",
+        "description": "One group: its values for the group-by keys, then one cell per measure."
       },
       "AnthropicMessage": {
         "properties": {
@@ -1744,40 +2662,6 @@
         "title": "AnthropicToolUseBlock",
         "description": "Anthropic ``tool_use`` content block carrying the call's arguments object."
       },
-      "ApproveConsentRequest": {
-        "properties": {
-          "request_id": {
-            "type": "string",
-            "title": "Request Id"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "request_id"
-        ],
-        "title": "ApproveConsentRequest",
-        "description": "Body for ``POST /mcp/consent/approve``: the parked request to materialize."
-      },
-      "ApproveConsentResponse": {
-        "properties": {
-          "redirect_url": {
-            "type": "string",
-            "title": "Redirect Url"
-          },
-          "group_slug": {
-            "type": "string",
-            "title": "Group Slug"
-          }
-        },
-        "type": "object",
-        "required": [
-          "redirect_url",
-          "group_slug"
-        ],
-        "title": "ApproveConsentResponse",
-        "description": "Response for ``POST /mcp/consent/approve``: where the browser should go next."
-      },
       "Body_import_run_bundle_api_g__group_slug__runs_import_post": {
         "properties": {
           "file": {
@@ -1825,7 +2709,7 @@
           "derived_count"
         ],
         "title": "BranchSourceSummary",
-        "description": "One source run that has been used as a derivation parent.\n\n``source_run`` is the parent's full summary; ``derived_count`` is how many\nruns (replace-agent, resume-at-round, cross-run-replace-agent source A)\nbranch from it."
+        "description": "One source run that has been used as a derivation parent.\n\n``source_run`` is the parent's full summary; ``derived_count`` is how many\nruns (replace-agent, fork-at-round, cross-run-replace-agent source A)\nbranch from it."
       },
       "ChannelMessage": {
         "properties": {
@@ -1876,6 +2760,79 @@
         ],
         "title": "ChannelMessage",
         "description": "A message sent by an agent to a channel."
+      },
+      "ChartEncoding": {
+        "properties": {
+          "measure_index": {
+            "type": "integer",
+            "title": "Measure Index"
+          },
+          "y_measure_index": {
+            "type": "integer",
+            "title": "Y Measure Index"
+          },
+          "error_measure_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Measure Index"
+          }
+        },
+        "type": "object",
+        "required": [
+          "measure_index",
+          "y_measure_index"
+        ],
+        "title": "ChartEncoding",
+        "description": "Which of a query's measures the chart's axes read.\n\n``measure_index`` is the measure a bar, line, or heatmap draws when the query\ngroups by two keys and the second is the series. ``y_measure_index`` is the\nscatter's second axis. Both index into the query's ``measures`` list, so a\nreordered query keeps its chart pointing at the same position rather than at a\nname that may no longer be there.\n\n``error_measure_index`` names a second measure over the same metric, usually its\nstandard error, drawn as error bars on the measure at ``measure_index``. It is\n``None`` when the chart carries none, which is not the same as zero spread: a bar\nwith no error bars says nothing about its spread, and one with a zero-length bar\nsays the spread was measured and was zero.\n\nIt is the one field here with a default, and the reason is that this model is\nstored. A dashboard saved last month has to keep opening after a field is added,\nand a required field would turn every one of them into a validation error on read.\nFields added to a stored spec from here on carry the same kind of default."
+      },
+      "ChartKind": {
+        "type": "string",
+        "enum": [
+          "bar",
+          "line",
+          "scatter",
+          "heatmap",
+          "table"
+        ],
+        "title": "ChartKind",
+        "description": "How one chart draws its result."
+      },
+      "ChartSpec": {
+        "properties": {
+          "chart_id": {
+            "type": "string",
+            "title": "Chart Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ChartKind"
+          },
+          "query": {
+            "$ref": "#/components/schemas/AnalysisQuerySpec"
+          },
+          "encoding": {
+            "$ref": "#/components/schemas/ChartEncoding"
+          }
+        },
+        "type": "object",
+        "required": [
+          "chart_id",
+          "title",
+          "kind",
+          "query",
+          "encoding"
+        ],
+        "title": "ChartSpec",
+        "description": "One chart: a title, a form, and the query behind it.\n\nThe encoding is validated against the query it belongs to. An index pointing past\nthe measures is not a visible error: every cell it reads comes back missing, so\nthe chart draws an empty frame under a header still reporting its groups and runs.\nThat is worse than a refusal, and it is what a saved chart does after a measure is\nremoved from it."
       },
       "ContainerYardAttribute": {
         "properties": {
@@ -2183,9 +3140,9 @@
             "type": "string",
             "title": "Source B Run Id"
           },
-          "round_start": {
+          "after_round": {
             "type": "integer",
-            "title": "Round Start"
+            "title": "After Round"
           },
           "source_b_round_end": {
             "type": "integer",
@@ -2217,7 +3174,7 @@
         "required": [
           "source_a_run_id",
           "source_b_run_id",
-          "round_start",
+          "after_round",
           "source_b_round_end",
           "target_event_id",
           "replaced_agent_id",
@@ -2227,6 +3184,246 @@
         ],
         "title": "CrossRunReplaceAgentSource",
         "description": "Provenance for a run created via the cross-run replace-agent endpoint.\n\n``source_a_run_id`` is the target run whose timeline was modified.\n``source_b_run_id`` is the run the imported agent came from.\n``source_b_round_end`` is the last Sim B round whose events fed\ninto the imported agent's history."
+      },
+      "CsvExportRequest": {
+        "properties": {
+          "selection": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FilterRunSelection"
+              },
+              {
+                "$ref": "#/components/schemas/ExplicitRunSelection"
+              }
+            ],
+            "title": "Selection",
+            "discriminator": {
+              "propertyName": "kind",
+              "mapping": {
+                "explicit": "#/components/schemas/ExplicitRunSelection",
+                "filters": "#/components/schemas/FilterRunSelection"
+              }
+            }
+          },
+          "frames": {
+            "items": {
+              "$ref": "#/components/schemas/ExportFrame"
+            },
+            "type": "array",
+            "title": "Frames"
+          },
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Columns"
+          },
+          "metrics": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Metrics"
+          },
+          "repeat_run_columns": {
+            "type": "boolean",
+            "title": "Repeat Run Columns"
+          },
+          "include_metric_summaries": {
+            "type": "boolean",
+            "title": "Include Metric Summaries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "selection",
+          "frames",
+          "columns",
+          "metrics",
+          "repeat_run_columns",
+          "include_metric_summaries"
+        ],
+        "title": "CsvExportRequest",
+        "description": "Body for the CSV export.\n\n``frames`` picks which tables to emit. ``columns`` names the run-context\ncolumns to carry, and ``metrics`` the evaluator metrics, which are one column\neach on every table that carries scores. ``repeat_run_columns`` copies the run\ncontext onto every row of the per-round, per-agent and per-message tables so\nthey read without joining back to the run-level table.\n``include_metric_summaries`` adds each metric's unit and one-line rollup at run\nlevel and its per-observation note on the other tables, which roughly triples\nthe run-level table's width.\n\n``metrics`` reaches neither the message nor the round-context table, whose\ncells are what an agent said and what it was told rather than measurements."
+      },
+      "Dashboard": {
+        "properties": {
+          "dashboard_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Dashboard Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "selection": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FilterRunSelection"
+              },
+              {
+                "$ref": "#/components/schemas/ExplicitRunSelection"
+              }
+            ],
+            "title": "Selection",
+            "discriminator": {
+              "propertyName": "kind",
+              "mapping": {
+                "explicit": "#/components/schemas/ExplicitRunSelection",
+                "filters": "#/components/schemas/FilterRunSelection"
+              }
+            }
+          },
+          "filters": {
+            "items": {
+              "$ref": "#/components/schemas/DimensionFilter"
+            },
+            "type": "array",
+            "title": "Filters"
+          },
+          "charts": {
+            "items": {
+              "$ref": "#/components/schemas/ChartSpec"
+            },
+            "type": "array",
+            "title": "Charts"
+          },
+          "created_by": {
+            "type": "string",
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dashboard_id",
+          "name",
+          "description",
+          "selection",
+          "filters",
+          "charts",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "Dashboard",
+        "description": "A stored dashboard, with who made it and when it last changed."
+      },
+      "DashboardContent": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "selection": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FilterRunSelection"
+              },
+              {
+                "$ref": "#/components/schemas/ExplicitRunSelection"
+              }
+            ],
+            "title": "Selection",
+            "discriminator": {
+              "propertyName": "kind",
+              "mapping": {
+                "explicit": "#/components/schemas/ExplicitRunSelection",
+                "filters": "#/components/schemas/FilterRunSelection"
+              }
+            }
+          },
+          "filters": {
+            "items": {
+              "$ref": "#/components/schemas/DimensionFilter"
+            },
+            "type": "array",
+            "title": "Filters"
+          },
+          "charts": {
+            "items": {
+              "$ref": "#/components/schemas/ChartSpec"
+            },
+            "type": "array",
+            "title": "Charts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "selection",
+          "filters",
+          "charts"
+        ],
+        "title": "DashboardContent",
+        "description": "Everything a dashboard is, before it has an identity or a history."
+      },
+      "DashboardSummary": {
+        "properties": {
+          "dashboard_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Dashboard Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "chart_count": {
+            "type": "integer",
+            "title": "Chart Count"
+          },
+          "created_by": {
+            "type": "string",
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dashboard_id",
+          "name",
+          "description",
+          "chart_count",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DashboardSummary",
+        "description": "One row of the dashboard list, without the charts."
       },
       "DebugLogEntry": {
         "properties": {
@@ -2284,36 +3481,18 @@
             "type": "string",
             "enum": [
               "replace_agent",
-              "resume_at_round",
+              "fork_at_round",
               "cross_run_replace_agent"
             ],
             "title": "Derivation Type"
           },
-          "round_start": {
+          "after_round": {
             "type": "integer",
-            "title": "Round Start"
+            "title": "After Round"
           },
-          "rounds_after_swap": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rounds After Swap"
-          },
-          "rounds_after_resume": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rounds After Resume"
+          "rounds_after": {
+            "type": "integer",
+            "title": "Rounds After"
           },
           "replaced_agent_id": {
             "anyOf": [
@@ -2446,9 +3625,8 @@
         "required": [
           "run_id",
           "derivation_type",
-          "round_start",
-          "rounds_after_swap",
-          "rounds_after_resume",
+          "after_round",
+          "rounds_after",
           "replaced_agent_id",
           "replacement_model",
           "replacement_provider",
@@ -2467,7 +3645,33 @@
           "headline_measurements"
         ],
         "title": "DerivedRunReference",
-        "description": "One child run derived from the parent currently being viewed.\n\nA child is any run whose timeline parent is this run: created via\n``replace-agent`` (``derivation_type == \"replace_agent\"``),\n``resume-at-round`` (``\"resume_at_round\"``), or\n``cross-run-replace-agent`` with this run as source A\n(``\"cross_run_replace_agent\"``). Source-B-only usage is not represented."
+        "description": "One child run derived from the parent currently being viewed.\n\nA child is any run whose timeline parent is this run: created via\n``replace-agent`` (``derivation_type == \"replace_agent\"``),\n``fork-at-round`` (``\"fork_at_round\"``), or\n``cross-run-replace-agent`` with this run as source A\n(``\"cross_run_replace_agent\"``). Source-B-only usage is not represented.\n``after_round`` is the fork boundary and ``rounds_after`` the number of\nnew rounds the child plays past it."
+      },
+      "DimensionFilter": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/FilterOperator"
+          },
+          "values": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Values"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "operator",
+          "values"
+        ],
+        "title": "DimensionFilter",
+        "description": "One condition on one dimension.\n\n``values`` holds the alternatives for ``in`` / ``not_in``, the substring for\n``contains``, and the bound for the numeric operators. The emptiness operators\nignore it.\n\nA comparing operator with no value is refused rather than applied. Empty is not a\nneutral filter: ``in`` with no values matches nothing and ``not_in`` with none\nmatches everything, so a half-built filter would silently blank every chart on a\ndashboard one way and silently do nothing the other. The CLI already refused this\nspec by name; the refusal belongs on the model so every caller gets it."
       },
       "DriveModuleCaseStageDTO": {
         "properties": {
@@ -2805,6 +4009,343 @@
         "title": "EvaluationTokenUsage",
         "description": "Accumulated token counts across all LLM calls during an evaluation run."
       },
+      "ExplicitRunSelection": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "explicit",
+            "title": "Kind"
+          },
+          "run_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Run Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "run_ids"
+        ],
+        "title": "ExplicitRunSelection",
+        "description": "Runs named one by one as ``scenario/run_dir_name`` ids."
+      },
+      "ExportFrame": {
+        "type": "string",
+        "enum": [
+          "run_level",
+          "round_level",
+          "agent_level",
+          "message_level",
+          "round_context"
+        ],
+        "title": "ExportFrame",
+        "description": "One CSV table shape an export can emit."
+      },
+      "ExportMetricColumn": {
+        "properties": {
+          "metric_name": {
+            "type": "string",
+            "title": "Metric Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "score_unit": {
+            "type": "string",
+            "title": "Score Unit"
+          },
+          "runs_with_value": {
+            "type": "integer",
+            "title": "Runs With Value"
+          },
+          "rounds_reported": {
+            "type": "integer",
+            "title": "Rounds Reported"
+          }
+        },
+        "type": "object",
+        "required": [
+          "metric_name",
+          "label",
+          "score_unit",
+          "runs_with_value",
+          "rounds_reported"
+        ],
+        "title": "ExportMetricColumn",
+        "description": "One evaluator metric an export can carry.\n\n``rounds_reported`` is how many round observations this metric carries across\nthe selection. It is not a row count: every metric is a column, so metrics\nshare the rows they fall on. The largest of them is what a caller estimates\nthe round table's height from, since one metric's rounds are usually a subset\nof another's rather than disjoint.\n\nThere is no per-metric agent count. The agent table is keyed on the run's\nregistered roster, so its height is ``agent_row_count`` on the selection and\nno choice of metrics moves it."
+      },
+      "ExportPreviewRequest": {
+        "properties": {
+          "selection": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FilterRunSelection"
+              },
+              {
+                "$ref": "#/components/schemas/ExplicitRunSelection"
+              }
+            ],
+            "title": "Selection",
+            "discriminator": {
+              "propertyName": "kind",
+              "mapping": {
+                "explicit": "#/components/schemas/ExplicitRunSelection",
+                "filters": "#/components/schemas/FilterRunSelection"
+              }
+            }
+          },
+          "include_raw_size_estimate": {
+            "type": "boolean",
+            "title": "Include Raw Size Estimate"
+          },
+          "include_logs": {
+            "type": "boolean",
+            "title": "Include Logs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "selection",
+          "include_raw_size_estimate",
+          "include_logs"
+        ],
+        "title": "ExportPreviewRequest",
+        "description": "Body for the export preview.\n\n``include_raw_size_estimate`` opts into walking the selected run directories\nfor their on-disk size. It is the only part of the preview that costs one\nfilesystem stat per file, so the CSV side leaves it off.\n\n``include_logs`` is what the estimate is taken with. The logs are roughly half\nthe size of a run folder again, so an estimate that ignored it would sit under\nthe checkbox that changes it and never move."
+      },
+      "ExportValueColumn": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "group": {
+            "type": "string",
+            "title": "Group"
+          },
+          "runs_with_value": {
+            "type": "integer",
+            "title": "Runs With Value"
+          },
+          "always_included": {
+            "type": "boolean",
+            "title": "Always Included"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "group",
+          "runs_with_value",
+          "always_included"
+        ],
+        "title": "ExportValueColumn",
+        "description": "One run-context column an export can carry.\n\n``group`` is which family it came from, used to lay out a column picker.\n``runs_with_value`` is how many runs in the selection have a non-empty cell.\n``always_included`` marks the identity columns, which every frame emits."
+      },
+      "FilterOperator": {
+        "type": "string",
+        "enum": [
+          "in",
+          "not_in",
+          "contains",
+          "is_empty",
+          "is_not_empty",
+          "gte",
+          "lte"
+        ],
+        "title": "FilterOperator",
+        "description": "How a filter compares a dimension cell against the values it carries."
+      },
+      "FilterRunSelection": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "filters",
+            "title": "Kind"
+          },
+          "scenario": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Scenario"
+          },
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Labels"
+          },
+          "run_id_contains": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id Contains"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contains_agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contains Agent Id"
+          },
+          "knob": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Knob"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "scenario",
+          "labels",
+          "run_id_contains",
+          "status",
+          "contains_agent_id"
+        ],
+        "title": "FilterRunSelection",
+        "description": "Runs named by the same filters the runs list uses.\n\nMirrors the runs list without paging: ``scenario`` is OR-matched, ``labels``\nare AND-matched, ``run_id_contains`` is a case-insensitive substring of\n``scenario/run_dir_name``, ``status`` restricts to one run status, and\n``contains_agent_id`` keeps runs that registered that agent. Each ``knob``\nentry is one ``<knob><operator><value>`` condition on the run's recorded\n``scenario_config``, and every one of them has to hold.\n\nEvery filter empty means every run the caller can see.\n\nThe set matches the list's own filters, so any selection the list can show is one\nthe export can reproduce."
+      },
+      "FilterableKnob": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "knob_type": {
+            "$ref": "#/components/schemas/FilterableKnobType"
+          },
+          "enum_values": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enum Values"
+          },
+          "nullable": {
+            "type": "boolean",
+            "title": "Nullable"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "knob_type",
+          "enum_values",
+          "nullable"
+        ],
+        "title": "FilterableKnob",
+        "description": "One knob the runs list can filter on.\n\n``enum_values`` is populated only for :attr:`FilterableKnobType.ENUM`, and\nis the full set of values the knob accepts.\n\n``nullable`` says the knob may be left unset, so a filter control should\noffer \"not set\" alongside the values. A run recording null there is still\nfilterable, with ``null`` as the value a condition compares against."
+      },
+      "FilterableKnobType": {
+        "type": "string",
+        "enum": [
+          "integer",
+          "number",
+          "boolean",
+          "string",
+          "enum"
+        ],
+        "title": "FilterableKnobType",
+        "description": "The widget and operator set a knob's filter control should use."
+      },
+      "FilterableKnobsResponse": {
+        "properties": {
+          "scenario_name": {
+            "type": "string",
+            "title": "Scenario Name"
+          },
+          "knobs": {
+            "items": {
+              "$ref": "#/components/schemas/FilterableKnob"
+            },
+            "type": "array",
+            "title": "Knobs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scenario_name",
+          "knobs"
+        ],
+        "title": "FilterableKnobsResponse",
+        "description": "The knobs of one scenario that the runs list can filter on."
+      },
+      "ForkAtRoundSource": {
+        "properties": {
+          "source_run_id": {
+            "type": "string",
+            "title": "Source Run Id"
+          },
+          "after_round": {
+            "type": "integer",
+            "title": "After Round"
+          },
+          "rounds_after": {
+            "type": "integer",
+            "title": "Rounds After"
+          },
+          "target_event_id": {
+            "type": "string",
+            "title": "Target Event Id"
+          },
+          "forked_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Forked At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_run_id",
+          "after_round",
+          "rounds_after",
+          "target_event_id",
+          "forked_at"
+        ],
+        "title": "ForkAtRoundSource",
+        "description": "Provenance for a run created via the fork-at-round endpoint.\n\nRounds 1..``after_round`` stay complete and the fork plays\n``rounds_after`` new rounds from ``after_round + 1``. No agent is\nreplaced: every agent keeps its full reconstructed history, and the\nfork differs from the source only via merged knob overrides (e.g.\n``postmortem_enabled``, ``scheduled_events``, ``round_count``)."
+      },
       "ForkSource": {
         "properties": {
           "source_run_id": {
@@ -2956,6 +4497,44 @@
         "title": "KnobsContentResponse",
         "description": "Response containing the parsed contents of a knobs JSON file."
       },
+      "LabelDescription": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Label"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "description"
+        ],
+        "title": "LabelDescription",
+        "description": "One label and the meaning its group recorded for it."
+      },
+      "LabelDescriptionsResponse": {
+        "properties": {
+          "descriptions": {
+            "items": {
+              "$ref": "#/components/schemas/LabelDescription"
+            },
+            "type": "array",
+            "title": "Descriptions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "descriptions"
+        ],
+        "title": "LabelDescriptionsResponse",
+        "description": "Every label description the group has recorded, sorted by label."
+      },
       "LaunchStatus": {
         "type": "string",
         "enum": [
@@ -2963,6 +4542,37 @@
         ],
         "title": "LaunchStatus",
         "description": "Status value for subprocess launch responses."
+      },
+      "MeasureSource": {
+        "type": "string",
+        "enum": [
+          "metric",
+          "run_column"
+        ],
+        "title": "MeasureSource",
+        "description": "Where a measure's numbers come from."
+      },
+      "MeasureSpec": {
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/MeasureSource"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "aggregate": {
+            "$ref": "#/components/schemas/Aggregate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "key",
+          "aggregate"
+        ],
+        "title": "MeasureSpec",
+        "description": "One measured quantity and how its values are reduced within a group."
       },
       "Measurement": {
         "properties": {
@@ -3072,6 +4682,120 @@
         ],
         "title": "ModelInfo",
         "description": "A supported model prefix and its provider."
+      },
+      "MultiRunExportPreview": {
+        "properties": {
+          "run_count": {
+            "type": "integer",
+            "title": "Run Count"
+          },
+          "run_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Run Ids"
+          },
+          "scenario_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Scenario Names"
+          },
+          "evaluated_run_count": {
+            "type": "integer",
+            "title": "Evaluated Run Count"
+          },
+          "in_progress_run_count": {
+            "type": "integer",
+            "title": "In Progress Run Count"
+          },
+          "runs_without_report": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Runs Without Report"
+          },
+          "missing_run_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Run Ids"
+          },
+          "raw_bytes_estimate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Bytes Estimate"
+          },
+          "agent_row_count": {
+            "type": "integer",
+            "title": "Agent Row Count"
+          },
+          "message_row_count": {
+            "type": "integer",
+            "title": "Message Row Count"
+          },
+          "round_context_row_estimate": {
+            "type": "integer",
+            "title": "Round Context Row Estimate"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ExportValueColumn"
+            },
+            "type": "array",
+            "title": "Columns"
+          },
+          "metrics": {
+            "items": {
+              "$ref": "#/components/schemas/ExportMetricColumn"
+            },
+            "type": "array",
+            "title": "Metrics"
+          },
+          "max_run_count": {
+            "type": "integer",
+            "title": "Max Run Count"
+          },
+          "max_raw_bytes": {
+            "type": "integer",
+            "title": "Max Raw Bytes"
+          },
+          "max_csv_bytes": {
+            "type": "integer",
+            "title": "Max Csv Bytes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_count",
+          "run_ids",
+          "scenario_names",
+          "evaluated_run_count",
+          "in_progress_run_count",
+          "runs_without_report",
+          "missing_run_ids",
+          "raw_bytes_estimate",
+          "agent_row_count",
+          "message_row_count",
+          "round_context_row_estimate",
+          "columns",
+          "metrics",
+          "max_run_count",
+          "max_raw_bytes",
+          "max_csv_bytes"
+        ],
+        "title": "MultiRunExportPreview",
+        "description": "Everything a client needs to describe an export before requesting it.\n\n``raw_bytes_estimate`` is the on-disk size of the run folders a raw export\nwould carry, and is ``None`` when it was not asked for. ``missing_run_ids``\nlists explicitly named ids that no longer resolve to a run this group owns.\n\n``agent_row_count`` and ``message_row_count`` are what the agent and message\ntables would hold. Both are run-level totals rather than per-metric ones: an\nagent row is an agent and a message row is a message, so no choice of metrics\nchanges either. The agent count is the registered roster, which is what that\ntable is keyed on.\n\n``round_context_row_estimate`` is the rounds the selection played, which is\nwhat a table of one row per run and round holds. It is an estimate and named\none, because a round nothing was injected in has no row and the preview does\nnot open the event logs to find out."
       },
       "NoteResponse": {
         "properties": {
@@ -3357,6 +5081,39 @@
         "title": "OrbitalAnomalyRunExtras",
         "description": "Scenario-specific run-detail payload surfaced for orbital_anomaly runs."
       },
+      "RawExportRequest": {
+        "properties": {
+          "selection": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FilterRunSelection"
+              },
+              {
+                "$ref": "#/components/schemas/ExplicitRunSelection"
+              }
+            ],
+            "title": "Selection",
+            "discriminator": {
+              "propertyName": "kind",
+              "mapping": {
+                "explicit": "#/components/schemas/ExplicitRunSelection",
+                "filters": "#/components/schemas/FilterRunSelection"
+              }
+            }
+          },
+          "include_logs": {
+            "type": "boolean",
+            "title": "Include Logs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "selection",
+          "include_logs"
+        ],
+        "title": "RawExportRequest",
+        "description": "Body for the raw run-folder zip."
+      },
       "ReasoningEntry": {
         "properties": {
           "message_id": {
@@ -3406,9 +5163,9 @@
             "type": "string",
             "title": "Source Run Id"
           },
-          "round_start": {
+          "after_round": {
             "type": "integer",
-            "title": "Round Start"
+            "title": "After Round"
           },
           "target_event_id": {
             "type": "string",
@@ -3435,7 +5192,7 @@
         "type": "object",
         "required": [
           "source_run_id",
-          "round_start",
+          "after_round",
           "target_event_id",
           "replaced_agent_id",
           "replacement_model",
@@ -3443,42 +5200,17 @@
           "replaced_at"
         ],
         "title": "ReplaceAgentSource",
-        "description": "Provenance for a run created via the replace-agent endpoint.\n\nThe replacement boundary is the start of round ``round_start``.\n``target_event_id`` is the resolved anchor inside the source run's\nJSONL event log (the ``RoundAdvanced`` event for ``round_start``),\nkept for traceability."
+        "description": "Provenance for a run created via the replace-agent endpoint.\n\nRounds 1..``after_round`` stay complete and the replacement agent\nenters round ``after_round + 1``. ``target_event_id`` is the resolved\nanchor inside the source run's JSONL event log, kept for traceability."
       },
-      "ResumeAtRoundSource": {
-        "properties": {
-          "source_run_id": {
-            "type": "string",
-            "title": "Source Run Id"
-          },
-          "round_start": {
-            "type": "integer",
-            "title": "Round Start"
-          },
-          "rounds_after_resume": {
-            "type": "integer",
-            "title": "Rounds After Resume"
-          },
-          "target_event_id": {
-            "type": "string",
-            "title": "Target Event Id"
-          },
-          "resumed_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Resumed At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "source_run_id",
-          "round_start",
-          "rounds_after_resume",
-          "target_event_id",
-          "resumed_at"
+      "ResultSort": {
+        "type": "string",
+        "enum": [
+          "group",
+          "measure_ascending",
+          "measure_descending"
         ],
-        "title": "ResumeAtRoundSource",
-        "description": "Provenance for a run created via the resume-at-round endpoint.\n\nThe resume boundary is the start of round ``round_start``. No agent\nis replaced \u2014 every agent keeps its full reconstructed history; the\nresumed simulation differs from the source only via merged knob\noverrides (e.g. ``postmortem_enabled``, ``scheduled_events``,\n``round_count``)."
+        "title": "ResultSort",
+        "description": "How the result rows are ordered."
       },
       "RoundEnding": {
         "properties": {
@@ -3773,10 +5505,10 @@
               }
             ]
           },
-          "resume_at_round_source": {
+          "fork_at_round_source": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ResumeAtRoundSource"
+                "$ref": "#/components/schemas/ForkAtRoundSource"
               },
               {
                 "type": "null"
@@ -3894,7 +5626,7 @@
           "fork_source",
           "replace_agent_source",
           "cross_run_replace_agent_source",
-          "resume_at_round_source",
+          "fork_at_round_source",
           "children",
           "labels",
           "note",
@@ -4033,10 +5765,10 @@
               }
             ]
           },
-          "resume_at_round_source": {
+          "fork_at_round_source": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ResumeAtRoundSource"
+                "$ref": "#/components/schemas/ForkAtRoundSource"
               },
               {
                 "type": "null"
@@ -4105,7 +5837,7 @@
           "fork_source",
           "replace_agent_source",
           "cross_run_replace_agent_source",
-          "resume_at_round_source",
+          "fork_at_round_source",
           "models",
           "provider",
           "agent_models",
@@ -5816,25 +7548,6 @@
         ],
         "title": "VeyruSwapPoint",
         "description": "Anchor for the moment agents were swapped between teams.\n\n``target_message_id`` is the first ``MessageSent`` on a link channel\nafter the swap fired, used by the frontend to scroll the timeline\nto that exact point. ``swapped_observer_display_names`` are the\ntwo observers who exchanged teams, in stable order."
-      },
-      "WebhookAccepted": {
-        "properties": {
-          "accepted": {
-            "type": "boolean",
-            "title": "Accepted"
-          },
-          "event_type": {
-            "type": "string",
-            "title": "Event Type"
-          }
-        },
-        "type": "object",
-        "required": [
-          "accepted",
-          "event_type"
-        ],
-        "title": "WebhookAccepted",
-        "description": "Response payload returned for every accepted Clerk webhook."
       },
       "WhoAmIResponse": {
         "properties": {

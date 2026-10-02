@@ -74,14 +74,16 @@ function InjectionEntry({ group }: { group: InjectionGroup }) {
         </span>
         <ChevronIcon className="ml-auto h-3 w-3 shrink-0 text-amber-600/60 dark:text-amber-400/60" />
       </button>
-      <ProseMarkdown
-        className={cn(
-          "mt-1 text-amber-900/80 dark:text-amber-200/80",
-          !expanded && "line-clamp-2 **:my-0! **:inline [&_br]:hidden"
-        )}
-      >
-        {group.text}
-      </ProseMarkdown>
+      {expanded ? (
+        <ProseMarkdown className="mt-1 text-amber-900/80 dark:text-amber-200/80">
+          {group.text}
+        </ProseMarkdown>
+      ) : (
+        <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-amber-900/80 dark:text-amber-200/80">
+          {group.text.slice(0, 300)}
+          {group.text.length > 300 ? "…" : ""}
+        </p>
+      )}
     </div>
   );
 }

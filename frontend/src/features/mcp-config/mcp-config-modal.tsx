@@ -122,7 +122,7 @@ export function McpConfigModal({ onClose }: { onClose: () => void }) {
                 </li>
                 <li>
                   <code className="font-mono">list_derived_runs</code> — runs derived from a parent
-                  (replace-agent, resume-at-round, cross-run) with round boundaries and scores
+                  (replace-agent, fork-at-round, cross-run) with round boundaries and scores
                 </li>
                 <li>
                   <code className="font-mono">get_run</code> — full run content with messages,
@@ -141,8 +141,8 @@ export function McpConfigModal({ onClose }: { onClose: () => void }) {
                   model, provider, and knobs
                 </li>
                 <li>
-                  <code className="font-mono">export_run_artifacts</code> — download URL for a zip
-                  archive of all run artifacts
+                  <code className="font-mono">export_run_artifacts</code> — download URL for a
+                  tar.gz bundle of all run artifacts
                 </li>
                 <li>
                   <code className="font-mono">export_agent_thread</code> — one agent thread as a

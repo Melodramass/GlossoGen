@@ -93,6 +93,15 @@ _EXCLUDED_COPY_NAMES: frozenset[str] = frozenset(
         "protocol_probe_replica_self_similarity.json",
         "protocol_probe_agent_pair_similarity.json",
         "protocol_probe_cutoff_trajectory.json",
+        # Derivation provenance. Each fork flow writes its own manifest after
+        # the copy; an inherited one would make the resume dispatch and the
+        # discovery layer read the source's boundary instead of the fork's
+        # (the cross-run manifest is checked first, so forking a cross-run
+        # run would silently resume at the old boundary).
+        "fork_manifest.json",
+        "replace_manifest.json",
+        "cross_run_replace_manifest.json",
+        "imported_history_source.jsonl",
     }
 )
 
@@ -217,3 +226,26 @@ def claim_run_dir(runs_dir: Path, scenario_name: str) -> Path:
             return candidate
         except FileExistsError:
             time.sleep(1)
+
+
+def resume_round_from_log(log_path: Path) -> int:
+    """Return the round a resumed run will open at, read from its own log.
+
+    The clock resumes at the last round it opened: the replace and resume flows
+    truncate the copied JSONL at the ``round_advanced`` for their boundary, and a
+    crashed run stopped inside the round it last opened. Preflight needs this
+    before anything is loaded, so the file is scanned once and only the matching
+    lines are parsed.
+
+    A log that does not exist yet answers 1, which leaves the caller's own error
+    about the missing run to be the one reported.
+    """
+    if not log_path.exists():
+        return 1
+    latest = 1
+    with log_path.open("rb") as handle:
+        for line in handle:
+            if b'"round_advanced"' not in line:
+                continue
+            latest = max(latest, int(orjson.loads(line)["round_number"]))
+    return latest
