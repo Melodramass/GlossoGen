@@ -241,6 +241,7 @@ glossogen export --runs-dir ./runs --out ./export \
 | `--no-repeat-run-columns` | keep the round, agent and message tables narrow |
 | `--raw` | also write `runs.zip` |
 | `--include-logs` | keep debug and stdout logs in that zip |
+| `--include-atif` | with `--raw`, add each agent's [ATIF trajectory](atif-export.md) to that zip |
 | `--max-runs N` | override the 5000-run ceiling |
 
 Every column and metric available for the selection is included. The flags trim
@@ -314,6 +315,11 @@ routinely larger than the event log. `--include-logs` or the modal checkbox puts
 them back. `stream.json` and `eval_in_progress.json` are always left out: they
 describe work in flight, so a re-imported run carrying them reads as still
 running.
+
+An `atif/` folder in each run holds one [ATIF trajectory](atif-export.md) per
+agent, generated from the event log while the zip is written. The modal's ATIF
+checkbox starts ticked. The CLI adds it with `--include-atif`, and the REST body
+with `include_atif`. A single run's zip download always includes it.
 
 A run still being written is safe to export. Members are streamed into the
 archive rather than pre-declaring a size, so a JSONL that grows mid-read does not

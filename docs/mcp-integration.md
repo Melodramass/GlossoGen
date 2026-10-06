@@ -65,6 +65,7 @@ restart is the only consequence.
 | `start_run` | Launch a simulation with scenario, model, provider and knobs |
 | `export_run_artifacts` | Download URL for a tar.gz bundle of the run directory |
 | `export_agent_thread` | One agent's thread as a drop-in Anthropic or OpenAI request body |
+| `export_agent_atif` | One agent as [ATIF](atif-export.md) trajectories, one per generation of its seat |
 
 A run-start conversation usually goes: `get_knobs_schema` to see the fields and
 preset names, `get_knobs_preset` to load a baseline, then `start_run` with the

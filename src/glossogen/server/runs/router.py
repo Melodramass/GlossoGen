@@ -14,6 +14,8 @@ import orjson
 from fastapi import APIRouter, HTTPException, Query, Request
 from starlette.responses import StreamingResponse
 
+from glossogen.atif_export.atif_models import AtifAgentExport
+from glossogen.atif_export.atif_trajectory_builder import build_agent_trajectories_from_run_dir
 from glossogen.db.queries import update_run_evaluation_content_hash, update_run_labels
 from glossogen.eval_manifest import read_eval_manifest
 from glossogen.evaluation.reports.evaluation_report import (
@@ -223,6 +225,37 @@ async def get_agent_thread_export(
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get(
+    "/runs/{scenario}/{run_dir_name}/agents/{agent_id}/atif",
+    response_model=AtifAgentExport,
+    response_model_exclude_none=True,
+)
+async def get_agent_atif_export(
+    scenario: str,
+    run_dir_name: str,
+    agent_id: str,
+    request: Request,
+    cutoff_round: int | None = Query(default=None, alias="round"),
+) -> AtifAgentExport:
+    """Export one agent as ATIF trajectories, one per generation of its seat.
+
+    ``round`` is the exclusive cutoff, as for the thread export.
+    """
+    resolved = await resolve_run_or_404(
+        request=request, scenario=scenario, run_dir_name=run_dir_name
+    )
+    try:
+        trajectories = await build_agent_trajectories_from_run_dir(
+            run_dir=resolved.run_dir,
+            scenario_name=resolved.scenario_name,
+            agent_id=agent_id,
+            cutoff_round=cutoff_round,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return AtifAgentExport(trajectories=trajectories)
 
 
 @router.get("/runs/{scenario}/{run_dir_name}/evaluation", response_model=EvalReportResponse | None)

@@ -190,6 +190,7 @@ async def export_runs_raw(
         write_runs_zip(
             runs=summaries,
             include_logs=body.include_logs,
+            include_atif=body.include_atif,
             destination=destination,
         )
 

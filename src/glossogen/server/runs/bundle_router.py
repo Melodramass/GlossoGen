@@ -159,7 +159,10 @@ async def export_run_zip(
     run_dir_name: str,
     request: Request,
 ) -> StreamingResponse:
-    """Export a simulation run as a ``{run_dir_name}.zip`` for manual extraction."""
+    """Export a simulation run as a ``{run_dir_name}.zip`` for manual extraction.
+
+    Each agent's ATIF trajectory is included under ``atif/``.
+    """
     resolved = await resolve_run_or_404(
         request=request,
         scenario=scenario,
@@ -172,7 +175,9 @@ async def export_run_zip(
         write_single_run_zip(
             run_dir=resolved.run_dir,
             run_dir_name=folder_name,
+            scenario_name=resolved.scenario_name,
             include_logs=False,
+            include_atif=True,
             destination=destination,
         )
 

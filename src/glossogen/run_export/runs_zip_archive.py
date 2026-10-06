@@ -21,6 +21,12 @@ import zipfile
 from pathlib import Path, PurePosixPath
 from typing import IO, NamedTuple
 
+from glossogen.atif_export.atif_trajectory_builder import (
+    build_run_trajectories,
+    serialize_trajectory,
+    trajectory_file_name,
+)
+from glossogen.evaluation.log_reader import read_events
 from glossogen.run_export.archive_member_filter import should_include_in_archive
 from glossogen.run_export.export_limits import check_raw_bytes
 from glossogen.server.runs.models import RunSummary
@@ -28,6 +34,8 @@ from glossogen.server.runs.models import RunSummary
 logger = logging.getLogger(__name__)
 
 _MANIFEST_MEMBER_NAME = "manifest.csv"
+
+_ATIF_MEMBER_DIR = "atif"
 
 _ZIP_MIN_DATE_TIME: tuple[int, int, int, int, int, int] = (1980, 1, 1, 0, 0, 0)
 
@@ -63,9 +71,15 @@ def add_run_to_zip(
     archive: zipfile.ZipFile,
     run_dir: Path,
     arc_root: PurePosixPath,
+    scenario_name: str,
     include_logs: bool,
+    include_atif: bool,
 ) -> RunZipTally:
-    """Add every included file under ``run_dir`` to ``archive`` beneath ``arc_root``."""
+    """Add every included file under ``run_dir`` to ``archive`` beneath ``arc_root``.
+
+    ``include_atif`` also writes each agent's ATIF trajectory, generated from the
+    run's event log, under ``atif/``.
+    """
     file_count = 0
     byte_count = 0
     for entry_path in sorted(run_dir.rglob("*")):
@@ -88,13 +102,54 @@ def add_run_to_zip(
             shutil.copyfileobj(source, target)
         file_count += 1
         byte_count += stat_result.st_size
+    if include_atif:
+        atif_tally = _add_atif_trajectories(
+            archive=archive,
+            run_dir=run_dir,
+            arc_root=arc_root,
+            scenario_name=scenario_name,
+        )
+        file_count += atif_tally.file_count
+        byte_count += atif_tally.byte_count
     return RunZipTally(file_count=file_count, byte_count=byte_count)
+
+
+def _add_atif_trajectories(
+    archive: zipfile.ZipFile,
+    run_dir: Path,
+    arc_root: PurePosixPath,
+    scenario_name: str,
+) -> RunZipTally:
+    """Write one ATIF trajectory per agent generation under ``arc_root/atif/``.
+
+    A run with no event log yet (claimed, never started) has no agents to write.
+    """
+    log_path = run_dir / f"{scenario_name}.jsonl"
+    if not log_path.exists():
+        return RunZipTally(file_count=0, byte_count=0)
+    trajectories = build_run_trajectories(
+        events=read_events(log_path=log_path),
+        run_id=f"{scenario_name}/{run_dir.name}",
+        scenario_name=scenario_name,
+        cutoff_round=None,
+    )
+    byte_count = 0
+    for trajectory in trajectories:
+        payload = serialize_trajectory(trajectory=trajectory).encode("utf-8")
+        member = arc_root / _ATIF_MEMBER_DIR / trajectory_file_name(trajectory=trajectory)
+        info = zipfile.ZipInfo(filename=str(member), date_time=zip_date_time(mtime=time.time()))
+        info.compress_type = zipfile.ZIP_DEFLATED
+        archive.writestr(info, payload)
+        byte_count += len(payload)
+    return RunZipTally(file_count=len(trajectories), byte_count=byte_count)
 
 
 def write_single_run_zip(
     run_dir: Path,
     run_dir_name: str,
+    scenario_name: str,
     include_logs: bool,
+    include_atif: bool,
     destination: IO[bytes],
 ) -> RunZipTally:
     """Write one run's zip, nesting its files under a ``{run_dir_name}/`` folder.
@@ -107,7 +162,9 @@ def write_single_run_zip(
             archive=archive,
             run_dir=run_dir,
             arc_root=PurePosixPath(run_dir_name),
+            scenario_name=scenario_name,
             include_logs=include_logs,
+            include_atif=include_atif,
         )
 
 
@@ -123,6 +180,7 @@ def _manifest_bytes(rows: list[tuple[str, str, str, str, str, int]]) -> bytes:
 def write_runs_zip(
     runs: list[RunSummary],
     include_logs: bool,
+    include_atif: bool,
     destination: IO[bytes],
 ) -> RunsZipTally:
     """Write many runs into one zip, each under ``{scenario_name}/{run_dir_name}/``.
@@ -143,7 +201,9 @@ def write_runs_zip(
                 archive=archive,
                 run_dir=run_dir,
                 arc_root=PurePosixPath(summary.scenario_name) / run_dir_name,
+                scenario_name=summary.scenario_name,
                 include_logs=include_logs,
+                include_atif=include_atif,
             )
             total_files += tally.file_count
             total_bytes += tally.byte_count
