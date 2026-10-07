@@ -1954,6 +1954,9 @@ export interface components {
         /**
          * EvaluationTokenUsage
          * @description Accumulated token counts across all LLM calls during an evaluation run.
+         *
+         *     ``input_tokens`` counts only the input that was neither read from nor written
+         *     to the cache, the way the Anthropic API reports it.
          */
         EvaluationTokenUsage: {
             /** Input Tokens */
