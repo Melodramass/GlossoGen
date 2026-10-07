@@ -128,6 +128,7 @@ nav:
       - Web UI: web-ui.md
       - MCP integration: mcp-integration.md
       - Exporting runs: exporting-runs.md
+      - ATIF export: atif-export.md
       - Analysis and dashboards: analysis.md
       - Notebooks:
           - About the notebooks: notebooks.md

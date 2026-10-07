@@ -57,7 +57,7 @@ from glossogen.server.runs.primary_channel_resolution import resolve_primary_cha
 from glossogen.server.runs.run_detail_types import AgentDetail, ChannelMessage
 from glossogen.server.runs.scenario_extension import SCENARIO_RUN_EXTENSIONS
 from glossogen.stream_manifest import delete_manifest, read_manifest
-from glossogen.token_pricing import TokenPricing, find_pricing
+from glossogen.token_pricing import TokenPricing, compute_token_cost_usd, find_pricing
 
 logger = logging.getLogger(__name__)
 
@@ -304,18 +304,13 @@ async def load_run_detail(
 
             event_pricing = pricing_by_agent.get(event.agent_id)
             if event_pricing is not None:
-                non_cached_input = max(
-                    0,
-                    event.usage.input_tokens
-                    - event.usage.cache_read_input_tokens
-                    - event.usage.cache_creation_input_tokens,
+                cost_from_tokens += compute_token_cost_usd(
+                    pricing=event_pricing,
+                    input_tokens=event.usage.input_tokens,
+                    output_tokens=event.usage.output_tokens,
+                    cache_read_tokens=event.usage.cache_read_input_tokens,
+                    cache_write_tokens=event.usage.cache_creation_input_tokens,
                 )
-                cost_from_tokens += (
-                    non_cached_input * event_pricing.input_per_mtok
-                    + event.usage.output_tokens * event_pricing.output_per_mtok
-                    + event.usage.cache_read_input_tokens * event_pricing.cache_read_per_mtok
-                    + event.usage.cache_creation_input_tokens * event_pricing.cache_write_per_mtok
-                ) / 1_000_000
 
             # Create reasoning entry for text content
             if event.text is not None and event.text.strip():

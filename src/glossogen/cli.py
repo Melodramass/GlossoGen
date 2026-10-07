@@ -23,6 +23,13 @@ from typing import Any, NamedTuple, cast
 import uvicorn
 from pydantic import ValidationError
 
+from glossogen.atif_export.atif_run_context import load_atif_run_context
+from glossogen.atif_export.atif_trajectory_builder import (
+    build_agent_trajectories,
+    build_run_trajectories,
+    serialize_trajectory,
+    trajectory_file_name,
+)
 from glossogen.autonomous_supervisor import AutonomousSupervisor
 from glossogen.config_overrides import (
     apply_overrides,
@@ -321,6 +328,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Keep debug and stdout logs in the raw zip (they are dropped by default)",
     )
     export_parser.add_argument(
+        "--include-atif",
+        action="store_true",
+        help="Add each agent's ATIF trajectory under atif/ in every run of the raw zip",
+    )
+    export_parser.add_argument(
         "--max-runs",
         type=int,
         default=MAX_EXPORT_RUN_COUNT,
@@ -482,6 +494,45 @@ def _build_parser() -> argparse.ArgumentParser:
         type=str,
         default=None,
         help="Write the export JSON to this path. Omit to print it to stdout.",
+    )
+
+    export_atif_parser = subparsers.add_parser(
+        "export-atif",
+        help="Export a run's agents as ATIF trajectories, one JSON file per agent",
+    )
+    export_atif_parser.add_argument(
+        "scenario_name",
+        type=str,
+        choices=scenario_names,
+        help="Name of the scenario the run belongs to",
+    )
+    export_atif_parser.add_argument(
+        "--run-dir",
+        type=str,
+        required=True,
+        help="Path to the run directory (e.g. runs/veyru/1742234567)",
+    )
+    export_atif_parser.add_argument(
+        "--agent-id",
+        type=str,
+        default=None,
+        help="Export only this agent. Omit to export every agent in the run.",
+    )
+    export_atif_parser.add_argument(
+        "--round",
+        dest="round",
+        type=int,
+        default=None,
+        help=(
+            "Exclusive round cutoff, as for export-thread: --round=R keeps rounds 1..R-1. "
+            "Omit for the whole run."
+        ),
+    )
+    export_atif_parser.add_argument(
+        "--out-dir",
+        type=str,
+        required=True,
+        help="Directory to write <agent_id>.json files into (created if missing)",
     )
 
     validate_parser = subparsers.add_parser(
@@ -1119,6 +1170,11 @@ def main() -> None:
         asyncio.run(_run_analyze(args=args))
         return
 
+    if known_args.command == "export-atif":
+        args = parser.parse_args()
+        asyncio.run(_run_export_atif(args=args))
+        return
+
     if known_args.command == "export-thread":
         args = parser.parse_args()
         asyncio.run(_run_export_thread(args=args))
@@ -1624,6 +1680,8 @@ async def _run_export(args: argparse.Namespace) -> None:
     frames_requested = _requested_frames(raw=args.frames)
     if args.include_logs and not args.raw:
         raise SystemExit("--include-logs only affects the raw zip; pass --raw as well.")
+    if args.include_atif and not args.raw:
+        raise SystemExit("--include-atif only affects the raw zip; pass --raw as well.")
 
     selection, summaries = await _resolved_local_runs(args=args)
     records = await load_export_run_records(runs=summaries)
@@ -1666,9 +1724,12 @@ async def _run_export(args: argparse.Namespace) -> None:
         zip_path = out_dir / "runs.zip"
         try:
             with zip_path.open("wb") as handle:
-                tally = write_runs_zip(
+                # In a worker thread: the ATIF writer runs its own event loop per run.
+                tally = await asyncio.to_thread(
+                    write_runs_zip,
                     runs=summaries,
                     include_logs=args.include_logs,
+                    include_atif=args.include_atif,
                     destination=handle,
                 )
         except ExportTooLargeError as exc:
@@ -1764,6 +1825,36 @@ async def _run_analyze(args: argparse.Namespace) -> None:
         print(result.model_dump_json(indent=2))
         return
     print(render_text_table(result=result))
+
+
+async def _run_export_atif(args: argparse.Namespace) -> None:
+    """Write one ATIF trajectory file per agent to ``--out-dir``.
+
+    A seat swapped to another model mid-run gets one file per generation.
+    """
+    context = await load_atif_run_context(
+        run_dir=Path(args.run_dir).resolve(),
+        scenario_name=args.scenario_name,
+    )
+    if args.agent_id is None:
+        trajectories = build_run_trajectories(context=context, cutoff_round=args.round)
+    else:
+        trajectories = build_agent_trajectories(
+            context=context,
+            agent_id=args.agent_id,
+            cutoff_round=args.round,
+        )
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for trajectory in trajectories:
+        out_path = out_dir / trajectory_file_name(trajectory=trajectory)
+        out_path.write_text(serialize_trajectory(trajectory=trajectory) + "\n")
+        logger.info(
+            "Wrote ATIF trajectory %s (%d steps) -> %s",
+            trajectory.trajectory_id,
+            trajectory.final_metrics.total_steps,
+            out_path,
+        )
 
 
 async def _run_export_thread(args: argparse.Namespace) -> None:

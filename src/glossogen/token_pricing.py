@@ -175,3 +175,25 @@ def find_pricing(model: str) -> TokenPricing | None:
     if model in _get_self_hosted_model_names():
         return _SELF_HOSTED_PRICING
     return None
+
+
+def compute_token_cost_usd(
+    pricing: TokenPricing,
+    input_tokens: int,
+    output_tokens: int,
+    cache_read_tokens: int,
+    cache_write_tokens: int,
+) -> float:
+    """Price token counts in USD, billing cached input at the cache rates.
+
+    ``input_tokens`` includes the cache-read and cache-write tokens (the way
+    pydantic-ai and the providers report it), so those are subtracted before the
+    base input rate applies.
+    """
+    non_cached_input = max(0, input_tokens - cache_read_tokens - cache_write_tokens)
+    return (
+        non_cached_input * pricing.input_per_mtok
+        + output_tokens * pricing.output_per_mtok
+        + cache_read_tokens * pricing.cache_read_per_mtok
+        + cache_write_tokens * pricing.cache_write_per_mtok
+    ) / 1_000_000

@@ -33,13 +33,22 @@ from glossogen.runtime.activity_notification import NewMessagesNotification
 from glossogen.runtime.agent_session import AgentSession
 from glossogen.runtime.agent_swap import AgentSwapResources, execute_agent_swap
 from glossogen.runtime.game_clock import GameClock, IdleRoundEndCheck, PhaseTimeoutCheck
-from glossogen.runtime.mcp_server import build_mcp_server, start_mcp_server
+from glossogen.runtime.mcp_server import (
+    RunningMcpServer,
+    build_mcp_server,
+    start_mcp_server,
+    stop_mcp_server,
+)
 from glossogen.runtime.mcp_tools import BASE_TOOL_NAMES
 from glossogen.runtime.mcp_transport import McpTransport, MountInProcess
 from glossogen.runtime.scenario_world import WorldContext
 from glossogen.runtime.scheduled_events import ScheduledEvent, SwapAgent
 from glossogen.runtime.scheduler import RoundBoundaryScheduler
 from glossogen.runtime.simulation_state import SimulationRuntime
+from glossogen.runtime.tool_definition_listing import (
+    list_tool_definitions,
+    select_tool_definitions,
+)
 from glossogen.scenario_protocol import SimulationScenario
 
 logger = logging.getLogger(__name__)
@@ -436,6 +445,7 @@ class AutonomousSupervisor:
                     timestamp=simulation_start_time,
                 )
             )
+        tool_definitions = await list_tool_definitions(runtime=runtime)
         for config in self._agent_configs:
             # Sorted because BASE_TOOL_NAMES is a frozenset: unpacking it wrote a
             # different order on every run, so two identical runs logged
@@ -456,6 +466,10 @@ class AutonomousSupervisor:
                     max_tokens=config.max_tokens,
                     interaction_protocol=config.interaction_protocol,
                     send_back_thinking=config.send_back_thinking,
+                    tool_definitions=select_tool_definitions(
+                        definitions=tool_definitions,
+                        tool_names=all_tool_names,
+                    ),
                     round_number=0,
                 )
             )
@@ -464,23 +478,14 @@ class AutonomousSupervisor:
         if isinstance(transport, MountInProcess):
             mcp_server_url = transport.host_url
             self._mcp_server_url = mcp_server_url
-            mcp_task = None
+            mcp_server: RunningMcpServer | None = None
             self._mount_mcp_app(runtime=runtime)
         else:
             mcp_server_url = _mcp_server_url(port=transport.port)
             self._mcp_server_url = mcp_server_url
 
-            # Start MCP server as a background task.
-            mcp_task = asyncio.create_task(
-                start_mcp_server(runtime=runtime, port=transport.port),
-                name="mcp-server",
-            )
-
-            # Wait for the MCP server to become ready or detect a startup failure.
-            await self._wait_for_mcp_server(
-                mcp_task=mcp_task,
-                port=transport.port,
-            )
+            mcp_server = start_mcp_server(runtime=runtime, port=transport.port)
+            await self._wait_for_mcp_server(mcp_task=mcp_server.task, port=transport.port)
 
         # For resumed runs, inject the reconstructed message history so each
         # agent starts with proper multi-turn context of what happened.
@@ -599,16 +604,10 @@ class AutonomousSupervisor:
         # Stop the MCP server. A mounted app has no server task; its lifespan is
         # held open by a task of its own, which is closed instead.
         logger.info("Stopping MCP server")
-        if mcp_task is None:
+        if mcp_server is None:
             self._mcp_in_process_server = None
         else:
-            mcp_task.cancel()
-            try:
-                await mcp_task
-            except asyncio.CancelledError:
-                # Awaiting a task we just cancelled: the cancellation is the
-                # expected outcome, not an error, so there is nothing to log.
-                pass
+            await stop_mcp_server(running=mcp_server)
 
         total_messages = self._count_total_messages()
         await self._event_logger.log(

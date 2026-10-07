@@ -300,6 +300,38 @@ def _resume_anchor_event_id(
     return events[-1].event_id
 
 
+async def imported_seat_history_filter(cross_run_info: CrossRunManifestInfo) -> AgentHistoryFilter:
+    """The filter that seeds a cross-run's imported seat from source B's log.
+
+    Loads source B's events from ``imported_history_path`` and cuts them at Sim B's
+    ``RoundAdvanced(source_b_round_end + 1)``, or at Sim B's last event when Sim B
+    did not advance further.
+    """
+    imported_events = await load_events(log_path=cross_run_info.imported_history_path)
+    if not imported_events:
+        raise ValueError(
+            f"imported history at {cross_run_info.imported_history_path} holds no events"
+        )
+    if cross_run_info.source_b_cutoff_event_id:
+        imported_target_timestamp = find_event_timestamp(
+            events=imported_events,
+            target_event_id=cross_run_info.source_b_cutoff_event_id,
+        )
+    else:
+        imported_target_timestamp = imported_events[-1].timestamp
+    return AgentHistoryFilter(
+        tool_calls_only=False,
+        channel_visibility=cross_run_info.channel_visibility,
+        imported=ImportedHistory(
+            events=tuple(imported_events),
+            target_timestamp=imported_target_timestamp,
+            cutoff_round=cross_run_info.source_b_round_end + 1,
+        ),
+        filter_below_round=None,
+        split_parallel_tool_calls=cross_run_info.imported_provider == SELF_HOSTED_PROVIDER,
+    )
+
+
 async def _build_cross_run_resume_state(
     events: list[SimulationEvent],
     cross_run_info: CrossRunManifestInfo,
@@ -314,30 +346,9 @@ async def _build_cross_run_resume_state(
     further), and constructs an ``AgentHistoryFilter`` that redirects
     the imported agent's history reconstruction to source B's events.
     """
-    imported_events = await load_events(log_path=cross_run_info.imported_history_path)
-    if not imported_events:
-        raise ValueError(
-            f"imported history at {cross_run_info.imported_history_path} holds no events"
-        )
-    if cross_run_info.source_b_cutoff_event_id:
-        imported_target_timestamp = find_event_timestamp(
-            events=imported_events,
-            target_event_id=cross_run_info.source_b_cutoff_event_id,
-        )
-    else:
-        imported_target_timestamp = imported_events[-1].timestamp
-
-    agent_filters: dict[str, AgentHistoryFilter] = {
-        cross_run_info.replaced_agent_id: AgentHistoryFilter(
-            tool_calls_only=False,
-            channel_visibility=cross_run_info.channel_visibility,
-            imported=ImportedHistory(
-                events=tuple(imported_events),
-                target_timestamp=imported_target_timestamp,
-                cutoff_round=cross_run_info.source_b_round_end + 1,
-            ),
-            filter_below_round=None,
-            split_parallel_tool_calls=cross_run_info.imported_provider == SELF_HOSTED_PROVIDER,
+    agent_filters = {
+        cross_run_info.replaced_agent_id: await imported_seat_history_filter(
+            cross_run_info=cross_run_info
         )
     }
     base_state = build_rewind_state_at_event(
@@ -423,6 +434,21 @@ def _load_fork_at_round_state(
     return apply_fork_boundary(state=state, entry_round=replace_info.entry_round)
 
 
+def replaced_seat_history_filter(replace_info: ReplaceManifestInfo) -> AgentHistoryFilter:
+    """The filter that seeds a replace-agent run's replaced seat from its predecessor.
+
+    Keeps the predecessor's tool calls on visible channels from the rounds before
+    the entry round, and none of its text or thinking.
+    """
+    return AgentHistoryFilter(
+        tool_calls_only=True,
+        channel_visibility=replace_info.channel_visibility,
+        imported=None,
+        filter_below_round=replace_info.entry_round,
+        split_parallel_tool_calls=replace_info.replacement_provider == SELF_HOSTED_PROVIDER,
+    )
+
+
 def _load_replace_agent_state(
     events: list[SimulationEvent],
     replace_info: ReplaceManifestInfo,
@@ -439,13 +465,7 @@ def _load_replace_agent_state(
         target_event_id=replace_info.target_event_id,
     )
     agent_filters = {
-        replaced_agent_id: AgentHistoryFilter(
-            tool_calls_only=True,
-            channel_visibility=replace_info.channel_visibility,
-            imported=None,
-            filter_below_round=replace_info.entry_round,
-            split_parallel_tool_calls=replace_info.replacement_provider == SELF_HOSTED_PROVIDER,
-        )
+        replaced_agent_id: replaced_seat_history_filter(replace_info=replace_info),
     }
     if progress is ForkProgress.PRISTINE:
         cutoff_round: int | None = replace_info.entry_round

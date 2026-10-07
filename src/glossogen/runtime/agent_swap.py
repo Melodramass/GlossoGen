@@ -181,6 +181,7 @@ async def execute_agent_swap(
             new_model=spec.model,
             new_provider=spec.provider,
             channel_visibility=effective_channel_visibility,
+            system_prompt=seed_history_config.base_prompt,
             round_number=spec.at_round,
         )
     )
@@ -225,7 +226,14 @@ async def _drain_old_runner(
 
 
 class _SeedHistory(NamedTuple):
+    """The swapped-in agent's seed history and the prompts it was built with.
+
+    ``base_prompt`` is the scenario prompt before the communication protocol is
+    appended; ``system_prompt`` is the full prompt handed to the runner.
+    """
+
     history: list[Any]
+    base_prompt: str
     system_prompt: str
 
 
@@ -274,8 +282,8 @@ async def _build_seed_history(
     if is_workspace_action_protocol(last_registration.interaction_protocol):
         # History contains the full prompt; the replacement config stores the
         # base only, since its runner appends the selected suffix itself.
-        return _SeedHistory(history=history, system_prompt=base_prompt)
-    return _SeedHistory(history=history, system_prompt=system_prompt)
+        return _SeedHistory(history=history, base_prompt=base_prompt, system_prompt=base_prompt)
+    return _SeedHistory(history=history, base_prompt=base_prompt, system_prompt=system_prompt)
 
 
 def _install_channel_visibility(

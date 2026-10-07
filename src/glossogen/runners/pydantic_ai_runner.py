@@ -91,7 +91,7 @@ from glossogen.runtime.scenario_mcp_tool import calling_agent_id
 from glossogen.runtime.simulation_state import SimulationRuntime
 from glossogen.server.runs.streaming_event import AgentCostUpdated
 from glossogen.telemetry_round_processor import current_round_source
-from glossogen.token_pricing import find_pricing
+from glossogen.token_pricing import compute_token_cost_usd, find_pricing
 
 logger = logging.getLogger(__name__)
 
@@ -623,21 +623,13 @@ class PydanticAIRunner(AgentRunner):
                         total_cache_read_tokens += cycle_usage.cache_read_tokens
                         total_cache_write_tokens += cycle_usage.cache_write_tokens
                         if cycle_pricing is not None:
-                            # pydantic-ai (via genai-prices) includes cache tokens
-                            # in input_tokens, so subtract them before applying
-                            # the base input rate to avoid double-counting.
-                            non_cached_input = max(
-                                0,
-                                total_input_tokens
-                                - total_cache_read_tokens
-                                - total_cache_write_tokens,
+                            cumulative_cost = compute_token_cost_usd(
+                                pricing=cycle_pricing,
+                                input_tokens=total_input_tokens,
+                                output_tokens=total_output_tokens,
+                                cache_read_tokens=total_cache_read_tokens,
+                                cache_write_tokens=total_cache_write_tokens,
                             )
-                            cumulative_cost = (
-                                non_cached_input * cycle_pricing.input_per_mtok
-                                + total_output_tokens * cycle_pricing.output_per_mtok
-                                + total_cache_read_tokens * cycle_pricing.cache_read_per_mtok
-                                + total_cache_write_tokens * cycle_pricing.cache_write_per_mtok
-                            ) / 1_000_000
                             bus.publish(
                                 event=AgentCostUpdated(
                                     agent_id=agent_id,

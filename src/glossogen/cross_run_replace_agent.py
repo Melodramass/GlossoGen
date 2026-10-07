@@ -31,7 +31,6 @@ from glossogen.provider_credentials import require_reachable_models
 from glossogen.replace_agent import (
     build_model_overrides,
     collect_source_agents,
-    compose_run_id,
     refuse_boundary_with_swapped_seats,
     refuse_source_b_with_mixed_seat,
     refuse_source_b_with_swapped_seat,
@@ -42,6 +41,7 @@ from glossogen.replace_agent import (
 )
 from glossogen.run_archive import claim_run_dir, copy_run_at_event, find_event_offset
 from glossogen.run_config_validation import validate_run_config
+from glossogen.run_identity import compose_run_id
 from glossogen.run_jsonl_rewriter import (
     drop_simulation_ended,
     patch_simulation_started_scenario_config,

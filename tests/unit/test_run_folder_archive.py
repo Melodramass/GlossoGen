@@ -70,7 +70,9 @@ def _build_zip(run_dir: Path, include_logs: bool) -> zipfile.ZipFile:
     write_single_run_zip(
         run_dir=run_dir,
         run_dir_name=RUN_DIR_NAME,
+        scenario_name="veyru",
         include_logs=include_logs,
+        include_atif=False,
         destination=buffer,
     )
     buffer.seek(0)
@@ -223,7 +225,7 @@ def _summary_for(run_dir: Path, scenario_name: str) -> RunSummary:
 def _build_multi_zip(runs: list[RunSummary], include_logs: bool) -> zipfile.ZipFile:
     """Write a multi-run zip in memory and return it open for reading."""
     buffer = io.BytesIO()
-    write_runs_zip(runs=runs, include_logs=include_logs, destination=buffer)
+    write_runs_zip(runs=runs, include_logs=include_logs, include_atif=False, destination=buffer)
     buffer.seek(0)
     return zipfile.ZipFile(buffer)
 
@@ -303,4 +305,6 @@ def test_a_selection_over_the_byte_ceiling_is_refused(tmp_path: Path) -> None:
         # ``check_raw_bytes`` reads the ceiling from its own module at call time.
         patch.setattr(export_limits, "MAX_RAW_EXPORT_BYTES", 1)
         with pytest.raises(ExportTooLargeError):
-            write_runs_zip(runs=[summary], include_logs=False, destination=io.BytesIO())
+            write_runs_zip(
+                runs=[summary], include_logs=False, include_atif=False, destination=io.BytesIO()
+            )

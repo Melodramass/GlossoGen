@@ -29,10 +29,10 @@ from glossogen.db.queries import list_distinct_labels_for_group
 from glossogen.db.queries import list_runs_for_group as db_list_runs_for_group
 from glossogen.knob_filter import KnobFilter, matches_knob_filters
 from glossogen.models.event import RunStatus
+from glossogen.run_identity import compose_run_id
 from glossogen.server.runs.discovery import (
     RunDescriptor,
     build_summary,
-    compose_run_id,
     discover_run_descriptors,
     read_run_labels,
     read_scenario_config,
@@ -369,9 +369,7 @@ async def list_runs_page(
         page = await _build_summaries(runs_dir=runs_dir, descriptors=window)
         # The page's summaries just read labels.json anyway; repair the rows'
         # labels mirror where a direct file write left it behind.
-        await heal_label_mirror(
-            pool=pool, group_id=group_id, descriptors=window, summaries=page
-        )
+        await heal_label_mirror(pool=pool, group_id=group_id, descriptors=window, summaries=page)
         return PaginatedRuns(runs=page, total=total, next_cursor=next_cursor)
 
     summaries = await _build_summaries(runs_dir=runs_dir, descriptors=descriptors)

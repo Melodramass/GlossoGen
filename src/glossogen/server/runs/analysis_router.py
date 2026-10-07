@@ -73,9 +73,7 @@ async def _selected_records(
 
     async def load() -> list[AnalysisRunRecord]:
         """Read every selected run's report, keeping only what a query reads."""
-        return await load_analysis_records(
-            runs=resolved.summaries, read_sidecars=read_sidecars
-        )
+        return await load_analysis_records(runs=resolved.summaries, read_sidecars=read_sidecars)
 
     records = await cache.records(
         key=key,
@@ -92,9 +90,7 @@ async def analysis_fields(
     request: Request,
 ) -> AnalysisFieldCatalog:
     """Describe what this selection can be grouped, filtered, and measured by."""
-    selected = await _selected_records(
-        request=request, selection=body.selection, grain=body.grain
-    )
+    selected = await _selected_records(request=request, selection=body.selection, grain=body.grain)
     catalog = build_field_catalog(records=selected.records, grain=body.grain)
     return catalog.model_copy(update={"missing_run_ids": selected.missing_run_ids})
 
