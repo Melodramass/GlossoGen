@@ -94,6 +94,10 @@ the commit log.
   `model_catalog.py`, without prices.
 
 ### Fixed
+- A round's injection in the run viewer keeps its line breaks when expanded. It
+  rendered as Markdown, which joins consecutive lines, so a line-per-item briefing
+  such as a recipe list ran together on one line. A briefing the two-line preview
+  cuts short now offers "Show full briefing" beneath it.
 - An evaluation judged by an OpenAI model no longer bills cached input twice. The
   Responses API counts cached tokens inside `input_tokens`, and the judge recorded
   that count as the non-cached input.

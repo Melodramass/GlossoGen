@@ -327,4 +327,36 @@ describe("chat virtualization", () => {
     await clickButton("Injection");
     expect(container.querySelector("strong")).toBeNull();
   });
+
+  it("offers the full briefing when the preview cuts it and keeps its lines apart", async () => {
+    const value = props(1);
+    const text =
+      "Round 1. TEAM TASK\nAll crafters got this.\n\nALL RECIPES\ncraft 1 a using 1 b\ncraft 1 c using 1 d";
+    value.roundInjections = [
+      { round_number: 1, agent_id: "member_1", text, timestamp: value.messages[0]!.timestamp },
+    ];
+    await render(value);
+    await clickButton("Show full briefing");
+    const recipes = [...container.querySelectorAll("p")].find(el =>
+      el.textContent?.startsWith("ALL RECIPES")
+    );
+    expect(recipes?.textContent).toBe("ALL RECIPES\ncraft 1 a using 1 b\ncraft 1 c using 1 d");
+    expect(recipes?.closest("[class*='whitespace-pre-line']")).not.toBeNull();
+    expect(container.textContent).not.toContain("Show full briefing");
+  });
+
+  it("offers no expansion for a briefing the preview already shows whole", async () => {
+    const value = props(1);
+    value.roundInjections = [
+      {
+        round_number: 1,
+        agent_id: "member_1",
+        text: "Round 2 begins.",
+        timestamp: value.messages[0]!.timestamp,
+      },
+    ];
+    await render(value);
+    expect(container.textContent).toContain("Round 2 begins.");
+    expect(container.textContent).not.toContain("Show full briefing");
+  });
 });
