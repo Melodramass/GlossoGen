@@ -118,6 +118,13 @@ def _scan_jsonl_sync(file_path: Path) -> _SinglePassResult:
                         provider=raw.get("provider", ""),
                         at=datetime.fromisoformat(raw["timestamp"]),
                     )
+            elif event_type == "agent_swapped_mid_run":
+                # Responses after the swap are billed at the swapped-in model's rates.
+                pricing_by_agent[raw["agent_id"]] = find_pricing(
+                    model=raw["new_model"],
+                    provider=raw["new_provider"],
+                    at=datetime.fromisoformat(raw["timestamp"]),
+                )
             elif event_type == "message_sent":
                 message_count += 1
             elif event_type == "llm_response_received":
