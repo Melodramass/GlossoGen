@@ -389,6 +389,80 @@
         }
       }
     },
+    "/api/g/{group_slug}/runs/{scenario}/{run_dir_name}/agents/{agent_id}/atif": {
+      "get": {
+        "summary": "Get Agent Atif Export",
+        "description": "Export one agent as ATIF trajectories, one per generation of its seat.\n\n``round`` is the exclusive cutoff, as for the thread export.",
+        "operationId": "get_agent_atif_export_api_g__group_slug__runs__scenario___run_dir_name__agents__agent_id__atif_get",
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scenario"
+            }
+          },
+          {
+            "name": "run_dir_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Dir Name"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Agent Id"
+            }
+          },
+          {
+            "name": "round",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Round"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AtifAgentExport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/g/{group_slug}/runs/{scenario}/{run_dir_name}/evaluation": {
       "get": {
         "summary": "Get Run Evaluation",
@@ -1121,7 +1195,7 @@
     "/api/g/{group_slug}/runs/{scenario}/{run_dir_name}/export/zip": {
       "get": {
         "summary": "Export Run Zip",
-        "description": "Export a simulation run as a ``{run_dir_name}.zip`` for manual extraction.",
+        "description": "Export a simulation run as a ``{run_dir_name}.zip`` for manual extraction.\n\nEach agent's ATIF trajectory is included under ``atif/``.",
         "operationId": "export_run_zip_api_g__group_slug__runs__scenario___run_dir_name__export_zip_get",
         "parameters": [
           {
@@ -2661,6 +2735,410 @@
         ],
         "title": "AnthropicToolUseBlock",
         "description": "Anthropic ``tool_use`` content block carrying the call's arguments object."
+      },
+      "AtifAgent": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name"
+          },
+          "tool_definitions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Tool Definitions"
+          },
+          "extra": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Extra"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "version",
+          "model_name",
+          "tool_definitions",
+          "extra"
+        ],
+        "title": "AtifAgent",
+        "description": "The agent the trajectory belongs to."
+      },
+      "AtifAgentExport": {
+        "properties": {
+          "trajectories": {
+            "items": {
+              "$ref": "#/components/schemas/AtifTrajectory"
+            },
+            "type": "array",
+            "title": "Trajectories"
+          }
+        },
+        "type": "object",
+        "required": [
+          "trajectories"
+        ],
+        "title": "AtifAgentExport",
+        "description": "One agent's trajectories: a single one, or one per generation for a swapped seat."
+      },
+      "AtifFinalMetrics": {
+        "properties": {
+          "total_prompt_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Prompt Tokens"
+          },
+          "total_completion_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Completion Tokens"
+          },
+          "total_cached_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Cached Tokens"
+          },
+          "total_cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Cost Usd"
+          },
+          "total_steps": {
+            "type": "integer",
+            "title": "Total Steps"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_prompt_tokens",
+          "total_completion_tokens",
+          "total_cached_tokens",
+          "total_cost_usd",
+          "total_steps"
+        ],
+        "title": "AtifFinalMetrics",
+        "description": "Totals over the steps played in this run.\n\nThe token and cost totals are ``None`` when no step carries metrics, and\n``total_cost_usd`` is also ``None`` when a model carrying usage has no pricing."
+      },
+      "AtifMetrics": {
+        "properties": {
+          "prompt_tokens": {
+            "type": "integer",
+            "title": "Prompt Tokens"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "title": "Completion Tokens"
+          },
+          "cached_tokens": {
+            "type": "integer",
+            "title": "Cached Tokens"
+          },
+          "cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Usd"
+          },
+          "extra": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Extra"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt_tokens",
+          "completion_tokens",
+          "cached_tokens",
+          "cost_usd",
+          "extra"
+        ],
+        "title": "AtifMetrics",
+        "description": "Token usage and cost of the agent cycle one agent step closes.\n\n``prompt_tokens`` includes cached tokens, as ATIF defines it.\n``cost_usd`` is ``None`` when the model has no pricing entry."
+      },
+      "AtifObservation": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/AtifObservationResult"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "results"
+        ],
+        "title": "AtifObservation",
+        "description": "Environment feedback for the tool calls of one agent step."
+      },
+      "AtifObservationResult": {
+        "properties": {
+          "source_call_id": {
+            "type": "string",
+            "title": "Source Call Id"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_call_id",
+          "content"
+        ],
+        "title": "AtifObservationResult",
+        "description": "The result of one tool call, linked back by ``source_call_id``."
+      },
+      "AtifStep": {
+        "properties": {
+          "step_id": {
+            "type": "integer",
+            "title": "Step Id"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          },
+          "source": {
+            "$ref": "#/components/schemas/AtifStepSource"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "reasoning_content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Content"
+          },
+          "tool_calls": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AtifToolCall"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Calls"
+          },
+          "observation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AtifObservation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metrics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AtifMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_copied_context": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Copied Context"
+          },
+          "llm_call_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Call Count"
+          },
+          "extra": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Extra"
+          }
+        },
+        "type": "object",
+        "required": [
+          "step_id",
+          "timestamp",
+          "source",
+          "message",
+          "model_name",
+          "reasoning_content",
+          "tool_calls",
+          "observation",
+          "metrics",
+          "is_copied_context",
+          "llm_call_count",
+          "extra"
+        ],
+        "title": "AtifStep",
+        "description": "One system, user, or agent turn.\n\n``model_name``, ``reasoning_content``, ``tool_calls``, ``observation`` and\n``metrics`` are only set on agent steps. ``is_copied_context`` is ``True`` on a\nstep the agent received as history from another run or another seat, and\n``None`` otherwise. ``timestamp`` is ``None`` on seed history and runner\nprompts, which record no times. ``llm_call_count`` is set on the agent step\nwhose ``metrics`` aggregate a whole agent cycle: the number of responses in\nthat cycle."
+      },
+      "AtifStepSource": {
+        "type": "string",
+        "enum": [
+          "system",
+          "user",
+          "agent"
+        ],
+        "title": "AtifStepSource",
+        "description": "Who originated a step."
+      },
+      "AtifToolCall": {
+        "properties": {
+          "tool_call_id": {
+            "type": "string",
+            "title": "Tool Call Id"
+          },
+          "function_name": {
+            "type": "string",
+            "title": "Function Name"
+          },
+          "arguments": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Arguments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tool_call_id",
+          "function_name",
+          "arguments"
+        ],
+        "title": "AtifToolCall",
+        "description": "One function invocation made by the agent."
+      },
+      "AtifTrajectory": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "ATIF-v1.8",
+            "title": "Schema Version"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "trajectory_id": {
+            "type": "string",
+            "title": "Trajectory Id"
+          },
+          "agent": {
+            "$ref": "#/components/schemas/AtifAgent"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/AtifStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "final_metrics": {
+            "$ref": "#/components/schemas/AtifFinalMetrics"
+          },
+          "extra": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Extra"
+          }
+        },
+        "type": "object",
+        "required": [
+          "schema_version",
+          "session_id",
+          "trajectory_id",
+          "agent",
+          "steps",
+          "final_metrics",
+          "extra"
+        ],
+        "title": "AtifTrajectory",
+        "description": "One agent's trajectory through one run, or through one generation of a swapped seat."
       },
       "Body_import_run_bundle_api_g__group_slug__runs_import_post": {
         "properties": {
@@ -5104,15 +5582,20 @@
           "include_logs": {
             "type": "boolean",
             "title": "Include Logs"
+          },
+          "include_atif": {
+            "type": "boolean",
+            "title": "Include Atif"
           }
         },
         "type": "object",
         "required": [
           "selection",
-          "include_logs"
+          "include_logs",
+          "include_atif"
         ],
         "title": "RawExportRequest",
-        "description": "Body for the raw run-folder zip."
+        "description": "Body for the raw run-folder zip.\n\n``include_atif`` adds each agent's ATIF trajectory, generated from the run's\nevent log, under ``atif/`` in every run's folder."
       },
       "ReasoningEntry": {
         "properties": {

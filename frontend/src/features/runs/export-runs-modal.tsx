@@ -195,6 +195,7 @@ export function ExportRunsModal({ onClose }: { onClose: () => void }) {
     selectedRunIds.size > 0 ? "explicit" : "filters"
   );
   const [includeLogs, setIncludeLogs] = useState(false);
+  const [includeAtif, setIncludeAtif] = useState(true);
   const [frames, setFrames] = useState<Set<ExportFrame>>(new Set<ExportFrame>(["run_level"]));
   const [columnKeys, setColumnKeys] = useState<ReadonlySet<string>>(new Set());
   const [metricNames, setMetricNames] = useState<ReadonlySet<string>>(new Set());
@@ -322,6 +323,7 @@ export function ExportRunsModal({ onClose }: { onClose: () => void }) {
         const body: components["schemas"]["RawExportRequest"] = {
           selection,
           include_logs: includeLogs,
+          include_atif: includeAtif,
         };
         await downloadAuthenticatedFile({
           path: "/api/g/{group_slug}/runs/export/raw",
@@ -538,6 +540,15 @@ export function ExportRunsModal({ onClose }: { onClose: () => void }) {
                         className="rounded border-input"
                       />
                       Include debug and stdout logs
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-2 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={includeAtif}
+                        onChange={() => setIncludeAtif(!includeAtif)}
+                        className="rounded border-input"
+                      />
+                      Include ATIF trajectories (one per agent)
                     </label>
                     <p className="text-[11px] text-muted-foreground">
                       {rawEstimate === null

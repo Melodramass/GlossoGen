@@ -85,6 +85,13 @@ async def test_a_full_round_writes_everything_to_the_jsonl(
     registered = {e["agent_id"] for e in result.of_type(event_type="agent_registered")}
     assert registered == {FIRST_AGENT_ID, SECOND_AGENT_ID}
 
+    # Each registration records the schema of every tool the agent is offered,
+    # the scenario's own tool included.
+    for registration in result.of_type(event_type="agent_registered"):
+        schemas = {d["name"]: d for d in registration["tool_definitions"]}
+        assert sorted(schemas) == registration["tool_names"]
+        assert "finding" in schemas[RECORD_TOOL_NAME]["input_schema"]["properties"]
+
     # The round opened and each agent received its injection.
     injections = result.of_type(event_type="injection_delivered")
     assert {e["agent_id"] for e in injections} == {FIRST_AGENT_ID, SECOND_AGENT_ID}

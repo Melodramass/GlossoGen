@@ -14,6 +14,8 @@ import orjson
 from fastapi import APIRouter, HTTPException, Query, Request
 from starlette.responses import StreamingResponse
 
+from glossogen.atif_export.atif_models import AtifAgentExport
+from glossogen.atif_export.atif_trajectory_builder import build_agent_trajectories_from_run_dir
 from glossogen.db.queries import update_run_evaluation_content_hash, update_run_labels
 from glossogen.eval_manifest import read_eval_manifest
 from glossogen.evaluation.reports.evaluation_report import (
@@ -28,6 +30,7 @@ from glossogen.knob_filter import (
 )
 from glossogen.models.event import RunStatus, SimulationEnded
 from glossogen.run_archive import move_run_to_trash
+from glossogen.run_identity import compose_run_id
 from glossogen.scenario_loader import find_scenario_class
 from glossogen.server.response_models import LaunchStatus
 from glossogen.server.runs.branch_sources import list_branch_sources_for_group
@@ -38,7 +41,7 @@ from glossogen.server.runs.detail_reader import (
     load_evaluation_report,
     load_run_detail,
 )
-from glossogen.server.runs.discovery import compose_run_id, scan_jsonl
+from glossogen.server.runs.discovery import scan_jsonl
 from glossogen.server.runs.label_mirror import heal_run_labels_after_read
 from glossogen.server.runs.listing import (
     invalidate_labels_cache,
@@ -223,6 +226,37 @@ async def get_agent_thread_export(
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get(
+    "/runs/{scenario}/{run_dir_name}/agents/{agent_id}/atif",
+    response_model=AtifAgentExport,
+    response_model_exclude_none=True,
+)
+async def get_agent_atif_export(
+    scenario: str,
+    run_dir_name: str,
+    agent_id: str,
+    request: Request,
+    cutoff_round: int | None = Query(default=None, alias="round"),
+) -> AtifAgentExport:
+    """Export one agent as ATIF trajectories, one per generation of its seat.
+
+    ``round`` is the exclusive cutoff, as for the thread export.
+    """
+    resolved = await resolve_run_or_404(
+        request=request, scenario=scenario, run_dir_name=run_dir_name
+    )
+    try:
+        trajectories = await build_agent_trajectories_from_run_dir(
+            run_dir=resolved.run_dir,
+            scenario_name=resolved.scenario_name,
+            agent_id=agent_id,
+            cutoff_round=cutoff_round,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return AtifAgentExport(trajectories=trajectories)
 
 
 @router.get("/runs/{scenario}/{run_dir_name}/evaluation", response_model=EvalReportResponse | None)

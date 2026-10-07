@@ -21,7 +21,7 @@ from pydantic import Discriminator, TypeAdapter
 
 from glossogen.models.event_base import EventBase, TokenUsage
 from glossogen.models.message import SimulationMessage
-from glossogen.models.tool_definition import ToolCallRequest
+from glossogen.models.tool_definition import RecordedToolDefinition, ToolCallRequest
 from glossogen.runtime.scheduled_events import ChannelVisibility
 from glossogen.scenario_submodule_discovery import concrete_subclasses, import_scenario_submodules
 
@@ -41,6 +41,9 @@ class SimulationStarted(EventBase):
 class AgentRegistered(EventBase):
     """Emitted when an agent joins the simulation, capturing its
     role, prompt, channels, and tools.
+
+    ``tool_definitions`` holds the schema of every tool in ``tool_names``. It
+    defaults to empty so that logs recorded before schemas were logged still parse.
     """
 
     event_type: Literal["agent_registered"] = "agent_registered"
@@ -52,6 +55,7 @@ class AgentRegistered(EventBase):
     model: str
     provider: str
     max_tokens: int
+    tool_definitions: list[RecordedToolDefinition] = []
 
 
 class AgentConnected(EventBase):
@@ -260,6 +264,10 @@ class AgentSwappedMidRun(EventBase):
     used when reconstructing the new agent's pydantic-ai history. Used
     by resume-aware metrics to compute per-swap performance windows
     (replaces ``replace_manifest.json`` for in-run swaps).
+
+    ``system_prompt`` is the base prompt the swapped-in agent was seeded with:
+    the swap's own when it set one, otherwise the seat's registered prompt. It
+    defaults to ``None`` so that logs recorded before it was logged still parse.
     """
 
     event_type: Literal["agent_swapped_mid_run"] = "agent_swapped_mid_run"
@@ -267,6 +275,7 @@ class AgentSwappedMidRun(EventBase):
     new_model: str
     new_provider: str
     channel_visibility: dict[str, ChannelVisibility]
+    system_prompt: str | None = None
 
 
 class PostmortemDisabledMidRun(EventBase):

@@ -17,6 +17,7 @@ from glossogen.eval_manifest import read_eval_manifest
 from glossogen.event_parsing import parse_event_bytes
 from glossogen.models.event import RunStatus, SimulationEnded, SimulationStarted
 from glossogen.replace_manifest import boundary_round_of, rounds_after_of
+from glossogen.run_identity import compose_run_id
 from glossogen.server.runs.manifest_sources import (
     read_cross_run_replace_agent_source,
     read_fork_at_round_source,
@@ -32,7 +33,7 @@ from glossogen.server.runs.models import (
     RunSummary,
 )
 from glossogen.stream_manifest import delete_manifest, read_manifest
-from glossogen.token_pricing import TokenPricing, find_pricing
+from glossogen.token_pricing import TokenPricing, compute_token_cost_usd, find_pricing
 
 logger = logging.getLogger(__name__)
 
@@ -56,25 +57,6 @@ class _SinglePassResult(NamedTuple):
     message_count: int
     cost_usd: float
     current_round: int
-
-
-def _compute_cost(
-    pricing: TokenPricing | None,
-    input_tokens: int,
-    output_tokens: int,
-    cache_read: int,
-    cache_write: int,
-) -> float:
-    """Compute USD cost from token totals using the given pricing record."""
-    if pricing is None or input_tokens + output_tokens + cache_read + cache_write == 0:
-        return 0.0
-    non_cached_input = max(0, input_tokens - cache_read - cache_write)
-    return (
-        non_cached_input * pricing.input_per_mtok
-        + output_tokens * pricing.output_per_mtok
-        + cache_read * pricing.cache_read_per_mtok
-        + cache_write * pricing.cache_write_per_mtok
-    ) / 1_000_000
 
 
 def _scan_jsonl_sync(file_path: Path) -> _SinglePassResult:
@@ -136,15 +118,14 @@ def _scan_jsonl_sync(file_path: Path) -> _SinglePassResult:
                 message_count += 1
             elif event_type == "llm_response_received":
                 usage = raw.get("usage")
-                if usage is not None:
-                    agent_id = raw.get("agent_id", "")
-                    pricing = pricing_by_agent.get(agent_id)
-                    cost_usd += _compute_cost(
+                pricing = pricing_by_agent.get(raw.get("agent_id", ""))
+                if usage is not None and pricing is not None:
+                    cost_usd += compute_token_cost_usd(
                         pricing=pricing,
                         input_tokens=usage.get("input_tokens", 0),
                         output_tokens=usage.get("output_tokens", 0),
-                        cache_read=usage.get("cache_read_input_tokens", 0),
-                        cache_write=usage.get("cache_creation_input_tokens", 0),
+                        cache_read_tokens=usage.get("cache_read_input_tokens", 0),
+                        cache_write_tokens=usage.get("cache_creation_input_tokens", 0),
                     )
             elif event_type == "round_advanced":
                 round_number = raw.get("round_number", 0)
@@ -318,11 +299,6 @@ class ResolvedRun(NamedTuple):
     run_dir: Path
     scenario_name: str
     db_labels: list[str] | None
-
-
-def compose_run_id(scenario_name: str, run_dir_name: str) -> str:
-    """Build the canonical run identifier from its two path components."""
-    return f"{scenario_name}/{run_dir_name}"
 
 
 def _timestamp_from_dir(dir_name: str) -> datetime:

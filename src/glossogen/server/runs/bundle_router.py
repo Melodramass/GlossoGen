@@ -25,11 +25,12 @@ from glossogen.models.event import RunStatus, SimulationStarted
 from glossogen.run_archive import claim_run_dir, strip_legacy_git_dir
 from glossogen.run_export.archive_member_filter import should_include_in_archive
 from glossogen.run_export.runs_zip_archive import write_single_run_zip
+from glossogen.run_identity import compose_run_id
 from glossogen.run_lineage import read_timeline_parent
 from glossogen.server.runs.archive_streaming_response import (
     build_temp_file_archive_response,
 )
-from glossogen.server.runs.discovery import compose_run_id, read_run_labels
+from glossogen.server.runs.discovery import read_run_labels
 from glossogen.server.runs.listing import list_runs_for_group
 from glossogen.server.runs.lookup import register_new_run, resolve_run_or_404
 from glossogen.server.runs.models import BundleManifest, ImportBundleResponse
@@ -159,7 +160,10 @@ async def export_run_zip(
     run_dir_name: str,
     request: Request,
 ) -> StreamingResponse:
-    """Export a simulation run as a ``{run_dir_name}.zip`` for manual extraction."""
+    """Export a simulation run as a ``{run_dir_name}.zip`` for manual extraction.
+
+    Each agent's ATIF trajectory is included under ``atif/``.
+    """
     resolved = await resolve_run_or_404(
         request=request,
         scenario=scenario,
@@ -172,7 +176,9 @@ async def export_run_zip(
         write_single_run_zip(
             run_dir=resolved.run_dir,
             run_dir_name=folder_name,
+            scenario_name=resolved.scenario_name,
             include_logs=False,
+            include_atif=True,
             destination=destination,
         )
 

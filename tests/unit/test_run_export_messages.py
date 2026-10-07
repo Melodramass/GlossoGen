@@ -26,6 +26,7 @@ from glossogen.evaluation.log_reader import load_events
 from glossogen.evaluation.metric_core.character_entropy import character_entropy_bits
 from glossogen.evaluation.metric_core.gzip_compression import gzip_compression_ratio
 from glossogen.models.event import RunStatus
+from glossogen.recorded_scenario_rebuild import candidate_configs
 from glossogen.run_export.csv_export_archive import build_legend_frame
 from glossogen.run_export.export_request_models import (
     CsvExportRequest,
@@ -37,10 +38,7 @@ from glossogen.run_export.label_value_columns import label_cells_by_key
 from glossogen.run_export.message_event_scan import scan_message_events
 from glossogen.run_export.message_level_frame import build_message_level_frame
 from glossogen.run_export.model_weight_class import model_class_of
-from glossogen.run_export.primary_channel_resolution import (
-    candidate_configs,
-    resolve_primary_channels,
-)
+from glossogen.run_export.primary_channel_resolution import resolve_primary_channels
 from glossogen.run_export.round_context_frame import build_round_context_frame
 from glossogen.run_export.run_message_records import load_run_injections, load_run_messages
 from glossogen.scenario_loader import get_scenario_class

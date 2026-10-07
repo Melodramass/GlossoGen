@@ -11,10 +11,12 @@ again when a tool is actually called, so an agent that guesses a name it was
 never shown is still refused.
 """
 
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any, Protocol, cast
+from typing import Any, NamedTuple, Protocol, cast
 
+import uvicorn
 from mcp.server.context import ServerMiddleware, ServerRequestContext
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ListToolsResult
@@ -153,16 +155,49 @@ def build_mcp_server(runtime: SimulationRuntime) -> MCPServer:
     return mcp
 
 
-async def start_mcp_server(runtime: SimulationRuntime, port: int) -> None:
-    """Create the filtering MCP server, register tools, and serve over HTTP.
+MCP_SERVER_HOST = "127.0.0.1"
 
-    Blocks until the server is shut down. Intended to be run as an asyncio task
-    alongside the game clock and agent runners.
+
+class RunningMcpServer(NamedTuple):
+    """A served MCP server: the uvicorn server and the task running ``serve()``."""
+
+    server: uvicorn.Server
+    task: asyncio.Task[None]
+
+
+def start_mcp_server(runtime: SimulationRuntime, port: int) -> RunningMcpServer:
+    """Serve the filtering MCP server over Streamable HTTP as a task on the current loop.
+
+    The uvicorn server is built here rather than by
+    ``MCPServer.run_streamable_http_async`` so that ``stop_mcp_server`` can hold it.
     """
     mcp = build_mcp_server(runtime=runtime)
+    config = uvicorn.Config(
+        mcp.streamable_http_app(host=MCP_SERVER_HOST),
+        host=MCP_SERVER_HOST,
+        port=port,
+        log_level=mcp.settings.log_level.lower(),
+    )
+    server = uvicorn.Server(config)
     logger.info("Starting MCP server on port %d", port)
+    task = asyncio.create_task(_serve_mcp_server(server=server, port=port), name="mcp-server")
+    return RunningMcpServer(server=server, task=task)
+
+
+async def _serve_mcp_server(server: uvicorn.Server, port: int) -> None:
     try:
-        await mcp.run_streamable_http_async(host="127.0.0.1", port=port)
+        await server.serve()
     except Exception:
         logger.exception("MCP server exited unexpectedly on port %d", port)
         raise
+
+
+async def stop_mcp_server(running: RunningMcpServer) -> None:
+    """Ask the server to exit and wait for its task to end.
+
+    Sets ``should_exit`` rather than cancelling the task: a cancelled ``serve()`` is
+    interrupted inside Starlette's lifespan, which reports the cancellation as
+    ``lifespan.shutdown.failed``, and uvicorn logs that traceback at ERROR.
+    """
+    running.server.should_exit = True
+    await running.task

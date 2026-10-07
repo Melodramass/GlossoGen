@@ -22,6 +22,8 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import AnyHttpUrl
 
+from glossogen.atif_export.atif_models import AtifAgentExport
+from glossogen.atif_export.atif_trajectory_builder import build_agent_trajectories_from_run_dir
 from glossogen.evaluation.reports.evaluation_report import EvaluationReport
 from glossogen.mcp_tool_rejection import surface_value_errors
 from glossogen.scenario_loader import get_scenario_class, iter_scenario_classes
@@ -721,6 +723,22 @@ async def _tool_export_agent_thread(
     )
 
 
+async def _tool_export_agent_atif(
+    run_id: str,
+    agent_id: str,
+    cutoff_round: int | None = None,
+) -> AtifAgentExport:
+    """Export one agent as ATIF trajectories, one per generation of its seat."""
+    run_summary = await _find_run_by_prefix(run_id_prefix=run_id)
+    trajectories = await build_agent_trajectories_from_run_dir(
+        run_dir=Path(run_summary.run_dir),
+        scenario_name=run_summary.scenario_name,
+        agent_id=agent_id,
+        cutoff_round=cutoff_round,
+    )
+    return AtifAgentExport(trajectories=trajectories)
+
+
 # ---------------------------------------------------------------------------
 # Tool registration table
 # ---------------------------------------------------------------------------
@@ -801,6 +819,15 @@ _TOOL_DEFS: list[tuple[str, str, Any]] = [
         "append your own trailing user message (and max_tokens for Anthropic) and send it to "
         "the provider. Accepts a full run_id or a unique prefix.",
         _tool_export_agent_thread,
+    ),
+    (
+        "export_agent_atif",
+        "Export one agent from a run as ATIF (Agent Trajectory Interchange Format) "
+        "trajectories: system prompt, scenario injections as user steps, each LLM response "
+        "with its tool calls and their results, and token usage and cost. A seat swapped to "
+        "another model mid-run yields one trajectory per generation. Set cutoff_round=R to "
+        "keep rounds 1..R-1. Accepts a full run_id or a unique prefix.",
+        _tool_export_agent_atif,
     ),
 ]
 

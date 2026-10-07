@@ -122,10 +122,15 @@ class ExportPreviewRequest(BaseModel):
 
 
 class RawExportRequest(BaseModel):
-    """Body for the raw run-folder zip."""
+    """Body for the raw run-folder zip.
+
+    ``include_atif`` adds each agent's ATIF trajectory, generated from the run's
+    event log, under ``atif/`` in every run's folder.
+    """
 
     selection: RunSelection
     include_logs: bool
+    include_atif: bool
 
 
 class CsvExportRequest(BaseModel):
