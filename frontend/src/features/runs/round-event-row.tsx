@@ -57,6 +57,14 @@ export function RoundInjectionRow({ injections, roleNameForAgent }: RoundInjecti
   );
 }
 
+const PREVIEW_CHARACTERS = 300;
+const PREVIEW_LINES = 2;
+
+/** Whether the collapsed preview hides part of the briefing. */
+function previewIsPartial(text: string): boolean {
+  return text.length > PREVIEW_CHARACTERS || text.split("\n").length > PREVIEW_LINES;
+}
+
 function InjectionEntry({ group }: { group: InjectionGroup }) {
   const [expanded, setExpanded] = useState(false);
   const ChevronIcon = expanded ? ChevronDown : ChevronRight;
@@ -75,14 +83,27 @@ function InjectionEntry({ group }: { group: InjectionGroup }) {
         <ChevronIcon className="ml-auto h-3 w-3 shrink-0 text-amber-600/60 dark:text-amber-400/60" />
       </button>
       {expanded ? (
-        <ProseMarkdown className="mt-1 text-amber-900/80 dark:text-amber-200/80">
+        // Briefings are mostly line-oriented plain text, where Markdown would
+        // join consecutive lines into one; paragraphs keep the author's breaks.
+        <ProseMarkdown className="mt-1 text-amber-900/80 dark:text-amber-200/80 [&_p]:whitespace-pre-line">
           {group.text}
         </ProseMarkdown>
       ) : (
-        <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-amber-900/80 dark:text-amber-200/80">
-          {group.text.slice(0, 300)}
-          {group.text.length > 300 ? "…" : ""}
-        </p>
+        <>
+          <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-amber-900/80 dark:text-amber-200/80">
+            {group.text.slice(0, PREVIEW_CHARACTERS)}
+            {group.text.length > PREVIEW_CHARACTERS ? "…" : ""}
+          </p>
+          {previewIsPartial(group.text) ? (
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              className="mt-0.5 font-medium text-amber-700 hover:underline dark:text-amber-300"
+            >
+              Show full briefing
+            </button>
+          ) : null}
+        </>
       )}
     </div>
   );
