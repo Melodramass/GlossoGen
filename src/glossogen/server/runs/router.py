@@ -28,6 +28,7 @@ from glossogen.knob_filter import (
     KnobFilterParseError,
     parse_knob_filters,
 )
+from glossogen.model_catalog import list_providers
 from glossogen.models.event import RunStatus, SimulationEnded
 from glossogen.run_archive import move_run_to_trash
 from glossogen.run_identity import compose_run_id
@@ -74,7 +75,6 @@ from glossogen.thread_export.export_agent_thread import (
     export_agent_thread_from_run_dir,
 )
 from glossogen.thread_export.thread_export_models import ThreadExport
-from glossogen.token_pricing import list_providers
 
 logger = logging.getLogger(__name__)
 

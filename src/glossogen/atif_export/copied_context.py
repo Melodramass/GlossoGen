@@ -18,6 +18,7 @@ from pydantic_ai.messages import ModelMessage
 
 from glossogen.message_history_builder import build_message_history
 from glossogen.message_rewind import AgentHistoryFilter, build_rewind_state_at_event
+from glossogen.model_catalog import SELF_HOSTED_PROVIDER
 from glossogen.models.event import AgentRegistered, AgentSwappedMidRun, SimulationEvent
 from glossogen.resume_state_loader import (
     imported_seat_history_filter,
@@ -26,7 +27,6 @@ from glossogen.resume_state_loader import (
     replaced_seat_history_filter,
 )
 from glossogen.runners.communication_protocol import build_full_system_prompt
-from glossogen.token_pricing import SELF_HOSTED_PROVIDER
 
 
 class CopiedContext(NamedTuple):

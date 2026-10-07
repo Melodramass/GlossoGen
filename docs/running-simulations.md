@@ -130,10 +130,8 @@ glossogen run veyru \
 ```
 
 Deploying on Modal, and running locally with Ollama or MLX, are covered in
-[Self-hosted models](local-inference-vllm-mlx.md). Pricing is keyed by
-literal model name in
-[token_pricing.py](../src/glossogen/token_pricing.py). Add an entry there for a
-model it does not know.
+[Self-hosted models](local-inference-vllm-mlx.md). A self-hosted model's tokens
+are priced at zero, since its GPU time is billed elsewhere.
 
 **Watch the context budget.** Self-hosted models are served at a small fixed
 context, and `input + agent_max_tokens` must stay under it or the server rejects the
@@ -182,16 +180,18 @@ The knobs that drive spend, roughly in order of impact:
 | Knob | Effect |
 |---|---|
 | `round_count` | Rounds per run, the main multiplier |
-| Model choice | The largest single factor. The models priced in `token_pricing.py` span 25× on input tokens and 20× on output, from `gpt-5.4-nano` to the Opus tier |
+| Model choice | The largest single factor. The models the pickers offer span 25× on input tokens and 20× on output, from `gpt-5.4-nano` to the Opus tier |
 | `max_round_duration_seconds` | Ceiling on how long agents keep talking before a round is cut off |
 | `agent_max_tokens` | Per-turn output cap (default `16384`) |
 | Number of agents | Each one is an independent conversation |
 | `--probe-replicas` | Evaluation only: multiplies probe calls per agent per question |
 
 What a run itself spent is on its last event: `simulation_ended` carries
-`total_cost_usd`, priced from
-[token_pricing.py](../src/glossogen/token_pricing.py). The web UI reads it, and so
-does `grep`:
+`total_cost_usd`, priced from the
+[genai-prices](https://github.com/pydantic/genai-prices) catalog at the rates in
+effect when the run started (see
+[token_pricing.py](../src/glossogen/token_pricing.py)). A model that catalog does
+not know is not costed. The web UI reads it, and so does `grep`:
 
 ```bash
 grep '"simulation_ended"' ./runs/<scenario>/<timestamp>/<scenario>.jsonl

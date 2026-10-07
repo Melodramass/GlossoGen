@@ -40,6 +40,7 @@ from glossogen.evaluation.metrics.protocol_probe.probe_agent import run_structur
 from glossogen.evaluation.reports.evaluation_cost import EvaluationTokenUsage
 from glossogen.llm.provider import LLMProvider
 from glossogen.message_history_builder import build_message_history
+from glossogen.model_catalog import SELF_HOSTED_PROVIDER
 from glossogen.models.agent_config import AgentConfig
 from glossogen.models.event import SimulationEvent
 from glossogen.replace_manifest import ReplaceManifest, read_replace_manifest
@@ -52,7 +53,6 @@ from glossogen.runtime.scheduled_events import (
 )
 from glossogen.scenario_protocol import SimulationScenario
 from glossogen.template_renderer import TemplateRenderer
-from glossogen.token_pricing import SELF_HOSTED_PROVIDER
 
 logger = logging.getLogger(__name__)
 

@@ -232,7 +232,11 @@ def _build_steps(context: AtifRunContext, generation: _Generation) -> _BuiltStep
     the cycle's usage, says how many LLM calls its metrics cover.
     """
     copied_ids = context.copied_context.copied_event_ids
-    pricing = find_pricing(model=generation.model)
+    pricing = find_pricing(
+        model=generation.model,
+        provider=generation.provider,
+        at=generation.registration.timestamp,
+    )
     results_by_call_id = {
         event.call_id: event for event in generation.events if isinstance(event, ToolResultReceived)
     }

@@ -113,7 +113,11 @@ def _scan_jsonl_sync(file_path: Path) -> _SinglePassResult:
                         model=model,
                         provider=raw.get("provider", "unknown"),
                     )
-                    pricing_by_agent[agent_id] = find_pricing(model=model)
+                    pricing_by_agent[agent_id] = find_pricing(
+                        model=model,
+                        provider=raw.get("provider", ""),
+                        at=datetime.fromisoformat(raw["timestamp"]),
+                    )
             elif event_type == "message_sent":
                 message_count += 1
             elif event_type == "llm_response_received":
