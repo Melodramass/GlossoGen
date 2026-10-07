@@ -27,7 +27,7 @@ from glossogen.run_archive import strip_legacy_git_dir
 logger = logging.getLogger(__name__)
 
 
-def read_events(log_path: Path) -> list[SimulationEvent]:
+def _read_and_parse_events(log_path: Path) -> list[SimulationEvent]:
     """Read and parse a JSONL log synchronously.
 
     Both the file read and the per-line ``orjson`` + Pydantic parse are
@@ -71,7 +71,7 @@ async def load_events(log_path: Path) -> list[SimulationEvent]:
     Runs the read + parse in a worker thread so the CPU-bound work does not
     block the event loop.
     """
-    return await asyncio.to_thread(read_events, log_path)
+    return await asyncio.to_thread(_read_and_parse_events, log_path)
 
 
 def extract_agent_configs(events: list[SimulationEvent]) -> list[AgentConfig]:

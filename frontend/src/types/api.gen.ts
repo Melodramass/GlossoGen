@@ -402,6 +402,8 @@ export interface paths {
         /**
          * Export Run Zip
          * @description Export a simulation run as a ``{run_dir_name}.zip`` for manual extraction.
+         *
+         *     Each agent's ATIF trajectory is included under ``atif/``.
          */
         get: operations["export_run_zip_api_g__group_slug__runs__scenario___run_dir_name__export_zip_get"];
         put?: never;
@@ -1164,15 +1166,18 @@ export interface components {
         };
         /**
          * AtifFinalMetrics
-         * @description Totals over every step of the trajectory.
+         * @description Totals over the steps played in this run.
+         *
+         *     The token and cost totals are ``None`` when no step carries metrics, and
+         *     ``total_cost_usd`` is also ``None`` when a model carrying usage has no pricing.
          */
         AtifFinalMetrics: {
             /** Total Prompt Tokens */
-            total_prompt_tokens: number;
+            total_prompt_tokens: number | null;
             /** Total Completion Tokens */
-            total_completion_tokens: number;
+            total_completion_tokens: number | null;
             /** Total Cached Tokens */
-            total_cached_tokens: number;
+            total_cached_tokens: number | null;
             /** Total Cost Usd */
             total_cost_usd: number | null;
             /** Total Steps */
@@ -1222,13 +1227,18 @@ export interface components {
          * @description One system, user, or agent turn.
          *
          *     ``model_name``, ``reasoning_content``, ``tool_calls``, ``observation`` and
-         *     ``metrics`` are only set on agent steps.
+         *     ``metrics`` are only set on agent steps. ``is_copied_context`` is ``True`` on a
+         *     step the agent received as history from another run or another seat, and
+         *     ``None`` otherwise. ``timestamp`` is ``None`` on seed history and runner
+         *     prompts, which record no times. ``llm_call_count`` is set on the agent step
+         *     whose ``metrics`` aggregate a whole agent cycle: the number of responses in
+         *     that cycle.
          */
         AtifStep: {
             /** Step Id */
             step_id: number;
             /** Timestamp */
-            timestamp: string;
+            timestamp: string | null;
             source: components["schemas"]["AtifStepSource"];
             /** Message */
             message: string;
@@ -1240,6 +1250,10 @@ export interface components {
             tool_calls: components["schemas"]["AtifToolCall"][] | null;
             observation: components["schemas"]["AtifObservation"] | null;
             metrics: components["schemas"]["AtifMetrics"] | null;
+            /** Is Copied Context */
+            is_copied_context: boolean | null;
+            /** Llm Call Count */
+            llm_call_count: number | null;
             /** Extra */
             extra: {
                 [key: string]: unknown;

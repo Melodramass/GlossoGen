@@ -17,6 +17,7 @@ from glossogen.eval_manifest import read_eval_manifest
 from glossogen.event_parsing import parse_event_bytes
 from glossogen.models.event import RunStatus, SimulationEnded, SimulationStarted
 from glossogen.replace_manifest import boundary_round_of, rounds_after_of
+from glossogen.run_identity import compose_run_id
 from glossogen.server.runs.manifest_sources import (
     read_cross_run_replace_agent_source,
     read_fork_at_round_source,
@@ -298,11 +299,6 @@ class ResolvedRun(NamedTuple):
     run_dir: Path
     scenario_name: str
     db_labels: list[str] | None
-
-
-def compose_run_id(scenario_name: str, run_dir_name: str) -> str:
-    """Build the canonical run identifier from its two path components."""
-    return f"{scenario_name}/{run_dir_name}"
 
 
 def _timestamp_from_dir(dir_name: str) -> datetime:

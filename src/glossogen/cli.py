@@ -23,6 +23,7 @@ from typing import Any, NamedTuple, cast
 import uvicorn
 from pydantic import ValidationError
 
+from glossogen.atif_export.atif_run_context import load_atif_run_context
 from glossogen.atif_export.atif_trajectory_builder import (
     build_agent_trajectories,
     build_run_trajectories,
@@ -1723,7 +1724,9 @@ async def _run_export(args: argparse.Namespace) -> None:
         zip_path = out_dir / "runs.zip"
         try:
             with zip_path.open("wb") as handle:
-                tally = write_runs_zip(
+                # In a worker thread: the ATIF writer runs its own event loop per run.
+                tally = await asyncio.to_thread(
+                    write_runs_zip,
                     runs=summaries,
                     include_logs=args.include_logs,
                     include_atif=args.include_atif,
@@ -1829,21 +1832,15 @@ async def _run_export_atif(args: argparse.Namespace) -> None:
 
     A seat swapped to another model mid-run gets one file per generation.
     """
-    run_dir = Path(args.run_dir).resolve()
-    events = await load_events(log_path=run_dir / f"{args.scenario_name}.jsonl")
-    run_id = f"{run_dir.parent.name}/{run_dir.name}"
+    context = await load_atif_run_context(
+        run_dir=Path(args.run_dir).resolve(),
+        scenario_name=args.scenario_name,
+    )
     if args.agent_id is None:
-        trajectories = build_run_trajectories(
-            events=events,
-            run_id=run_id,
-            scenario_name=args.scenario_name,
-            cutoff_round=args.round,
-        )
+        trajectories = build_run_trajectories(context=context, cutoff_round=args.round)
     else:
         trajectories = build_agent_trajectories(
-            events=events,
-            run_id=run_id,
-            scenario_name=args.scenario_name,
+            context=context,
             agent_id=args.agent_id,
             cutoff_round=args.round,
         )

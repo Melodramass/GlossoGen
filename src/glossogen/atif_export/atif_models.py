@@ -60,11 +60,16 @@ class AtifStep(BaseModel):
     """One system, user, or agent turn.
 
     ``model_name``, ``reasoning_content``, ``tool_calls``, ``observation`` and
-    ``metrics`` are only set on agent steps.
+    ``metrics`` are only set on agent steps. ``is_copied_context`` is ``True`` on a
+    step the agent received as history from another run or another seat, and
+    ``None`` otherwise. ``timestamp`` is ``None`` on seed history and runner
+    prompts, which record no times. ``llm_call_count`` is set on the agent step
+    whose ``metrics`` aggregate a whole agent cycle: the number of responses in
+    that cycle.
     """
 
     step_id: int
-    timestamp: str
+    timestamp: str | None
     source: AtifStepSource
     message: str
     model_name: str | None
@@ -72,6 +77,8 @@ class AtifStep(BaseModel):
     tool_calls: list[AtifToolCall] | None
     observation: AtifObservation | None
     metrics: AtifMetrics | None
+    is_copied_context: bool | None
+    llm_call_count: int | None
     extra: dict[str, Any]
 
 
@@ -86,11 +93,15 @@ class AtifAgent(BaseModel):
 
 
 class AtifFinalMetrics(BaseModel):
-    """Totals over every step of the trajectory."""
+    """Totals over the steps played in this run.
 
-    total_prompt_tokens: int
-    total_completion_tokens: int
-    total_cached_tokens: int
+    The token and cost totals are ``None`` when no step carries metrics, and
+    ``total_cost_usd`` is also ``None`` when a model carrying usage has no pricing.
+    """
+
+    total_prompt_tokens: int | None
+    total_completion_tokens: int | None
+    total_cached_tokens: int | None
     total_cost_usd: float | None
     total_steps: int
 

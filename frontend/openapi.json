@@ -1195,7 +1195,7 @@
     "/api/g/{group_slug}/runs/{scenario}/{run_dir_name}/export/zip": {
       "get": {
         "summary": "Export Run Zip",
-        "description": "Export a simulation run as a ``{run_dir_name}.zip`` for manual extraction.",
+        "description": "Export a simulation run as a ``{run_dir_name}.zip`` for manual extraction.\n\nEach agent's ATIF trajectory is included under ``atif/``.",
         "operationId": "export_run_zip_api_g__group_slug__runs__scenario___run_dir_name__export_zip_get",
         "parameters": [
           {
@@ -2795,15 +2795,36 @@
       "AtifFinalMetrics": {
         "properties": {
           "total_prompt_tokens": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Total Prompt Tokens"
           },
           "total_completion_tokens": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Total Completion Tokens"
           },
           "total_cached_tokens": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Total Cached Tokens"
           },
           "total_cost_usd": {
@@ -2831,7 +2852,7 @@
           "total_steps"
         ],
         "title": "AtifFinalMetrics",
-        "description": "Totals over every step of the trajectory."
+        "description": "Totals over the steps played in this run.\n\nThe token and cost totals are ``None`` when no step carries metrics, and\n``total_cost_usd`` is also ``None`` when a model carrying usage has no pricing."
       },
       "AtifMetrics": {
         "properties": {
@@ -2918,7 +2939,14 @@
             "title": "Step Id"
           },
           "timestamp": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Timestamp"
           },
           "source": {
@@ -2984,6 +3012,28 @@
               }
             ]
           },
+          "is_copied_context": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Copied Context"
+          },
+          "llm_call_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Call Count"
+          },
           "extra": {
             "additionalProperties": true,
             "type": "object",
@@ -3001,10 +3051,12 @@
           "tool_calls",
           "observation",
           "metrics",
+          "is_copied_context",
+          "llm_call_count",
           "extra"
         ],
         "title": "AtifStep",
-        "description": "One system, user, or agent turn.\n\n``model_name``, ``reasoning_content``, ``tool_calls``, ``observation`` and\n``metrics`` are only set on agent steps."
+        "description": "One system, user, or agent turn.\n\n``model_name``, ``reasoning_content``, ``tool_calls``, ``observation`` and\n``metrics`` are only set on agent steps. ``is_copied_context`` is ``True`` on a\nstep the agent received as history from another run or another seat, and\n``None`` otherwise. ``timestamp`` is ``None`` on seed history and runner\nprompts, which record no times. ``llm_call_count`` is set on the agent step\nwhose ``metrics`` aggregate a whole agent cycle: the number of responses in\nthat cycle."
       },
       "AtifStepSource": {
         "type": "string",

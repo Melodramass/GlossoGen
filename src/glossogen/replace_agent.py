@@ -44,6 +44,7 @@ from glossogen.provider_credentials import require_reachable_models
 from glossogen.replace_manifest import REPLACE_MANIFEST_FILENAME, ReplaceManifest
 from glossogen.run_archive import claim_run_dir, copy_run_at_event, find_event_offset
 from glossogen.run_config_validation import validate_run_config
+from glossogen.run_identity import compose_run_id
 from glossogen.run_jsonl_rewriter import (
     drop_simulation_ended,
     patch_simulation_started_scenario_config,
@@ -116,11 +117,6 @@ class ForkBoundary(NamedTuple):
     target_event_id: str
     boundary_timestamp: datetime
     advances_into_round: bool
-
-
-def compose_run_id(scenario_name: str, run_dir_name: str) -> str:
-    """Build the canonical ``<scenario>/<run_dir>`` identifier."""
-    return f"{scenario_name}/{run_dir_name}"
 
 
 def resolve_fork_boundary(

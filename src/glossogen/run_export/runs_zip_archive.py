@@ -21,12 +21,12 @@ import zipfile
 from pathlib import Path, PurePosixPath
 from typing import IO, NamedTuple
 
+from glossogen.atif_export.atif_run_context import load_atif_run_context_blocking
 from glossogen.atif_export.atif_trajectory_builder import (
     build_run_trajectories,
     serialize_trajectory,
     trajectory_file_name,
 )
-from glossogen.evaluation.log_reader import read_events
 from glossogen.run_export.archive_member_filter import should_include_in_archive
 from glossogen.run_export.export_limits import check_raw_bytes
 from glossogen.server.runs.models import RunSummary
@@ -127,12 +127,8 @@ def _add_atif_trajectories(
     log_path = run_dir / f"{scenario_name}.jsonl"
     if not log_path.exists():
         return RunZipTally(file_count=0, byte_count=0)
-    trajectories = build_run_trajectories(
-        events=read_events(log_path=log_path),
-        run_id=f"{scenario_name}/{run_dir.name}",
-        scenario_name=scenario_name,
-        cutoff_round=None,
-    )
+    context = load_atif_run_context_blocking(run_dir=run_dir, scenario_name=scenario_name)
+    trajectories = build_run_trajectories(context=context, cutoff_round=None)
     byte_count = 0
     for trajectory in trajectories:
         payload = serialize_trajectory(trajectory=trajectory).encode("utf-8")
