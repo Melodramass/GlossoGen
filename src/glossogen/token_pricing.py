@@ -1,112 +1,36 @@
-"""Per-model token pricing table and lookup.
+"""Per-model token rates, read from the ``genai-prices`` catalog, and the cost of token counts.
 
-Provides USD-per-million-token rates for supported LLM models.
-Used by both the agent runner (simulation cost tracking) and the
-evaluation module (evaluator cost reporting).
-
-Self-hosted models are discovered dynamically from the ``SELF_HOSTED_BASE_URLS``
-environment variable (a JSON object mapping model name → endpoint URL), so
-adding a new self-hosted deployment does not require code changes here.
+Used by the agent runner (simulation cost tracking), the run views, the ATIF
+export, and the evaluation module (evaluator cost reporting). Prices come from the
+snapshot bundled with the installed ``genai-prices`` package, so a new model or a
+price change arrives by upgrading that package. Self-hosted models are priced at
+zero, since their GPU time is billed elsewhere.
 """
 
-import json
+import functools
 import logging
-import os
+from datetime import datetime
+from decimal import Decimal
 from typing import NamedTuple
+
+from genai_prices import Usage, calc_price
+from genai_prices.types import ModelInfo, TieredPrices
+
+from glossogen.model_catalog import SELF_HOSTED_PROVIDER
 
 logger = logging.getLogger(__name__)
 
-SELF_HOSTED_PROVIDER = "self-hosted"
-
 
 class TokenPricing(NamedTuple):
-    """Per-million-token prices in USD for a model, plus its provider."""
+    """Per-million-token prices in USD for one model."""
 
-    provider: str
     input_per_mtok: float
     output_per_mtok: float
     cache_read_per_mtok: float
     cache_write_per_mtok: float
 
 
-# Per-million-token prices in USD keyed by model name prefix for hosted APIs.
-# Self-hosted models are NOT listed here — they are discovered from
-# ``SELF_HOSTED_BASE_URLS`` at request time and priced at $0 (GPU-time billed
-# elsewhere). Prefix matching allows versioned IDs like
-# ``claude-sonnet-4-20250514`` to match ``claude-sonnet-4``.
-_PRICING_TABLE: dict[str, TokenPricing] = {
-    # Anthropic — keys use dashes (matching actual API model IDs).
-    # Longer prefixes first so "claude-opus-4-6-*" doesn't accidentally
-    # match the cheaper "claude-opus-4" entry.
-    "claude-opus-4-7": TokenPricing(
-        provider="anthropic",
-        input_per_mtok=5.0,
-        output_per_mtok=25.0,
-        cache_read_per_mtok=0.50,
-        cache_write_per_mtok=6.25,
-    ),
-    "claude-opus-4-6": TokenPricing(
-        provider="anthropic",
-        input_per_mtok=5.0,
-        output_per_mtok=25.0,
-        cache_read_per_mtok=0.50,
-        cache_write_per_mtok=6.25,
-    ),
-    "claude-opus-4-5": TokenPricing(
-        provider="anthropic",
-        input_per_mtok=5.0,
-        output_per_mtok=25.0,
-        cache_read_per_mtok=0.50,
-        cache_write_per_mtok=6.25,
-    ),
-    "claude-sonnet-4-6": TokenPricing(
-        provider="anthropic",
-        input_per_mtok=3.0,
-        output_per_mtok=15.0,
-        cache_read_per_mtok=0.30,
-        cache_write_per_mtok=3.75,
-    ),
-    "claude-haiku-4-5": TokenPricing(
-        provider="anthropic",
-        input_per_mtok=1.0,
-        output_per_mtok=5.0,
-        cache_read_per_mtok=0.10,
-        cache_write_per_mtok=1.25,
-    ),
-    # OpenAI — longer prefixes first so "gpt-5.4-mini" doesn't match "gpt-5.4".
-    "gpt-5.4-nano": TokenPricing(
-        provider="openai",
-        input_per_mtok=0.20,
-        output_per_mtok=1.25,
-        cache_read_per_mtok=0.02,
-        cache_write_per_mtok=0.20,
-    ),
-    "gpt-5.4-mini": TokenPricing(
-        provider="openai",
-        input_per_mtok=0.75,
-        output_per_mtok=4.50,
-        cache_read_per_mtok=0.075,
-        cache_write_per_mtok=0.75,
-    ),
-    "gpt-5.4": TokenPricing(
-        provider="openai",
-        input_per_mtok=2.50,
-        output_per_mtok=15.0,
-        cache_read_per_mtok=0.25,
-        cache_write_per_mtok=2.50,
-    ),
-    "gpt-5.2": TokenPricing(
-        provider="openai",
-        input_per_mtok=0.875,
-        output_per_mtok=7.0,
-        cache_read_per_mtok=0.175,
-        cache_write_per_mtok=0.875,
-    ),
-}
-
-
 _SELF_HOSTED_PRICING = TokenPricing(
-    provider=SELF_HOSTED_PROVIDER,
     input_per_mtok=0.0,
     output_per_mtok=0.0,
     cache_read_per_mtok=0.0,
@@ -114,67 +38,72 @@ _SELF_HOSTED_PRICING = TokenPricing(
 )
 
 
-def _get_self_hosted_model_names() -> list[str]:
-    """Return model names listed in the ``SELF_HOSTED_BASE_URLS`` env var.
+@functools.cache
+def _find_catalog_model(model: str, provider: str) -> ModelInfo | None:
+    """The ``genai-prices`` entry for a model served by ``provider``, or ``None``.
 
-    Returns an empty list when the env var is unset, empty, or not valid JSON,
-    so that environments without a self-hosted endpoint do not raise.
+    Cached because the answer for a pair never changes within a process, and the
+    run listing asks once per agent of every run.
     """
-    raw = os.environ.get("SELF_HOSTED_BASE_URLS", "")
-    if not raw:
-        return []
     try:
-        parsed: dict[str, str] = json.loads(raw)
-    except json.JSONDecodeError:
-        logger.warning("SELF_HOSTED_BASE_URLS is not valid JSON; ignoring.")
-        return []
-    return list(parsed.keys())
+        calculation = calc_price(
+            usage=Usage(input_tokens=0, output_tokens=0),
+            model_ref=model,
+            provider_id=provider,
+        )
+    except LookupError:
+        logger.exception(
+            "genai-prices has no price for model %r under provider %r; its tokens are not costed",
+            model,
+            provider,
+        )
+        return None
+    return calculation.model
 
 
-def list_providers() -> list[str]:
-    """Return unique provider names, including ``self-hosted`` if any are configured.
+def _base_rate(price: Decimal | TieredPrices | None) -> float | None:
+    if price is None:
+        return None
+    if isinstance(price, TieredPrices):
+        return float(price.base)
+    return float(price)
 
-    The order is: providers from the static pricing table (in insertion
-    order), then ``self-hosted`` last when ``SELF_HOSTED_BASE_URLS`` lists
-    at least one model.
+
+def find_pricing(model: str, provider: str, at: datetime) -> TokenPricing | None:
+    """The model's rates in effect at ``at``, or ``None`` when ``genai-prices`` does not know it.
+
+    ``genai-prices`` dates its price changes, so passing when the tokens were spent
+    prices an old run at the rates it ran under.
+
+    A rate with long-context tiers is taken at its base tier. The tier depends on a
+    single request's input size, and the usage priced here is always a sum over
+    several requests, which no longer carries it. A model with no cache-read or
+    cache-write rate bills those tokens as ordinary input, as ``genai-prices`` does.
     """
-    seen: set[str] = set()
-    providers: list[str] = []
-    for pricing in _PRICING_TABLE.values():
-        if pricing.provider not in seen:
-            seen.add(pricing.provider)
-            providers.append(pricing.provider)
-    if _get_self_hosted_model_names():
-        providers.append(SELF_HOSTED_PROVIDER)
-    return providers
-
-
-def list_models() -> list[tuple[str, str]]:
-    """Return all known (model_prefix, provider) pairs.
-
-    Includes static pricing-table entries followed by every model listed
-    in ``SELF_HOSTED_BASE_URLS``.
-    """
-    static_models = [(prefix, pricing.provider) for prefix, pricing in _PRICING_TABLE.items()]
-    self_hosted = [(name, SELF_HOSTED_PROVIDER) for name in _get_self_hosted_model_names()]
-    return static_models + self_hosted
-
-
-def find_pricing(model: str) -> TokenPricing | None:
-    """Find pricing by matching model name against prefix keys.
-
-    Normalizes dots to dashes before comparison so that both
-    ``claude-haiku-4.5`` and ``claude-haiku-4-5-20251001`` match. Falls
-    back to a zero-cost ``self-hosted`` pricing entry when the model is
-    listed in ``SELF_HOSTED_BASE_URLS``.
-    """
-    normalized = model.replace(".", "-")
-    for prefix, pricing in _PRICING_TABLE.items():
-        if normalized.startswith(prefix.replace(".", "-")):
-            return pricing
-    if model in _get_self_hosted_model_names():
+    if provider == SELF_HOSTED_PROVIDER:
         return _SELF_HOSTED_PRICING
-    return None
+    catalog_model = _find_catalog_model(model=model, provider=provider)
+    if catalog_model is None:
+        return None
+    prices = catalog_model.get_prices(request_timestamp=at)
+    input_rate = _base_rate(price=prices.input_mtok)
+    if input_rate is None:
+        input_rate = 0.0
+    output_rate = _base_rate(price=prices.output_mtok)
+    if output_rate is None:
+        output_rate = 0.0
+    cache_read_rate = _base_rate(price=prices.cache_read_mtok)
+    if cache_read_rate is None:
+        cache_read_rate = input_rate
+    cache_write_rate = _base_rate(price=prices.cache_write_mtok)
+    if cache_write_rate is None:
+        cache_write_rate = input_rate
+    return TokenPricing(
+        input_per_mtok=input_rate,
+        output_per_mtok=output_rate,
+        cache_read_per_mtok=cache_read_rate,
+        cache_write_per_mtok=cache_write_rate,
+    )
 
 
 def compute_token_cost_usd(

@@ -18,6 +18,7 @@ from typing import Any, NamedTuple
 from glossogen.channel_router import compute_per_channel_join_index
 from glossogen.evaluation.log_reader import load_events
 from glossogen.message_history_builder import build_message_history
+from glossogen.model_catalog import SELF_HOSTED_PROVIDER
 from glossogen.models.agent_config import AgentConfig
 from glossogen.models.event import AgentRegistered, AgentSwappedMidRun
 from glossogen.resume_context_writer import write_swap_resume_context_file
@@ -27,7 +28,6 @@ from glossogen.runtime.activity_notification import DoneNotification, NewMessage
 from glossogen.runtime.agent_session import AgentSession
 from glossogen.runtime.scheduled_events import ChannelVisibility, ChannelVisibilityNone, SwapAgent
 from glossogen.runtime.simulation_state import SimulationRuntime
-from glossogen.token_pricing import SELF_HOSTED_PROVIDER
 
 logger = logging.getLogger(__name__)
 

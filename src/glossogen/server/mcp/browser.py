@@ -26,6 +26,7 @@ from glossogen.atif_export.atif_models import AtifAgentExport
 from glossogen.atif_export.atif_trajectory_builder import build_agent_trajectories_from_run_dir
 from glossogen.evaluation.reports.evaluation_report import EvaluationReport
 from glossogen.mcp_tool_rejection import surface_value_errors
+from glossogen.model_catalog import list_models, list_providers
 from glossogen.scenario_loader import get_scenario_class, iter_scenario_classes
 from glossogen.server.mcp.asgi_context import McpRunContextMiddleware
 from glossogen.server.mcp.models import (
@@ -72,7 +73,6 @@ from glossogen.thread_export.export_agent_thread import (
     export_agent_thread_from_run_dir,
 )
 from glossogen.thread_export.thread_export_models import ThreadExport
-from glossogen.token_pricing import list_models, list_providers
 
 logger = logging.getLogger(__name__)
 

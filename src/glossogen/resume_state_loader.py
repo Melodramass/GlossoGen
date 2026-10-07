@@ -43,6 +43,7 @@ from glossogen.message_rewind import (
     build_rewind_state_from_last_message,
     find_event_timestamp,
 )
+from glossogen.model_catalog import SELF_HOSTED_PROVIDER
 from glossogen.models.event import (
     AgentConnected,
     AgentRegistered,
@@ -61,7 +62,6 @@ from glossogen.runtime.scheduled_events import (
     ChannelVisibilityFull,
     ChannelVisibilityNone,
 )
-from glossogen.token_pricing import SELF_HOSTED_PROVIDER
 
 logger = logging.getLogger(__name__)
 

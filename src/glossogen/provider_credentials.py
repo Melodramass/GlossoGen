@@ -42,11 +42,11 @@ import json
 import os
 from typing import Any, NamedTuple, cast
 
+from glossogen.model_catalog import SELF_HOSTED_PROVIDER
 from glossogen.models.agent_config import AgentRole
 from glossogen.models.model_consumer import ModelConsumer
 from glossogen.runtime.scheduled_events import SwapAgent
 from glossogen.scenario_protocol import SimulationScenario
-from glossogen.token_pricing import SELF_HOSTED_PROVIDER
 
 SELF_HOSTED_BASE_URLS_VAR = "SELF_HOSTED_BASE_URLS"
 SELF_HOSTED_API_KEY_VAR = "SELF_HOSTED_API_KEY"

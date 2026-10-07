@@ -246,7 +246,9 @@ async def load_run_detail(
                 provider=event.provider,
                 system_prompt=event.system_prompt,
             )
-            pricing_by_agent[event.agent_id] = find_pricing(model=event.model)
+            pricing_by_agent[event.agent_id] = find_pricing(
+                model=event.model, provider=event.provider, at=event.timestamp
+            )
 
         elif isinstance(event, AgentSwappedMidRun):
             registered = agents_by_id.get(event.agent_id)
@@ -260,7 +262,9 @@ async def load_run_detail(
                     system_prompt=registered.system_prompt if registered else "",
                 )
             )
-            pricing_by_agent[event.agent_id] = find_pricing(model=event.new_model)
+            pricing_by_agent[event.agent_id] = find_pricing(
+                model=event.new_model, provider=event.new_provider, at=event.timestamp
+            )
 
         elif isinstance(event, ContextCompacted):
             context_compaction_events.append(

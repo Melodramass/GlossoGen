@@ -1,16 +1,21 @@
 """Cost estimation for LLM evaluation calls."""
 
 import logging
+from datetime import UTC, datetime
 
 from pydantic import BaseModel
 
-from glossogen.token_pricing import find_pricing
+from glossogen.token_pricing import compute_token_cost_usd, find_pricing
 
 logger = logging.getLogger(__name__)
 
 
 class EvaluationTokenUsage(BaseModel):
-    """Accumulated token counts across all LLM calls during an evaluation run."""
+    """Accumulated token counts across all LLM calls during an evaluation run.
+
+    ``input_tokens`` counts only the input that was neither read from nor written
+    to the cache, the way the Anthropic API reports it.
+    """
 
     input_tokens: int
     output_tokens: int
@@ -36,7 +41,7 @@ def compute_evaluation_cost(
 
     Returns zero cost with a log warning for unknown models.
     """
-    pricing = find_pricing(model=model)
+    pricing = find_pricing(model=model, provider=provider_name, at=datetime.now(tz=UTC))
     if pricing is None:
         logger.warning(
             "No pricing data for model '%s', reporting zero cost",
@@ -49,12 +54,16 @@ def compute_evaluation_cost(
             provider_name=provider_name,
         )
 
-    cost = (
-        usage.input_tokens * pricing.input_per_mtok
-        + usage.output_tokens * pricing.output_per_mtok
-        + usage.cache_read_input_tokens * pricing.cache_read_per_mtok
-        + usage.cache_creation_input_tokens * pricing.cache_write_per_mtok
-    ) / 1_000_000
+    # compute_token_cost_usd takes an input count that includes the cached tokens.
+    cost = compute_token_cost_usd(
+        pricing=pricing,
+        input_tokens=usage.input_tokens
+        + usage.cache_read_input_tokens
+        + usage.cache_creation_input_tokens,
+        output_tokens=usage.output_tokens,
+        cache_read_tokens=usage.cache_read_input_tokens,
+        cache_write_tokens=usage.cache_creation_input_tokens,
+    )
 
     return EvaluationCost(
         usage=usage,

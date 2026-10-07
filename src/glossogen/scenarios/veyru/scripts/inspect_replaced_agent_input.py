@@ -26,9 +26,9 @@ from pathlib import Path
 
 from glossogen.evaluation.log_reader import load_events
 from glossogen.message_rewind import AgentHistoryFilter, build_rewind_state_from_last_message
+from glossogen.model_catalog import SELF_HOSTED_PROVIDER
 from glossogen.models.event import AgentRegistered, InjectionDelivered
 from glossogen.resume_state_loader import read_replace_manifest_info
-from glossogen.token_pricing import SELF_HOSTED_PROVIDER
 
 
 def _print_section(title: str) -> None:

@@ -9,6 +9,7 @@ import logging
 import orjson
 from fastapi import APIRouter, HTTPException
 
+from glossogen.model_catalog import list_models, list_providers
 from glossogen.scenario_loader import find_scenario_class, iter_scenario_classes
 from glossogen.server.scenarios.filterable_knobs import filterable_knobs_from_schema
 from glossogen.server.scenarios.models import (
@@ -18,7 +19,6 @@ from glossogen.server.scenarios.models import (
     ScenarioInfo,
     ScenariosResponse,
 )
-from glossogen.token_pricing import list_models, list_providers
 
 logger = logging.getLogger(__name__)
 

@@ -63,6 +63,7 @@ from glossogen.label_descriptions.filesystem_label_description_store import (
 from glossogen.label_descriptions.label_description_models import LabelDescription
 from glossogen.logging_format import EventBusLogHandler, JsonLineFormatter
 from glossogen.message_rewind import RewindState
+from glossogen.model_catalog import list_providers
 from glossogen.models.agent_config import AgentConfig
 from glossogen.models.event import (
     AgentRegistered,
@@ -133,7 +134,6 @@ from glossogen.thread_export.export_agent_thread import (
     ThreadExportFormat,
     export_agent_thread_from_run_dir,
 )
-from glossogen.token_pricing import list_providers
 
 logger = logging.getLogger(__name__)
 

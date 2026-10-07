@@ -165,7 +165,7 @@ def test_a_self_hosted_model_the_map_serves_is_accepted(monkeypatch: pytest.Monk
 
 
 def test_an_endpoint_map_that_is_not_json_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`token_pricing` swallows this and reports no self-hosted models, so a run
+    """`model_catalog` swallows this and reports no self-hosted models, so a run
     configured this way reaches the runner and fails there instead."""
     monkeypatch.setenv("SELF_HOSTED_BASE_URLS", "{not valid json")
     monkeypatch.setenv("SELF_HOSTED_API_KEY", "sh-secret")
