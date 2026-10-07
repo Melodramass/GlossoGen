@@ -116,8 +116,10 @@ class OpenAIProvider(LLMProvider):
                 details = response.usage.input_tokens_details
                 if details is not None and hasattr(details, "cached_tokens"):
                     cached = details.cached_tokens
+            # The Responses API counts cached tokens inside input_tokens; the
+            # recorded usage keeps them apart, as the Anthropic API does.
             self._record_usage(
-                input_tokens=response.usage.input_tokens,
+                input_tokens=response.usage.input_tokens - cached,
                 output_tokens=response.usage.output_tokens,
                 cache_read_input_tokens=cached,
                 cache_creation_input_tokens=0,

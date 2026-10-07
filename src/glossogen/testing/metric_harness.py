@@ -47,7 +47,7 @@ def ontology_options(*, ontology_path: Path) -> MetricRunOptions:
 
 
 # The judge the report's cost is attributed to. Nothing is sent anywhere; the
-# name only has to be one `token_pricing` knows, or the cost comes back zero and
+# name only has to be one `genai-prices` knows, or the cost comes back zero and
 # the report says the evaluation was free.
 JUDGE_MODEL = "claude-haiku-4-5-20251001"
 JUDGE_PROVIDER = "anthropic"

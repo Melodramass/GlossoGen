@@ -86,6 +86,17 @@ the commit log.
   `lineage.resumed_at` to `lineage.forked_at`) and write the translated form back,
   as does the summary-cache reader, so a legacy file is translated once rather
   than on every read.
+- **Token costs are priced from the `genai-prices` catalog** instead of a table kept
+  in `token_pricing.py`, at the rates in effect when the agent registered. A new
+  model or a price change now arrives by upgrading that package. `gpt-5.2` was the
+  one model whose old entry disagreed: it is now $1.75 / $14 per million input /
+  output tokens, double the old figure. The models the pickers offer moved to
+  `model_catalog.py`, without prices.
+
+### Fixed
+- An evaluation judged by an OpenAI model no longer bills cached input twice. The
+  Responses API counts cached tokens inside `input_tokens`, and the judge recorded
+  that count as the non-cached input.
 
 ### Added
 - `textcraft_shared_workspace`: a team crafts every target of a synthetic layered

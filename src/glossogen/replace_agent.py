@@ -30,6 +30,7 @@ import orjson
 from glossogen.cross_run_replace_manifest import CROSS_RUN_REPLACE_MANIFEST_FILENAME
 from glossogen.evaluation.log_reader import load_events
 from glossogen.message_rewind import build_rewind_state_at_event
+from glossogen.model_catalog import list_providers
 from glossogen.models.event import (
     AgentRegistered,
     AgentSwappedMidRun,
@@ -52,7 +53,6 @@ from glossogen.run_jsonl_rewriter import (
 )
 from glossogen.run_launching import PreparedForkRun, launch_prepared_run
 from glossogen.scenario_loader import get_scenario_class
-from glossogen.token_pricing import list_providers
 
 logger = logging.getLogger(__name__)
 

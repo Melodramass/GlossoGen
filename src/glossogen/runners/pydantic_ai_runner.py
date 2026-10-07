@@ -12,6 +12,7 @@ import logging
 from collections.abc import AsyncIterable, Awaitable, Callable
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
 from langfuse import propagate_attributes
@@ -450,7 +451,9 @@ class PydanticAIRunner(AgentRunner):
             checkpoint = _RunCheckpoint(messages=None, prompt=initial_prompt)
         bus = self._event_bus
         all_background_tasks: list[asyncio.Task[None]] = []
-        cycle_pricing = find_pricing(model=agent_config.model)
+        cycle_pricing = find_pricing(
+            model=agent_config.model, provider=agent_config.provider, at=datetime.now(tz=UTC)
+        )
         last_recorded_usage: RunUsage = RunUsage()
 
         try:

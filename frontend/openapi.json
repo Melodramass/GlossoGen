@@ -4485,7 +4485,7 @@
           "cache_creation_input_tokens"
         ],
         "title": "EvaluationTokenUsage",
-        "description": "Accumulated token counts across all LLM calls during an evaluation run."
+        "description": "Accumulated token counts across all LLM calls during an evaluation run.\n\n``input_tokens`` counts only the input that was neither read from nor written\nto the cache, the way the Anthropic API reports it."
       },
       "ExplicitRunSelection": {
         "properties": {

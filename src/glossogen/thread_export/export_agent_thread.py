@@ -14,6 +14,7 @@ from typing import Literal
 
 from glossogen.evaluation.log_reader import extract_agent_configs, load_events
 from glossogen.message_history_builder import build_message_history, resolve_history_timestamp
+from glossogen.model_catalog import SELF_HOSTED_PROVIDER
 from glossogen.models.agent_config import AgentConfig
 from glossogen.models.event import SimulationEvent
 from glossogen.runners.communication_protocol import build_full_system_prompt
@@ -22,7 +23,6 @@ from glossogen.thread_export.provider_thread_serializer import (
     to_openai_request,
 )
 from glossogen.thread_export.thread_export_models import ThreadExport, ThreadExportMeta
-from glossogen.token_pricing import SELF_HOSTED_PROVIDER
 
 logger = logging.getLogger(__name__)
 

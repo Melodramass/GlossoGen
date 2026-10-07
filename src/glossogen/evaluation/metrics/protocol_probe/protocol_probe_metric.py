@@ -36,12 +36,12 @@ from glossogen.evaluation.metrics.protocol_probe.response_models import Protocol
 from glossogen.evaluation.reports.evaluation_cost import EvaluationTokenUsage
 from glossogen.llm.provider import LLMProvider
 from glossogen.message_history_builder import build_message_history, resolve_history_timestamp
+from glossogen.model_catalog import SELF_HOSTED_PROVIDER
 from glossogen.models.agent_config import AgentConfig
 from glossogen.models.event import SimulationEvent
 from glossogen.runners.communication_protocol import build_full_system_prompt
 from glossogen.scenario_protocol import SimulationScenario
 from glossogen.template_renderer import TemplateRenderer
-from glossogen.token_pricing import SELF_HOSTED_PROVIDER
 
 logger = logging.getLogger(__name__)
 

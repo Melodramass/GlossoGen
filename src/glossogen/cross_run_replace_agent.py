@@ -26,6 +26,7 @@ from glossogen.cross_run_replace_manifest import (
 )
 from glossogen.evaluation.log_reader import load_events
 from glossogen.message_rewind import find_event_timestamp
+from glossogen.model_catalog import list_providers
 from glossogen.models.event import RoundAdvanced, SimulationEvent, SimulationStarted
 from glossogen.provider_credentials import require_reachable_models
 from glossogen.replace_agent import (
@@ -50,7 +51,6 @@ from glossogen.run_jsonl_rewriter import (
 from glossogen.run_launching import PreparedForkRun, launch_prepared_run
 from glossogen.scenario_loader import get_scenario_class
 from glossogen.scenario_protocol import SimulationScenario
-from glossogen.token_pricing import list_providers
 
 logger = logging.getLogger(__name__)
 
