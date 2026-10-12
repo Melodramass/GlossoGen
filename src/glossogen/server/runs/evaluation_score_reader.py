@@ -1,12 +1,13 @@
 """Reading a run's per-metric scores out of its evaluation report.
 
-Every run summary carries these scores, and some listings build a summary for
-every run in a group (MCP ``list_runs``, the exports, the status filter). Over
-4,738 local runs, reading every report took such a listing from 1.4s to 2.0s. The
-scores are therefore held per report, keyed on its modification time and size, so
-a run whose report has not changed costs one ``stat`` and a repeat listing takes
-1.6s. ``write_report`` replaces a report atomically, so a rewritten report
-presents a new key.
+Every completed run's summary carries these scores, and some listings build a
+summary for every run in a group (MCP ``list_runs``, the exports, the status
+filter). Over 4,738 local runs, reading every report took such a listing from
+1.4s to 2.0s. The scores are therefore held per report, keyed on its modification
+time and size, so a run whose report has not changed costs one ``stat`` and a
+repeat listing takes 1.6s. ``write_report`` replaces a report through
+``os.replace``, so a rewritten report presents a new key unless the new file has
+the same size and the same modification time as the old one.
 """
 
 import logging
@@ -21,9 +22,9 @@ from glossogen.server.runs.models import EvaluationScore
 
 logger = logging.getLogger(__name__)
 
-# About twice the local runs directory measured above. An entry measured 7.5 KB
-# on average, so a full cache holds about 75 MB. A group with more evaluated runs
-# than this re-reads reports on each listing that covers all of them.
+# A group with more evaluated runs than this re-reads every report on each
+# listing that covers all of them, since the least recently read entries are
+# evicted as the listing proceeds.
 MAX_CACHED_REPORTS = 10_000
 
 
@@ -33,29 +34,46 @@ class _ReportScores(BaseModel):
     measurements: list[EvaluationScore]
 
 
+class EvaluationReportScores(NamedTuple):
+    """What reading a run's report yielded.
+
+    ``has_report`` is whether the report file exists. ``scores`` holds the
+    report's measurements in report order; it is empty when there is no report
+    and None when the report exists but could not be read or parsed.
+    """
+
+    has_report: bool
+    scores: list[EvaluationScore] | None
+
+
 class _CachedScores(NamedTuple):
     """One report's scores and the modification time and size of the file they came from."""
 
     modified_ns: int
     size: int
-    scores: tuple[EvaluationScore, ...]
+    scores: tuple[EvaluationScore, ...] | None
 
 
 _CACHE: OrderedDict[Path, _CachedScores] = OrderedDict()
 _CACHE_LOCK = threading.Lock()
 
 
-def read_evaluation_scores(report_path: Path) -> list[EvaluationScore] | None:
-    """Return the report's scores in report order, or None when the run has no report.
+def read_evaluation_scores(report_path: Path) -> EvaluationReportScores:
+    """Read the report's scores through the cache.
 
-    A report that cannot be read or parsed yields an empty list and one logged
-    exception per version of the file, so one bad report costs that run its
-    scores rather than failing the listing. Called from worker threads.
+    A report that cannot be read or parsed yields ``scores=None`` and one logged
+    exception per version of the file while that version stays cached, so one
+    bad report costs that run its scores rather than failing the listing. A
+    ``stat`` that fails for a reason other than the file being absent is logged
+    and reported as no report. Called from worker threads.
     """
     try:
         stat = report_path.stat()
     except FileNotFoundError:
-        return None
+        return _no_report()
+    except OSError:
+        logger.exception("Failed to stat evaluation report %s", report_path)
+        return _no_report()
     with _CACHE_LOCK:
         cached = _CACHE.get(report_path)
         if (
@@ -64,7 +82,7 @@ def read_evaluation_scores(report_path: Path) -> list[EvaluationScore] | None:
             and cached.size == stat.st_size
         ):
             _CACHE.move_to_end(report_path)
-            return list(cached.scores)
+            return _as_result(scores=cached.scores)
     scores = _parse_scores(report_path=report_path)
     with _CACHE_LOCK:
         _CACHE[report_path] = _CachedScores(
@@ -73,14 +91,26 @@ def read_evaluation_scores(report_path: Path) -> list[EvaluationScore] | None:
         _CACHE.move_to_end(report_path)
         while len(_CACHE) > MAX_CACHED_REPORTS:
             _CACHE.popitem(last=False)
-    return list(scores)
+    return _as_result(scores=scores)
 
 
-def _parse_scores(report_path: Path) -> tuple[EvaluationScore, ...]:
-    """Read the report's scores, or none when the file cannot be read or does not parse."""
+def _no_report() -> EvaluationReportScores:
+    """The result for a run without a report, with a fresh list the caller may keep."""
+    return EvaluationReportScores(has_report=False, scores=[])
+
+
+def _as_result(scores: tuple[EvaluationScore, ...] | None) -> EvaluationReportScores:
+    """The result for a report that exists, with a fresh list the caller may keep."""
+    if scores is None:
+        return EvaluationReportScores(has_report=True, scores=None)
+    return EvaluationReportScores(has_report=True, scores=list(scores))
+
+
+def _parse_scores(report_path: Path) -> tuple[EvaluationScore, ...] | None:
+    """Read the report's scores, or None when the file cannot be read or does not parse."""
     try:
         report = _ReportScores.model_validate_json(report_path.read_bytes())
     except (OSError, ValidationError):
         logger.exception("Failed to read evaluation scores from %s", report_path)
-        return ()
+        return None
     return tuple(report.measurements)

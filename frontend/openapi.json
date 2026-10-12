@@ -4094,15 +4094,22 @@
             "title": "Has Evaluation"
           },
           "evaluation_scores": {
-            "items": {
-              "$ref": "#/components/schemas/EvaluationScore"
-            },
-            "type": "array",
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EvaluationScore"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Evaluation Scores"
           },
           "headline_measurements": {
             "items": {
-              "$ref": "#/components/schemas/HeadlineMeasurement"
+              "$ref": "#/components/schemas/EvaluationScore"
             },
             "type": "array",
             "title": "Headline Measurements"
@@ -4481,16 +4488,21 @@
           "score_unit": {
             "type": "string",
             "title": "Score Unit"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
           }
         },
         "type": "object",
         "required": [
           "metric_name",
           "score",
-          "score_unit"
+          "score_unit",
+          "summary"
         ],
         "title": "EvaluationScore",
-        "description": "One metric's overall score from a run's evaluation report, without its breakdowns."
+        "description": "One metric's overall score and one-line summary from a run's evaluation report.\n\nThe per-round and per-agent breakdowns are left out."
       },
       "EvaluationTokenUsage": {
         "properties": {
@@ -4895,35 +4907,6 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
-      },
-      "HeadlineMeasurement": {
-        "properties": {
-          "metric_name": {
-            "type": "string",
-            "title": "Metric Name"
-          },
-          "score": {
-            "type": "number",
-            "title": "Score"
-          },
-          "score_unit": {
-            "type": "string",
-            "title": "Score Unit"
-          },
-          "summary": {
-            "type": "string",
-            "title": "Summary"
-          }
-        },
-        "type": "object",
-        "required": [
-          "metric_name",
-          "score",
-          "score_unit",
-          "summary"
-        ],
-        "title": "HeadlineMeasurement",
-        "description": "Compact eval measurement surfaced inline on a derived run reference."
       },
       "HealthResponse": {
         "properties": {
@@ -6245,10 +6228,17 @@
             "title": "Has Evaluation"
           },
           "evaluation_scores": {
-            "items": {
-              "$ref": "#/components/schemas/EvaluationScore"
-            },
-            "type": "array",
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EvaluationScore"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Evaluation Scores"
           },
           "evaluation_in_progress": {
@@ -6372,7 +6362,7 @@
           "evaluation_content_hash"
         ],
         "title": "RunSummary",
-        "description": "Summary of a single simulation run for the runs list endpoint.\n\n``evaluation_scores`` holds every measurement in the run's evaluation report,\nin report order, and is empty when ``has_evaluation`` is false."
+        "description": "Summary of a single simulation run for the runs list endpoint.\n\n``evaluation_scores`` holds every measurement in the run's evaluation report,\nin report order. It is empty when ``has_evaluation`` is false and null when\nthe report exists but could not be read or parsed."
       },
       "SSEAgentConnected": {
         "properties": {

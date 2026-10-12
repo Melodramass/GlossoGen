@@ -13,8 +13,9 @@ const HOVER_OPEN_DELAY_MS = 250;
 const HOVER_CLOSE_DELAY_MS = 80;
 
 /** The Evaluated badge, whose hover popover lists the scores the run listing
- *  already returned for the run. */
-export function EvaluationBadge({ scores }: { scores: EvaluationScore[] }) {
+ *  already returned for the run. `scores` is null when the run's report exists
+ *  but could not be read. */
+export function EvaluationBadge({ scores }: { scores: EvaluationScore[] | null }) {
   const [popover, setPopover] = useState<AnchorBox | null>(null);
   const [position, setPosition] = useState<PopoverPosition | null>(null);
   const openTimerRef = useRef<number | null>(null);
@@ -140,13 +141,18 @@ export function EvaluationBadge({ scores }: { scores: EvaluationScore[] }) {
                 onMouseLeave={closeSoon}
                 onClick={e => e.stopPropagation()}
               >
-                {scores.length === 0 ? (
+                {scores === null ? (
+                  <span className="text-muted-foreground">
+                    Evaluation report could not be read.
+                  </span>
+                ) : scores.length === 0 ? (
                   <span className="text-muted-foreground">No measurements recorded.</span>
                 ) : (
                   <div className="space-y-0.5">
                     {scores.map((m, index) => (
                       <div
                         key={`${m.metric_name}::${index}`}
+                        title={m.summary}
                         className="flex items-baseline justify-between gap-4"
                       >
                         <span>{humanize(m.metric_name)}</span>

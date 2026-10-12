@@ -8,7 +8,7 @@ import { EvaluationBadge } from "./evaluation-badge";
 import { formatCost, humanize } from "./format";
 
 type DerivedRunReference = components["schemas"]["DerivedRunReference"];
-type HeadlineMeasurement = components["schemas"]["HeadlineMeasurement"];
+type EvaluationScore = components["schemas"]["EvaluationScore"];
 type RunStatus = components["schemas"]["RunStatus"];
 
 const STATUS_LABELS: Record<RunStatus, string> = {
@@ -171,7 +171,7 @@ function StatusPill({ status }: { status: RunStatus }) {
   );
 }
 
-function HeadlineScores({ measurements }: { measurements: HeadlineMeasurement[] }) {
+function HeadlineScores({ measurements }: { measurements: EvaluationScore[] }) {
   if (measurements.length === 0) {
     return null;
   }

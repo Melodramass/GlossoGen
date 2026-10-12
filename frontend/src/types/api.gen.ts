@@ -1761,9 +1761,9 @@ export interface components {
             /** Has Evaluation */
             has_evaluation: boolean;
             /** Evaluation Scores */
-            evaluation_scores: components["schemas"]["EvaluationScore"][];
+            evaluation_scores: components["schemas"]["EvaluationScore"][] | null;
             /** Headline Measurements */
-            headline_measurements: components["schemas"]["HeadlineMeasurement"][];
+            headline_measurements: components["schemas"]["EvaluationScore"][];
         };
         /**
          * DimensionFilter
@@ -1940,7 +1940,9 @@ export interface components {
         };
         /**
          * EvaluationScore
-         * @description One metric's overall score from a run's evaluation report, without its breakdowns.
+         * @description One metric's overall score and one-line summary from a run's evaluation report.
+         *
+         *     The per-round and per-agent breakdowns are left out.
          */
         EvaluationScore: {
             /** Metric Name */
@@ -1949,6 +1951,8 @@ export interface components {
             score: number;
             /** Score Unit */
             score_unit: string;
+            /** Summary */
+            summary: string;
         };
         /**
          * EvaluationTokenUsage
@@ -2172,20 +2176,6 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
-        };
-        /**
-         * HeadlineMeasurement
-         * @description Compact eval measurement surfaced inline on a derived run reference.
-         */
-        HeadlineMeasurement: {
-            /** Metric Name */
-            metric_name: string;
-            /** Score */
-            score: number;
-            /** Score Unit */
-            score_unit: string;
-            /** Summary */
-            summary: string;
         };
         /**
          * HealthResponse
@@ -2787,7 +2777,8 @@ export interface components {
          * @description Summary of a single simulation run for the runs list endpoint.
          *
          *     ``evaluation_scores`` holds every measurement in the run's evaluation report,
-         *     in report order, and is empty when ``has_evaluation`` is false.
+         *     in report order. It is empty when ``has_evaluation`` is false and null when
+         *     the report exists but could not be read or parsed.
          */
         RunSummary: {
             /** Run Id */
@@ -2815,7 +2806,7 @@ export interface components {
             /** Has Evaluation */
             has_evaluation: boolean;
             /** Evaluation Scores */
-            evaluation_scores: components["schemas"]["EvaluationScore"][];
+            evaluation_scores: components["schemas"]["EvaluationScore"][] | null;
             /** Evaluation In Progress */
             evaluation_in_progress: boolean;
             /** Run Dir */

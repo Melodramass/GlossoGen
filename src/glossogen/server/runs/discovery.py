@@ -28,7 +28,10 @@ from glossogen.models.event import (
 )
 from glossogen.replace_manifest import REPLACE_MANIFEST_FILENAME, boundary_round_of, rounds_after_of
 from glossogen.run_identity import compose_run_id
-from glossogen.server.runs.evaluation_score_reader import read_evaluation_scores
+from glossogen.server.runs.evaluation_score_reader import (
+    EvaluationReportScores,
+    read_evaluation_scores,
+)
 from glossogen.server.runs.manifest_sources import (
     FORK_MANIFEST_FILENAME,
     read_cross_run_replace_agent_source,
@@ -39,7 +42,6 @@ from glossogen.server.runs.manifest_sources import (
 from glossogen.server.runs.models import (
     AgentModelSummary,
     CrossRunReplaceAgentSource,
-    EvaluationScore,
     ForkAtRoundSource,
     ForkSource,
     ReplaceAgentSource,
@@ -395,34 +397,26 @@ class _LiveFields(NamedTuple):
 
     labels: list[str]
     has_note: bool
-    has_evaluation: bool
-    evaluation_scores: list[EvaluationScore]
     evaluation_in_progress: bool
 
 
-def _live_fields(
-    scenario_name: str,
-    timestamp_dir: Path,
-) -> _LiveFields:
+def _live_fields(timestamp_dir: Path) -> _LiveFields:
     """Read the fields that can change after a run completes.
 
     Labels here must stay a disk read even where the database mirrors them:
     ``sync-metadata-to-prod`` computes label drift from the paginated ``/runs``
     response, so a page row has to report what ``labels.json`` actually holds.
     """
-    evaluation_scores = read_evaluation_scores(
-        report_path=timestamp_dir / f"{scenario_name}_report.json"
-    )
-    has_evaluation = evaluation_scores is not None
-    if evaluation_scores is None:
-        evaluation_scores = []
     return _LiveFields(
         labels=read_run_labels(run_dir=timestamp_dir),
         has_note=_has_note(run_dir=timestamp_dir),
-        has_evaluation=has_evaluation,
-        evaluation_scores=evaluation_scores,
         evaluation_in_progress=read_eval_manifest(run_dir=timestamp_dir) is not None,
     )
+
+
+def _report_scores(scenario_name: str, timestamp_dir: Path) -> EvaluationReportScores:
+    """Read the run's evaluation report. A run that has not ended reports none."""
+    return read_evaluation_scores(report_path=timestamp_dir / f"{scenario_name}_report.json")
 
 
 def read_scenario_config(scenario_name: str, timestamp_dir: Path) -> dict[str, Any] | None:
@@ -487,10 +481,8 @@ def _build_summary_sync(
 
     cache = _read_summary_cache(run_dir=timestamp_dir)
     if cache is not None:
-        live = _live_fields(
-            scenario_name=scenario_name,
-            timestamp_dir=timestamp_dir,
-        )
+        live = _live_fields(timestamp_dir=timestamp_dir)
+        report = _report_scores(scenario_name=scenario_name, timestamp_dir=timestamp_dir)
         return RunSummary(
             run_id=run_id,
             scenario_name=cache.scenario_name,
@@ -504,8 +496,8 @@ def _build_summary_sync(
             total_cost_usd=cache.total_cost_usd,
             duration_seconds=cache.duration_seconds,
             status=cache.status,
-            has_evaluation=live.has_evaluation,
-            evaluation_scores=live.evaluation_scores,
+            has_evaluation=report.has_report,
+            evaluation_scores=report.scores,
             evaluation_in_progress=live.evaluation_in_progress,
             run_dir=str(timestamp_dir),
             fork_source=cache.fork_source,
@@ -539,12 +531,10 @@ def _build_summary_sync(
         run_dir=timestamp_dir,
         base_config=first_event.scenario_config,
     )
-    live = _live_fields(
-        scenario_name=scenario_name,
-        timestamp_dir=timestamp_dir,
-    )
+    live = _live_fields(timestamp_dir=timestamp_dir)
 
     if scan.last_event is not None:
+        report = _report_scores(scenario_name=scenario_name, timestamp_dir=timestamp_dir)
         derived = (
             fork_source is not None
             or replace_agent_source is not None
@@ -583,8 +573,8 @@ def _build_summary_sync(
             total_cost_usd=scan.last_event.total_cost_usd,
             duration_seconds=duration_seconds,
             status=scan.last_event.reason,
-            has_evaluation=live.has_evaluation,
-            evaluation_scores=live.evaluation_scores,
+            has_evaluation=report.has_report,
+            evaluation_scores=report.scores,
             evaluation_in_progress=live.evaluation_in_progress,
             run_dir=str(timestamp_dir),
             fork_source=fork_source,
