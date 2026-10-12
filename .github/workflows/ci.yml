@@ -32,6 +32,13 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    # A merge to main pushes two commits (the merge, then release.yml's version
+    # bump), and both runs push the coverage baseline to the same data branch.
+    # Run main's one at a time so the second starts from the first's push
+    # instead of being rejected. Each PR run gets its own group.
+    concurrency:
+      group: coverage-baseline-${{ github.event_name == 'push' && 'main' || github.run_id }}
+      cancel-in-progress: false
     permissions:
       # GitHub downgrades both to read-only for pull_request runs from forks,
       # so a fork's PR cannot use them. Trusted PRs get their comment posted
