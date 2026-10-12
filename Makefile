@@ -1,4 +1,9 @@
-BLACK_EXCLUDE := ^/(\.venv|frontend|runs|build|dist)/|vulture_whitelist\.py
+# Passing --exclude replaces black's default excludes, which match .venv at any
+# depth, and stops black reading .gitignore. Every entry here is anchored at the
+# root. .claude is listed because Claude Code keeps worktrees under
+# .claude/worktrees/, each with its own source tree and .venv, and black would
+# otherwise reformat all of it.
+BLACK_EXCLUDE := ^/(\.claude|\.venv|frontend|runs|build|dist)/|vulture_whitelist\.py
 
 # Installation
 install: install-server install-frontend
@@ -111,14 +116,14 @@ lint: lint-server lint-frontend
 lint-server:
 	@echo "Linting server..."
 	VIRTUAL_ENV= uv run --no-sync black . --exclude '$(BLACK_EXCLUDE)'
-	VIRTUAL_ENV= uv run --no-sync isort . --skip-glob '.venv/*' --skip-glob 'frontend/*' --skip-glob 'vulture_whitelist.py' --skip-glob 'runs/*' --skip-glob 'build/*' --skip-glob 'dist/*'
-	VIRTUAL_ENV= uv run --no-sync ruff check . --exclude .venv --exclude frontend --exclude vulture_whitelist.py --exclude runs
+	VIRTUAL_ENV= uv run --no-sync isort . --skip-glob '.claude/*' --skip-glob '.venv/*' --skip-glob 'frontend/*' --skip-glob 'vulture_whitelist.py' --skip-glob 'runs/*' --skip-glob 'build/*' --skip-glob 'dist/*'
+	VIRTUAL_ENV= uv run --no-sync ruff check . --exclude .claude --exclude .venv --exclude frontend --exclude vulture_whitelist.py --exclude runs
 	VIRTUAL_ENV= uv run --no-sync pyright --project pyproject.toml
 	VIRTUAL_ENV= uv run --no-sync vulture src/ scripts/ linter/ vulture_whitelist.py --min-confidence 60
-	VIRTUAL_ENV= uv run --no-sync python linter/check_inline_imports.py --target-dir . --exclude runs --exclude modal --exclude build --exclude dist
-	VIRTUAL_ENV= uv run --no-sync python linter/check_type_checking.py --target-dir . --exclude runs --exclude build --exclude dist
-	VIRTUAL_ENV= uv run --no-sync python linter/check_prompt_templates.py --target-dir . --exclude runs --exclude modal --exclude build --exclude node_modules
-	VIRTUAL_ENV= uv run --no-sync python linter/check_notebook_outputs.py --target-dir . --exclude runs --exclude site --exclude build --exclude node_modules --exclude .venv
+	VIRTUAL_ENV= uv run --no-sync python linter/check_inline_imports.py --target-dir . --exclude .claude --exclude runs --exclude modal --exclude build --exclude dist
+	VIRTUAL_ENV= uv run --no-sync python linter/check_type_checking.py --target-dir . --exclude .claude --exclude runs --exclude build --exclude dist
+	VIRTUAL_ENV= uv run --no-sync python linter/check_prompt_templates.py --target-dir . --exclude .claude --exclude runs --exclude modal --exclude build --exclude node_modules
+	VIRTUAL_ENV= uv run --no-sync python linter/check_notebook_outputs.py --target-dir . --exclude .claude --exclude runs --exclude site --exclude build --exclude node_modules --exclude .venv
 	@echo "Server linting complete"
 
 # CI mode for the server: same checks as lint-server, but black and isort only
@@ -127,14 +132,14 @@ lint-server:
 check-server:
 	@echo "Checking server..."
 	VIRTUAL_ENV= uv run --no-sync black --check . --exclude '$(BLACK_EXCLUDE)'
-	VIRTUAL_ENV= uv run --no-sync isort --check-only . --skip-glob '.venv/*' --skip-glob 'frontend/*' --skip-glob 'vulture_whitelist.py' --skip-glob 'runs/*' --skip-glob 'build/*' --skip-glob 'dist/*'
-	VIRTUAL_ENV= uv run --no-sync ruff check . --exclude .venv --exclude frontend --exclude vulture_whitelist.py --exclude runs
+	VIRTUAL_ENV= uv run --no-sync isort --check-only . --skip-glob '.claude/*' --skip-glob '.venv/*' --skip-glob 'frontend/*' --skip-glob 'vulture_whitelist.py' --skip-glob 'runs/*' --skip-glob 'build/*' --skip-glob 'dist/*'
+	VIRTUAL_ENV= uv run --no-sync ruff check . --exclude .claude --exclude .venv --exclude frontend --exclude vulture_whitelist.py --exclude runs
 	VIRTUAL_ENV= uv run --no-sync pyright --project pyproject.toml
 	VIRTUAL_ENV= uv run --no-sync vulture src/ scripts/ linter/ vulture_whitelist.py --min-confidence 60
-	VIRTUAL_ENV= uv run --no-sync python linter/check_inline_imports.py --target-dir . --exclude runs --exclude modal --exclude build --exclude dist
-	VIRTUAL_ENV= uv run --no-sync python linter/check_type_checking.py --target-dir . --exclude runs --exclude build --exclude dist
-	VIRTUAL_ENV= uv run --no-sync python linter/check_prompt_templates.py --target-dir . --exclude runs --exclude modal --exclude build --exclude node_modules
-	VIRTUAL_ENV= uv run --no-sync python linter/check_notebook_outputs.py --target-dir . --exclude runs --exclude site --exclude build --exclude node_modules --exclude .venv
+	VIRTUAL_ENV= uv run --no-sync python linter/check_inline_imports.py --target-dir . --exclude .claude --exclude runs --exclude modal --exclude build --exclude dist
+	VIRTUAL_ENV= uv run --no-sync python linter/check_type_checking.py --target-dir . --exclude .claude --exclude runs --exclude build --exclude dist
+	VIRTUAL_ENV= uv run --no-sync python linter/check_prompt_templates.py --target-dir . --exclude .claude --exclude runs --exclude modal --exclude build --exclude node_modules
+	VIRTUAL_ENV= uv run --no-sync python linter/check_notebook_outputs.py --target-dir . --exclude .claude --exclude runs --exclude site --exclude build --exclude node_modules --exclude .venv
 	@echo "Server check complete"
 
 lint-frontend:
