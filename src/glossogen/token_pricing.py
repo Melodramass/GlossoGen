@@ -16,7 +16,7 @@ from typing import NamedTuple
 from genai_prices import Usage, calc_price
 from genai_prices.types import ModelInfo, TieredPrices
 
-from glossogen.model_catalog import Provider
+from glossogen.model_catalog import PROVIDER_SPECS, Provider
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,9 @@ class TokenPricing(NamedTuple):
 
 
 # Served from hardware billed elsewhere, so their tokens cost nothing here.
-_ZERO_COST_PROVIDERS: frozenset[Provider] = frozenset({Provider.SELF_HOSTED, Provider.OLLAMA})
+_ZERO_COST_PROVIDERS: frozenset[Provider] = frozenset(
+    spec.provider for spec in PROVIDER_SPECS if not spec.billed
+)
 
 _SELF_HOSTED_PRICING = TokenPricing(
     input_per_mtok=0.0,

@@ -7,9 +7,12 @@ which needs editing every time a family is added and silently misfiles anything
 it has not heard of.
 
 Provider is the sounder signal, and the platform already records it per agent. A
-provider is a fixed set the CLI validates, and it says how the model was served:
-`self-hosted` and `ollama` are weights running on hardware someone chose, and the
-hosted APIs are not. That holds for a model family nobody here has run yet.
+provider is a fixed set the CLI validates, and its row in `PROVIDER_SPECS` says
+which weights it serves: `self-hosted` and `ollama` run weights on hardware
+someone chose, and hosts such as `groq` and `deepseek` serve open-weight models,
+while `anthropic`, `openai`, `google-gla` and `xai` serve closed ones. That holds
+for a model family nobody here has run yet. A provider serving both, such as
+`openrouter`, has no class.
 
 A run whose agents span both is `mixed`, which is its own condition rather than a
 missing value: the cross-family pairings are the reason this column exists.
@@ -19,18 +22,18 @@ is empty and the run is visibly unclassified instead of quietly counted as
 closed.
 """
 
-from glossogen.model_catalog import Provider
+from glossogen.model_catalog import PROVIDER_SPECS, Provider, WeightClass
 from glossogen.server.runs.models import AgentModelSummary
 
-OPEN_WEIGHT_PROVIDERS: frozenset[Provider] = frozenset({Provider.SELF_HOSTED, Provider.OLLAMA})
+OPEN_WEIGHT_PROVIDERS: frozenset[Provider] = frozenset(
+    spec.provider for spec in PROVIDER_SPECS if spec.weights is WeightClass.OPEN
+)
 CLOSED_WEIGHT_PROVIDERS: frozenset[Provider] = frozenset(
-    {Provider.ANTHROPIC, Provider.OPENAI, Provider.GOOGLE_GLA}
+    spec.provider for spec in PROVIDER_SPECS if spec.weights is WeightClass.CLOSED
 )
 
 MODEL_CLASS_COLUMN = "model_class"
 
-_OPEN = "open"
-_CLOSED = "closed"
 _MIXED = "mixed"
 
 
@@ -49,7 +52,7 @@ def model_class_of(agent_models: list[AgentModelSummary]) -> str:
     if open_seen and closed_seen:
         return _MIXED
     if open_seen:
-        return _OPEN
+        return WeightClass.OPEN.value
     if closed_seen:
-        return _CLOSED
+        return WeightClass.CLOSED.value
     return ""

@@ -26,7 +26,7 @@ From a checkout, spell each command
 | Flag | Does |
 |---|---|
 | `--model` | Model identifier, required. The default for every agent, see [per-agent models](#per-agent-models) |
-| `--provider` | `anthropic`, `openai`, `google-gla`, `ollama`, `self-hosted`; required. Also the default for every agent. A knob naming a provider (`judge_provider`, `model_overrides`, `scheduled_events`) takes the same values, and `glossogen evaluate --provider` takes a judge provider: `anthropic`, `huggingface` or `openai` |
+| `--provider` | One of the [providers](#providers); required. Also the default for every agent. A knob naming a provider (`judge_provider`, `model_overrides`, `scheduled_events`) takes the same values, and `glossogen evaluate --provider` takes a judge provider: `anthropic`, `huggingface` or `openai` |
 | `--runs-dir` | Root directory for run output. Required unless `--resume` is given, which names the directory itself |
 | `--config` | A preset the scenario ships (`knobs_default`), or a path to a JSON file of your own; required |
 | `--max-agent-turns` | Ceiling on agentic turns per agent (default 200) |
@@ -107,6 +107,37 @@ glossogen run veyru \
 | An override must name a `model` | `provider` is optional and falls back to `--provider`, so `field_observer` above stays on Anthropic. Moving an agent to another provider takes both lines |
 | The flags stay required even when every agent is overridden | No agent runs under them, but `--provider` is still the fallback for an override that names only a model, so set both to real values rather than placeholders |
 | The launch check reads the resolved pairs | A run whose every agent is on `openai` needs no credential for the `--provider` on the command line. It needs a key for every provider some agent resolved to, plus the scenario's judge, which is its own knob (`judge_provider`) |
+
+### Providers
+
+An agent can run under any of these. Each needs its key in the `.env`, and the
+launch check refuses a run whose key is unset. Hosted providers are priced from
+the `genai-prices` catalog; a model it does not list runs, but is not costed.
+
+| `--provider` | Reaches | Key | Weights |
+|---|---|---|---|
+| `anthropic` | Claude | `ANTHROPIC_API_KEY` | closed |
+| `openai` | GPT | `OPENAI_API_KEY` | closed |
+| `google-gla` | Gemini | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | closed |
+| `xai` | Grok | `XAI_API_KEY` | closed |
+| `groq` | open-weight models on Groq (Llama, Qwen, gpt-oss) | `GROQ_API_KEY` | open |
+| `mistral` | Mistral | `MISTRAL_API_KEY` | mixed |
+| `deepseek` | DeepSeek | `DEEPSEEK_API_KEY` | open |
+| `openrouter` | hundreds of models from many vendors, named `vendor/model` | `OPENROUTER_API_KEY` | mixed |
+| `ollama` | a local Ollama server | `OLLAMA_BASE_URL` | open |
+| `self-hosted` | any OpenAI-compatible endpoint, see below | `SELF_HOSTED_BASE_URLS`, `SELF_HOSTED_API_KEY` | open |
+
+The weights column feeds the export's `model_class`; a provider serving both
+leaves a run unclassified rather than guessing.
+
+**A model you trained yourself.** Serve it behind an OpenAI-compatible endpoint
+(vLLM, SGLang, TGI, LM Studio) and run it as `self-hosted`, below. A fine-tune
+hosted by a provider above runs under that provider with the fine-tune's model
+name (`--provider openai --model ft:gpt-4.1-mini:...`).
+
+A provider pydantic-ai and `genai-prices` already support is added in one place,
+`PROVIDER_SPECS` in [model_catalog.py](../src/glossogen/model_catalog.py): a row
+with its key, its pydantic-ai prefix, whether it is billed, and its weights.
 
 ### Self-hosted and local models
 

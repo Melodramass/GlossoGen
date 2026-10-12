@@ -10,7 +10,14 @@ import os
 from typing import Any, NamedTuple
 
 from glossogen.config_overrides import ResolvedAgentModel
-from glossogen.model_catalog import Provider
+from glossogen.model_catalog import (
+    PROVIDER_SPECS,
+    SELF_HOSTED_API_KEY_VAR,
+    SELF_HOSTED_BASE_URLS_VAR,
+    CredentialRequirement,
+    Provider,
+    provider_spec,
+)
 from glossogen.models.agent_config import AgentRole
 from glossogen.models.compaction_config import COMPACTION_PROVIDERS
 from glossogen.models.model_consumer import ModelConsumer
@@ -18,20 +25,7 @@ from glossogen.runtime.scheduled_events import SwapAgent
 from glossogen.scenario_protocol import SimulationScenario
 from glossogen.self_hosted_config import parse_self_hosted_base_urls
 
-SELF_HOSTED_BASE_URLS_VAR = "SELF_HOSTED_BASE_URLS"
-SELF_HOSTED_API_KEY_VAR = "SELF_HOSTED_API_KEY"
-OLLAMA_BASE_URL_VAR = "OLLAMA_BASE_URL"
 ANTHROPIC_MIN_COMPACTION_TOKENS = 50_000
-
-
-class CredentialRequirement(NamedTuple):
-    """Environment variables that each satisfy one credential a provider reads.
-
-    Any one of ``accepted_names`` carrying a value satisfies the requirement. A
-    provider that reads two independent values declares two requirements.
-    """
-
-    accepted_names: tuple[str, ...]
 
 
 class UnreachableProvider(NamedTuple):
@@ -44,19 +38,6 @@ class UnreachableProvider(NamedTuple):
     provider: str
     caller_names: tuple[str, ...]
     remedy: str
-
-
-# A provider absent from this table contributes no requirement. Hugging Face is
-# a judge provider whose client reads its token itself. ``self-hosted`` is
-# handled separately because its requirements depend on the model name.
-_REQUIREMENTS: dict[Provider, tuple[CredentialRequirement, ...]] = {
-    Provider.ANTHROPIC: (CredentialRequirement(accepted_names=("ANTHROPIC_API_KEY",)),),
-    Provider.OPENAI: (CredentialRequirement(accepted_names=("OPENAI_API_KEY",)),),
-    Provider.GOOGLE_GLA: (
-        CredentialRequirement(accepted_names=("GOOGLE_API_KEY", "GEMINI_API_KEY")),
-    ),
-    Provider.OLLAMA: (CredentialRequirement(accepted_names=(OLLAMA_BASE_URL_VAR,)),),
-}
 
 
 def require_reachable_models(
@@ -218,11 +199,16 @@ def describe_unreachable_providers(unreachable: tuple[UnreachableProvider, ...])
 
 
 def _remedies_for(model: str, provider: Provider) -> tuple[str, ...]:
-    """Return what stands between this caller and its model, as things to go and do."""
+    """Return what stands between this caller and its model, as things to go and do.
+
+    A provider's requirements come from its row in ``PROVIDER_SPECS``. A provider
+    with no row, Hugging Face as a judge, has none here: its client reads its own
+    token. ``self-hosted`` also needs its endpoint map to serve the model.
+    """
     if provider == Provider.SELF_HOSTED:
         return _self_hosted_remedies(model=model)
     remedies: list[str] = []
-    for requirement in _REQUIREMENTS.get(provider, ()):
+    for requirement in _requirements(provider=provider):
         if _any_name_carries_a_value(names=requirement.accepted_names):
             continue
         remedies.append(f"set {' or '.join(requirement.accepted_names)}")
@@ -285,18 +271,25 @@ def _any_name_carries_a_value(names: tuple[str, ...]) -> bool:
     return any(os.environ.get(name, "").strip() != "" for name in names)
 
 
+def _requirements(provider: Provider) -> tuple[CredentialRequirement, ...]:
+    spec = provider_spec(provider=provider)
+    if spec is None:
+        return ()
+    return spec.credentials
+
+
 def credential_variable_names() -> tuple[str, ...]:
     """Return every environment variable a run's reachability can depend on.
 
-    Derived from the table above rather than restated, so a provider added there is
+    Derived from ``PROVIDER_SPECS`` rather than restated, so a provider added there is
     covered everywhere this list is used. `scenario_conformance` hides these while it
     builds a scenario, and a name missing from that guard is a check that passes on a
     machine holding the key and fails on one that does not.
     """
     names = {
         name
-        for requirements in _REQUIREMENTS.values()
-        for requirement in requirements
+        for spec in PROVIDER_SPECS
+        for requirement in spec.credentials
         for name in requirement.accepted_names
     }
-    return tuple(sorted(names | {SELF_HOSTED_BASE_URLS_VAR, SELF_HOSTED_API_KEY_VAR}))
+    return tuple(sorted(names))

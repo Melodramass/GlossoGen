@@ -1,5 +1,12 @@
 """The models and providers a run can be launched with.
 
+``PROVIDER_SPECS`` is the one place a provider an agent can run under is
+described: the variables that carry its credential, the model prefix pydantic-ai
+reaches it by, whether its tokens are billed, and whether it serves open- or
+closed-weight models. The launch check, the model factory, pricing and the
+``model_class`` export column all read it, so adding a provider pydantic-ai and
+``genai-prices`` already know is a row here and a name in ``Provider``.
+
 The hosted entries are the models the run and evaluation pickers offer. Self-hosted
 models are discovered from the ``SELF_HOSTED_BASE_URLS`` environment variable (a
 JSON object mapping model name → endpoint URL), so adding a self-hosted deployment
@@ -9,6 +16,7 @@ needs no code change here. Prices live elsewhere: see ``token_pricing``.
 import logging
 import os
 from enum import StrEnum
+from typing import NamedTuple
 
 from glossogen.self_hosted_config import parse_self_hosted_base_urls
 
@@ -21,20 +29,146 @@ class Provider(StrEnum):
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
     GOOGLE_GLA = "google-gla"
+    XAI = "xai"
+    GROQ = "groq"
+    MISTRAL = "mistral"
+    DEEPSEEK = "deepseek"
+    OPENROUTER = "openrouter"
     OLLAMA = "ollama"
     SELF_HOSTED = "self-hosted"
     HUGGINGFACE = "huggingface"
 
 
+SELF_HOSTED_BASE_URLS_VAR = "SELF_HOSTED_BASE_URLS"
+SELF_HOSTED_API_KEY_VAR = "SELF_HOSTED_API_KEY"
+OLLAMA_BASE_URL_VAR = "OLLAMA_BASE_URL"
+
+
+class CredentialRequirement(NamedTuple):
+    """Environment variables that each satisfy one credential a provider reads.
+
+    Any one of ``accepted_names`` carrying a value satisfies the requirement. A
+    provider that reads two independent values declares two requirements.
+    """
+
+    accepted_names: tuple[str, ...]
+
+
+class WeightClass(StrEnum):
+    """Whether a provider's models are open-weight or closed."""
+
+    OPEN = "open"
+    CLOSED = "closed"
+
+
+class ProviderSpec(NamedTuple):
+    """What the platform needs to know to run an agent under one provider.
+
+    ``pydantic_ai_prefix`` is the ``<prefix>:<model>`` name pydantic-ai builds the
+    model from, or None for ``self-hosted``, whose model the factory builds itself.
+    ``billed`` is False for a provider served on hardware billed elsewhere, priced
+    at zero. ``weights`` is None for a provider serving both open- and
+    closed-weight models, so its runs are left unclassified rather than guessed.
+    """
+
+    provider: Provider
+    credentials: tuple[CredentialRequirement, ...]
+    pydantic_ai_prefix: str | None
+    billed: bool
+    weights: WeightClass | None
+
+
+PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
+    ProviderSpec(
+        provider=Provider.ANTHROPIC,
+        credentials=(CredentialRequirement(accepted_names=("ANTHROPIC_API_KEY",)),),
+        pydantic_ai_prefix="anthropic",
+        billed=True,
+        weights=WeightClass.CLOSED,
+    ),
+    ProviderSpec(
+        provider=Provider.OPENAI,
+        credentials=(CredentialRequirement(accepted_names=("OPENAI_API_KEY",)),),
+        pydantic_ai_prefix="openai-responses",
+        billed=True,
+        weights=WeightClass.CLOSED,
+    ),
+    # ``google-gla`` is Glossogen's stable name; pydantic-ai 2.x reaches the Gemini
+    # Developer API under the ``google`` prefix.
+    ProviderSpec(
+        provider=Provider.GOOGLE_GLA,
+        credentials=(CredentialRequirement(accepted_names=("GOOGLE_API_KEY", "GEMINI_API_KEY")),),
+        pydantic_ai_prefix="google",
+        billed=True,
+        weights=WeightClass.CLOSED,
+    ),
+    ProviderSpec(
+        provider=Provider.XAI,
+        credentials=(CredentialRequirement(accepted_names=("XAI_API_KEY",)),),
+        pydantic_ai_prefix="xai",
+        billed=True,
+        weights=WeightClass.CLOSED,
+    ),
+    ProviderSpec(
+        provider=Provider.GROQ,
+        credentials=(CredentialRequirement(accepted_names=("GROQ_API_KEY",)),),
+        pydantic_ai_prefix="groq",
+        billed=True,
+        weights=WeightClass.OPEN,
+    ),
+    ProviderSpec(
+        provider=Provider.MISTRAL,
+        credentials=(CredentialRequirement(accepted_names=("MISTRAL_API_KEY",)),),
+        pydantic_ai_prefix="mistral",
+        billed=True,
+        weights=None,
+    ),
+    ProviderSpec(
+        provider=Provider.DEEPSEEK,
+        credentials=(CredentialRequirement(accepted_names=("DEEPSEEK_API_KEY",)),),
+        pydantic_ai_prefix="deepseek",
+        billed=True,
+        weights=WeightClass.OPEN,
+    ),
+    ProviderSpec(
+        provider=Provider.OPENROUTER,
+        credentials=(CredentialRequirement(accepted_names=("OPENROUTER_API_KEY",)),),
+        pydantic_ai_prefix="openrouter",
+        billed=True,
+        weights=None,
+    ),
+    ProviderSpec(
+        provider=Provider.OLLAMA,
+        credentials=(CredentialRequirement(accepted_names=(OLLAMA_BASE_URL_VAR,)),),
+        pydantic_ai_prefix="ollama",
+        billed=False,
+        weights=WeightClass.OPEN,
+    ),
+    # Which endpoint serves a self-hosted model depends on the model's name, so
+    # the launch check looks it up in ``SELF_HOSTED_BASE_URLS`` itself.
+    ProviderSpec(
+        provider=Provider.SELF_HOSTED,
+        credentials=(
+            CredentialRequirement(accepted_names=(SELF_HOSTED_BASE_URLS_VAR,)),
+            CredentialRequirement(accepted_names=(SELF_HOSTED_API_KEY_VAR,)),
+        ),
+        pydantic_ai_prefix=None,
+        billed=False,
+        weights=WeightClass.OPEN,
+    ),
+)
+
+_SPECS_BY_PROVIDER: dict[Provider, ProviderSpec] = {spec.provider: spec for spec in PROVIDER_SPECS}
+
 # The providers a simulation agent, a scheduled swap or a replacement agent can run
 # under: the ones the agent runner builds a pydantic-ai model for.
-SIMULATION_PROVIDERS: tuple[Provider, ...] = (
-    Provider.ANTHROPIC,
-    Provider.OPENAI,
-    Provider.GOOGLE_GLA,
-    Provider.OLLAMA,
-    Provider.SELF_HOSTED,
-)
+SIMULATION_PROVIDERS: tuple[Provider, ...] = tuple(spec.provider for spec in PROVIDER_SPECS)
+
+
+def provider_spec(provider: Provider) -> ProviderSpec | None:
+    """The spec for ``provider``, or None for one no agent runs under (a judge-only one)."""
+    return _SPECS_BY_PROVIDER.get(provider)
+
 
 # The providers an LLM judge can run under: the ones ``create_provider`` builds.
 JUDGE_PROVIDERS: tuple[Provider, ...] = (
@@ -56,6 +190,11 @@ _HOSTED_MODELS: tuple[tuple[str, Provider], ...] = (
     ("gpt-5.4-mini", Provider.OPENAI),
     ("gpt-5.4", Provider.OPENAI),
     ("gpt-5.2", Provider.OPENAI),
+    ("grok-4.6", Provider.XAI),
+    ("llama-3.3-70b-versatile", Provider.GROQ),
+    ("mistral-large-latest", Provider.MISTRAL),
+    ("deepseek-chat", Provider.DEEPSEEK),
+    ("deepseek/deepseek-chat-v3.1", Provider.OPENROUTER),
 )
 
 
@@ -65,7 +204,7 @@ def _get_self_hosted_model_names() -> list[str]:
     Returns an empty list when the env var is unset, empty, or not valid JSON,
     so that environments without a self-hosted endpoint do not raise.
     """
-    raw = os.environ.get("SELF_HOSTED_BASE_URLS", "")
+    raw = os.environ.get(SELF_HOSTED_BASE_URLS_VAR, "")
     if not raw:
         return []
     try:

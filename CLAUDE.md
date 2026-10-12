@@ -332,6 +332,7 @@ cp .env.example .env
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Yes (for simulations) | Anthropic API key |
 | `OPENAI_API_KEY` | Optional | OpenAI API key |
+| `GOOGLE_API_KEY` / `GEMINI_API_KEY`, `XAI_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY`, `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY` | Optional | The key of each other hosted provider an agent can run under (`google-gla`, `xai`, `groq`, `mistral`, `deepseek`, `openrouter`); see `PROVIDER_SPECS` in `model_catalog.py` |
 | `HF_TOKEN` | Optional | HuggingFace token |
 | `DATABASE_URL` | No (single-tenant) / Yes (multi-tenant, prod) | Postgres connection string for the tenancy + runs index (e.g. `postgresql://localhost:5432/glossogen_dev`). Leave unset or blank for no-database single-tenant mode (runs index derived from the filesystem, OAuth state in memory). Required whenever an identity provider is installed. |
 | `ALLOWED_ORIGINS` | Optional | Comma-separated CORS origins (defaults to `http://localhost:3000`) |
@@ -628,7 +629,7 @@ VIRTUAL_ENV= uv run --no-sync python -m glossogen run <scenario> \
   > ./runs/<scenario>_stdout.log 2>&1 &
 ```
 
-Required flags: `--model`, `--provider` (`anthropic`, `openai`, `google-gla`, `ollama`, `self-hosted`), `--runs-dir`, `--config <preset-name|path>`.
+Required flags: `--model`, `--provider` (`anthropic`, `openai`, `google-gla`, `xai`, `groq`, `mistral`, `deepseek`, `openrouter`, `ollama`, `self-hosted`), `--runs-dir`, `--config <preset-name|path>`.
 Optional flags: `--max-agent-turns` (default: 200).
 
 The `self-hosted` provider points pydantic-ai at any OpenAI-compatible chat-completions endpoint. `SELF_HOSTED_BASE_URLS` is a JSON map from model name → `/v1` URL, so multiple self-hosted models can coexist; `SELF_HOSTED_API_KEY` is the bearer token shared across them. Reference deployments are in `modal/` (Llama 3.3 70B + Qwen3-32B, both vLLM with tool calling); see `modal/README.md` for deploy steps. Once deployed and the env vars are set:
@@ -641,7 +642,7 @@ VIRTUAL_ENV= uv run --no-sync python -m glossogen run veyru \
   > ./runs/veyru_stdout.log 2>&1 &
 ```
 
-Self-hosted and Ollama models are priced at $0 (GPU time is billed elsewhere). Hosted models are priced from the `genai-prices` catalog in `src/glossogen/token_pricing.py`; the models the pickers offer, and the `Provider` enum with its `SIMULATION_PROVIDERS` / `JUDGE_PROVIDERS` views that every provider field and `--provider` flag is checked against, are in `src/glossogen/model_catalog.py`.
+Self-hosted and Ollama models are priced at $0 (GPU time is billed elsewhere). Hosted models are priced from the `genai-prices` catalog in `src/glossogen/token_pricing.py`; the models the pickers offer, the `Provider` enum, and `PROVIDER_SPECS` (one row per provider an agent can run under: its key, its pydantic-ai prefix, whether it is billed, its weights; `SIMULATION_PROVIDERS` is derived from it) are in `src/glossogen/model_catalog.py`, alongside `JUDGE_PROVIDERS`. Every provider field and `--provider` flag is checked against those.
 
 **Self-hosted context budget (`agent_max_tokens` knob).** Simulation agents' per-cycle output cap is the `agent_max_tokens` knob (`BaseKnobs`, default `16384`), not `LLM_MAX_TOKENS`. Self-hosted models are served at a small fixed context (Llama 3.3 70B is `--max-model-len 24576` in `modal/serve_llama.py`), and `input + agent_max_tokens` must stay under it or vLLM 400s with `"maximum context length is 24576 tokens"` and the run stalls. For **replace-agent / swap / cross-run** runs with a self-hosted agent, the swapped-in agent's *reconstructed history accumulates* (the veyru observer grows to ~18k tokens over a 10-round swap), so the default `16384` output cap overflows. **Set `agent_max_tokens: 2048` in the `--knobs` for self-hosted swap runs** (veyru outputs are short tool calls, so it truncates nothing). Raising `--max-model-len` instead risks KV-cache OOM on H100:2; see `modal/README.md`. The platform also serializes parallel tool calls in reconstructed history for self-hosted agents automatically (vLLM rejects multi-tool-call turns); no action needed there.
 

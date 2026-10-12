@@ -12,7 +12,12 @@ from pydantic_ai.models.openai import OpenAIChatModel, OpenAIResponsesModelSetti
 from pydantic_ai.providers.openai import OpenAIProvider as PydanticAIOpenAIProvider
 from pydantic_ai.settings import ModelSettings
 
-from glossogen.model_catalog import Provider
+from glossogen.model_catalog import (
+    SELF_HOSTED_API_KEY_VAR,
+    SELF_HOSTED_BASE_URLS_VAR,
+    Provider,
+    provider_spec,
+)
 from glossogen.self_hosted_config import parse_self_hosted_base_urls
 
 
@@ -23,7 +28,7 @@ def resolve_self_hosted_base_url(model: str) -> str:
     object mapping model names (as passed to the simulation) to their
     serving endpoints.
     """
-    mapping = parse_self_hosted_base_urls(raw=os.environ["SELF_HOSTED_BASE_URLS"])
+    mapping = parse_self_hosted_base_urls(raw=os.environ[SELF_HOSTED_BASE_URLS_VAR])
     if model not in mapping:
         configured = ", ".join(sorted(mapping)) or "<none>"
         raise KeyError(
@@ -39,24 +44,20 @@ def build_pydantic_ai_model(model: str, provider: Provider) -> str | OpenAIChatM
     For ``self-hosted`` providers the function returns a fully-constructed
     ``OpenAIChatModel`` pointing at the OpenAI-compatible base URL. For all
     other providers it returns the ``"<prefix>:<model>"`` string literal that
-    pydantic-ai uses to look up the right backend.
+    pydantic-ai uses to look up the right backend, with the prefix from the
+    provider's row in ``PROVIDER_SPECS``.
     """
-    if provider == Provider.SELF_HOSTED:
+    spec = provider_spec(provider=provider)
+    if spec is None:
+        raise ValueError(f"no agent runs under provider {provider!r}")
+    if spec.pydantic_ai_prefix is None:
         base_url = resolve_self_hosted_base_url(model=model)
         oai_provider = PydanticAIOpenAIProvider(
             base_url=base_url,
-            api_key=os.environ["SELF_HOSTED_API_KEY"],
+            api_key=os.environ[SELF_HOSTED_API_KEY_VAR],
         )
         return OpenAIChatModel(model, provider=oai_provider)
-    if provider == Provider.OPENAI:
-        model_prefix = "openai-responses"
-    elif provider == Provider.GOOGLE_GLA:
-        # ``google-gla`` is Glossogen's stable provider name. Pydantic AI 2.x
-        # exposes the Gemini Developer API under the ``google`` model prefix.
-        model_prefix = "google"
-    else:
-        model_prefix = provider.value
-    return f"{model_prefix}:{model}"
+    return f"{spec.pydantic_ai_prefix}:{model}"
 
 
 def default_pydantic_ai_settings(provider: Provider) -> ModelSettings:

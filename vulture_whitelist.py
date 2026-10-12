@@ -325,3 +325,5 @@ rounds_covered  # unused variable (src/glossogen/thread_export/thread_export_mod
 thinking_included  # unused variable (src/glossogen/thread_export/thread_export_models.py:163)
 tools_flattened  # unused variable (src/glossogen/thread_export/thread_export_models.py:164)
 exported_at  # unused variable (src/glossogen/thread_export/thread_export_models.py:165)
+model_prefix  # unused variable (src/glossogen/server/mcp/models.py:20)
+model_prefix  # unused variable (src/glossogen/server/scenarios/models.py:21)
