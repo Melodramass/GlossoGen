@@ -206,6 +206,7 @@ def _summary_for(run_dir: Path, scenario_name: str) -> RunSummary:
         duration_seconds=0.0,
         status=RunStatus.SCENARIO_COMPLETE,
         has_evaluation=False,
+        evaluation_scores=[],
         evaluation_in_progress=False,
         run_dir=str(run_dir),
         fork_source=None,

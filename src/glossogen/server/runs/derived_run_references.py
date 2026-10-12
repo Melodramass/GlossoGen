@@ -2,10 +2,10 @@
 
 Walks the Postgres ``runs`` table for every row whose ``source_run_scenario``
 / ``source_run_dir_name`` columns point at the run currently being viewed,
-then enriches each child with manifest-derived boundary info and the eval
-report's headline ``round_success*`` measurements. In no-database local mode
-(``pool`` is ``None``) the same children are found by scanning the filesystem
-and matching each run's manifest-derived source against the parent.
+then enriches each child with manifest-derived boundary info and the headline
+``round_success*`` scores among the summary's evaluation scores. In no-database
+local mode (``pool`` is ``None``) the same children are found by scanning the
+filesystem and matching each run's manifest-derived source against the parent.
 """
 
 import asyncio
@@ -18,11 +18,10 @@ from pydantic import ValidationError
 
 from glossogen.db.pool import DbPool
 from glossogen.db.queries import list_children_of_run
-from glossogen.evaluation.reports.evaluation_report import load_report
 from glossogen.scenario_loader import find_scenario_class
 from glossogen.server.runs.discovery import build_summary, discover_runs
 from glossogen.server.runs.manifest_sources import read_derivation_fields
-from glossogen.server.runs.models import DerivedRunReference, HeadlineMeasurement, RunSummary
+from glossogen.server.runs.models import DerivedRunReference, EvaluationScore, RunSummary
 
 
 class _ChildRunId(NamedTuple):
@@ -154,10 +153,10 @@ async def _build_reference(
         )
         return None
 
-    headline_measurements = await _load_headline_measurements(
-        scenario_name=scenario,
-        run_dir=timestamp_dir,
-    )
+    if summary.evaluation_scores is None:
+        headline_measurements = []
+    else:
+        headline_measurements = headline_measurements_of(scores=summary.evaluation_scores)
 
     target_round_count = _read_target_round_count(
         scenario_name=scenario, scenario_config=summary.scenario_config
@@ -183,6 +182,7 @@ async def _build_reference(
         total_cost_usd=summary.total_cost_usd,
         labels=summary.labels,
         has_evaluation=summary.has_evaluation,
+        evaluation_scores=summary.evaluation_scores,
         headline_measurements=headline_measurements,
     )
 
@@ -212,47 +212,19 @@ def _read_target_round_count(scenario_name: str, scenario_config: dict[str, obje
     return knobs.round_count
 
 
-async def _load_headline_measurements(
-    *,
-    scenario_name: str,
-    run_dir: Path,
-) -> list[HeadlineMeasurement]:
-    """Load up to three ``round_success``-family measurements from the eval report.
+def headline_measurements_of(scores: list[EvaluationScore]) -> list[EvaluationScore]:
+    """Select up to three ``round_success``-family scores for a derived run's row.
 
-    Returns ``[]`` when no report file exists, the file is unreadable,
-    or none of the metric names match the ``round_success`` prefix.
+    ``round_success_after_resume*`` scores come first, then the other
+    ``round_success*`` scores, each group sorted by metric name.
     """
-    report_path = run_dir / f"{scenario_name}_report.json"
-    try:
-        report = await load_report(report_path=report_path)
-    except Exception:
-        logger.exception("Failed to load eval report at %s", report_path)
-        return []
-    if report is None:
-        return []
-
-    after_resume: list[HeadlineMeasurement] = []
-    base: list[HeadlineMeasurement] = []
-    for measurement in report.measurements:
-        if measurement.metric_name.startswith("round_success_after_resume"):
-            after_resume.append(
-                HeadlineMeasurement(
-                    metric_name=measurement.metric_name,
-                    score=measurement.score,
-                    score_unit=measurement.score_unit,
-                    summary=measurement.summary,
-                )
-            )
-        elif measurement.metric_name.startswith("round_success"):
-            base.append(
-                HeadlineMeasurement(
-                    metric_name=measurement.metric_name,
-                    score=measurement.score,
-                    score_unit=measurement.score_unit,
-                    summary=measurement.summary,
-                )
-            )
-
+    after_resume: list[EvaluationScore] = []
+    base: list[EvaluationScore] = []
+    for score in scores:
+        if score.metric_name.startswith("round_success_after_resume"):
+            after_resume.append(score)
+        elif score.metric_name.startswith("round_success"):
+            base.append(score)
     after_resume.sort(key=lambda m: m.metric_name)
     base.sort(key=lambda m: m.metric_name)
     return (after_resume + base)[:3]

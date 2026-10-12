@@ -8,7 +8,7 @@ import { EvaluationBadge } from "./evaluation-badge";
 import { formatCost, humanize } from "./format";
 
 type DerivedRunReference = components["schemas"]["DerivedRunReference"];
-type HeadlineMeasurement = components["schemas"]["HeadlineMeasurement"];
+type EvaluationScore = components["schemas"]["EvaluationScore"];
 type RunStatus = components["schemas"]["RunStatus"];
 
 const STATUS_LABELS: Record<RunStatus, string> = {
@@ -66,7 +66,7 @@ function DerivedRunRow({ child }: { child: DerivedRunReference }) {
       <StatusPill status={child.status} />
       <HeadlineScores measurements={child.headline_measurements} />
       {child.has_evaluation && child.headline_measurements.length === 0 ? (
-        <EvaluationBadge runId={child.run_id} />
+        <EvaluationBadge scores={child.evaluation_scores} />
       ) : null}
       {child.total_cost_usd > 0 ? (
         <span className="ml-auto text-[11px] text-muted-foreground">
@@ -171,7 +171,7 @@ function StatusPill({ status }: { status: RunStatus }) {
   );
 }
 
-function HeadlineScores({ measurements }: { measurements: HeadlineMeasurement[] }) {
+function HeadlineScores({ measurements }: { measurements: EvaluationScore[] }) {
   if (measurements.length === 0) {
     return null;
   }

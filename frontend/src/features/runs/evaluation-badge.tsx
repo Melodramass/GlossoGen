@@ -2,41 +2,26 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Loader2 } from "lucide-react";
-import { api } from "@/shared/lib/api-client";
-import { splitRunId } from "@/shared/lib/run-id";
+import { CheckCircle2 } from "lucide-react";
+import type { components } from "@/types/api.gen";
 import { humanize } from "./format";
 import { type AnchorBox, type PopoverPosition, placePopover } from "./popover-placement";
+
+type EvaluationScore = components["schemas"]["EvaluationScore"];
 
 const HOVER_OPEN_DELAY_MS = 250;
 const HOVER_CLOSE_DELAY_MS = 80;
 
-export function EvaluationBadge({ runId }: { runId: string }) {
+/** The Evaluated badge, whose hover popover lists the scores the run listing
+ *  already returned for the run. `scores` is null when the run's report exists
+ *  but could not be read. */
+export function EvaluationBadge({ scores }: { scores: EvaluationScore[] | null }) {
   const [popover, setPopover] = useState<AnchorBox | null>(null);
   const [position, setPosition] = useState<PopoverPosition | null>(null);
   const openTimerRef = useRef<number | null>(null);
   const closeTimerRef = useRef<number | null>(null);
   const anchorRef = useRef<HTMLSpanElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
-
-  const { data, isLoading } = useQuery({
-    queryKey: ["run-evaluation", runId],
-    enabled: popover !== null,
-    queryFn: async () => {
-      const { data, error } = await api.GET(
-        "/api/g/{group_slug}/runs/{scenario}/{run_dir_name}/evaluation",
-        {
-          params: { path: splitRunId(runId) },
-        }
-      );
-      if (error) {
-        throw new Error("Failed to fetch evaluation");
-      }
-      return data;
-    },
-    staleTime: 60_000,
-  });
 
   function clearOpenTimer() {
     if (openTimerRef.current !== null) {
@@ -107,10 +92,10 @@ export function EvaluationBadge({ runId }: { runId: string }) {
     };
   }, [popover]);
 
-  // Placed once rendered, since its size depends on what it shows; measured again
-  // as the report loads, before the browser paints. The height is the content's
-  // full height, read through scrollHeight, so a cap from an earlier placement
-  // does not hide how tall the report is.
+  // Placed once rendered, since its size depends on what it shows, and again
+  // before the browser paints if the scores change while it is open. The height
+  // is the content's full height, read through scrollHeight, so a cap from an
+  // earlier placement does not hide how tall the list is.
   useLayoutEffect(() => {
     const element = popoverRef.current;
     if (popover === null || element === null) {
@@ -126,7 +111,7 @@ export function EvaluationBadge({ runId }: { runId: string }) {
         viewportHeight: window.innerHeight,
       })
     );
-  }, [popover, isLoading, data]);
+  }, [popover, scores]);
 
   return (
     <>
@@ -156,32 +141,28 @@ export function EvaluationBadge({ runId }: { runId: string }) {
                 onMouseLeave={closeSoon}
                 onClick={e => e.stopPropagation()}
               >
-                {isLoading ? (
-                  <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Loading…
+                {scores === null ? (
+                  <span className="text-muted-foreground">
+                    Evaluation report could not be read.
                   </span>
-                ) : data ? (
-                  data.measurements.length === 0 ? (
-                    <span className="text-muted-foreground">No measurements recorded.</span>
-                  ) : (
-                    <div className="space-y-0.5">
-                      {data.measurements.map((m, index) => (
-                        <div
-                          key={`${m.metric_name}::${index}`}
-                          className="flex items-baseline justify-between gap-4"
-                        >
-                          <span>{humanize(m.metric_name)}</span>
-                          <span className="font-mono text-muted-foreground">
-                            {m.score.toFixed(2)}
-                            <span className="ml-1 text-[10px] opacity-60">{m.score_unit}</span>
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )
+                ) : scores.length === 0 ? (
+                  <span className="text-muted-foreground">No measurements recorded.</span>
                 ) : (
-                  <span className="text-muted-foreground">Evaluation report not available.</span>
+                  <div className="space-y-0.5">
+                    {scores.map((m, index) => (
+                      <div
+                        key={`${m.metric_name}::${index}`}
+                        title={m.summary}
+                        className="flex items-baseline justify-between gap-4"
+                      >
+                        <span>{humanize(m.metric_name)}</span>
+                        <span className="font-mono text-muted-foreground">
+                          {m.score.toFixed(2)}
+                          <span className="ml-1 text-[10px] opacity-60">{m.score_unit}</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>,

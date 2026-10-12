@@ -28,6 +28,10 @@ from glossogen.models.event import (
 )
 from glossogen.replace_manifest import REPLACE_MANIFEST_FILENAME, boundary_round_of, rounds_after_of
 from glossogen.run_identity import compose_run_id
+from glossogen.server.runs.evaluation_score_reader import (
+    EvaluationReportScores,
+    read_evaluation_scores,
+)
 from glossogen.server.runs.manifest_sources import (
     FORK_MANIFEST_FILENAME,
     read_cross_run_replace_agent_source,
@@ -386,24 +390,31 @@ def _resolve_scenario_config(
     return {**base_config, **overlay}
 
 
-def _live_fields(
-    scenario_name: str,
-    timestamp_dir: Path,
-) -> tuple[list[str], bool, bool, bool]:
-    """Read the four fields that can change after a run completes.
+class _LiveFields(NamedTuple):
+    """The fields of a run summary that can change after the run completes."""
 
-    Returns (labels, has_note, has_evaluation, evaluation_in_progress).
+    labels: list[str]
+    has_note: bool
+    evaluation_in_progress: bool
+
+
+def _live_fields(timestamp_dir: Path) -> _LiveFields:
+    """Read the fields that can change after a run completes.
 
     Labels here must stay a disk read even where the database mirrors them:
     ``sync-metadata-to-prod`` computes label drift from the paginated ``/runs``
     response, so a page row has to report what ``labels.json`` actually holds.
     """
-    report_path = timestamp_dir / f"{scenario_name}_report.json"
-    labels = read_run_labels(run_dir=timestamp_dir)
-    has_note = _has_note(run_dir=timestamp_dir)
-    has_evaluation = report_path.exists()
-    eval_in_progress = read_eval_manifest(run_dir=timestamp_dir) is not None
-    return labels, has_note, has_evaluation, eval_in_progress
+    return _LiveFields(
+        labels=read_run_labels(run_dir=timestamp_dir),
+        has_note=_has_note(run_dir=timestamp_dir),
+        evaluation_in_progress=read_eval_manifest(run_dir=timestamp_dir) is not None,
+    )
+
+
+def _report_scores(scenario_name: str, timestamp_dir: Path) -> EvaluationReportScores:
+    """Read the run's evaluation report. A run that has not ended reports none."""
+    return read_evaluation_scores(report_path=timestamp_dir / f"{scenario_name}_report.json")
 
 
 def read_scenario_config(scenario_name: str, timestamp_dir: Path) -> dict[str, Any] | None:
@@ -468,10 +479,8 @@ def _build_summary_sync(
 
     cache = _read_summary_cache(run_dir=timestamp_dir)
     if cache is not None:
-        labels, has_note, has_evaluation, eval_in_progress = _live_fields(
-            scenario_name=scenario_name,
-            timestamp_dir=timestamp_dir,
-        )
+        live = _live_fields(timestamp_dir=timestamp_dir)
+        report = _report_scores(scenario_name=scenario_name, timestamp_dir=timestamp_dir)
         return RunSummary(
             run_id=run_id,
             scenario_name=cache.scenario_name,
@@ -485,8 +494,9 @@ def _build_summary_sync(
             total_cost_usd=cache.total_cost_usd,
             duration_seconds=cache.duration_seconds,
             status=cache.status,
-            has_evaluation=has_evaluation,
-            evaluation_in_progress=eval_in_progress,
+            has_evaluation=report.has_report,
+            evaluation_scores=report.scores,
+            evaluation_in_progress=live.evaluation_in_progress,
             run_dir=str(timestamp_dir),
             fork_source=cache.fork_source,
             replace_agent_source=cache.replace_agent_source,
@@ -495,8 +505,8 @@ def _build_summary_sync(
             models=cache.models,
             provider=cache.provider,
             agent_models=cache.agent_models,
-            labels=labels,
-            has_note=has_note,
+            labels=live.labels,
+            has_note=live.has_note,
             current_round=cache.current_round,
             evaluation_content_hash=evaluation_content_hash,
         )
@@ -519,12 +529,10 @@ def _build_summary_sync(
         run_dir=timestamp_dir,
         base_config=first_event.scenario_config,
     )
-    labels, has_note, has_evaluation, eval_in_progress = _live_fields(
-        scenario_name=scenario_name,
-        timestamp_dir=timestamp_dir,
-    )
+    live = _live_fields(timestamp_dir=timestamp_dir)
 
     if scan.last_event is not None:
+        report = _report_scores(scenario_name=scenario_name, timestamp_dir=timestamp_dir)
         derived = (
             fork_source is not None
             or replace_agent_source is not None
@@ -563,8 +571,9 @@ def _build_summary_sync(
             total_cost_usd=scan.last_event.total_cost_usd,
             duration_seconds=duration_seconds,
             status=scan.last_event.reason,
-            has_evaluation=has_evaluation,
-            evaluation_in_progress=eval_in_progress,
+            has_evaluation=report.has_report,
+            evaluation_scores=report.scores,
+            evaluation_in_progress=live.evaluation_in_progress,
             run_dir=str(timestamp_dir),
             fork_source=fork_source,
             replace_agent_source=replace_agent_source,
@@ -573,8 +582,8 @@ def _build_summary_sync(
             models=scan.unique_models,
             provider=first_event.provider,
             agent_models=scan.agent_models,
-            labels=labels,
-            has_note=has_note,
+            labels=live.labels,
+            has_note=live.has_note,
             current_round=scan.current_round,
             evaluation_content_hash=evaluation_content_hash,
         )
@@ -602,7 +611,8 @@ def _build_summary_sync(
         duration_seconds=0.0,
         status=status,
         has_evaluation=False,
-        evaluation_in_progress=eval_in_progress,
+        evaluation_scores=[],
+        evaluation_in_progress=live.evaluation_in_progress,
         run_dir=str(timestamp_dir),
         fork_source=fork_source,
         replace_agent_source=replace_agent_source,
@@ -611,8 +621,8 @@ def _build_summary_sync(
         models=scan.unique_models,
         provider=first_event.provider,
         agent_models=scan.agent_models,
-        labels=labels,
-        has_note=has_note,
+        labels=live.labels,
+        has_note=live.has_note,
         current_round=scan.current_round,
         evaluation_content_hash=evaluation_content_hash,
     )
