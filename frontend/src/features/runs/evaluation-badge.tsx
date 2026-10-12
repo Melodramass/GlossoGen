@@ -92,26 +92,36 @@ export function EvaluationBadge({ runId }: { runId: string }) {
       setPopover(null);
       setPosition(null);
     };
-    window.addEventListener("scroll", dismiss, true);
+    // Scrolling the popover's own list leaves it where it was placed.
+    const dismissUnlessInsidePopover = (event: Event) => {
+      if (event.target instanceof Node && popoverRef.current?.contains(event.target)) {
+        return;
+      }
+      dismiss();
+    };
+    window.addEventListener("scroll", dismissUnlessInsidePopover, true);
     window.addEventListener("resize", dismiss);
     return () => {
-      window.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("scroll", dismissUnlessInsidePopover, true);
       window.removeEventListener("resize", dismiss);
     };
   }, [popover]);
 
   // Placed once rendered, since its size depends on what it shows; measured again
-  // as the report loads, before the browser paints.
+  // as the report loads, before the browser paints. The height is the content's
+  // full height, read through scrollHeight, so a cap from an earlier placement
+  // does not hide how tall the report is.
   useLayoutEffect(() => {
-    if (popover === null || popoverRef.current === null) {
+    const element = popoverRef.current;
+    if (popover === null || element === null) {
       return;
     }
-    const { width, height } = popoverRef.current.getBoundingClientRect();
+    const borderHeight = element.offsetHeight - element.clientHeight;
     setPosition(
       placePopover({
         anchor: popover,
-        width,
-        height,
+        width: element.getBoundingClientRect().width,
+        height: element.scrollHeight + borderHeight,
         viewportWidth: window.innerWidth,
         viewportHeight: window.innerHeight,
       })
@@ -135,10 +145,11 @@ export function EvaluationBadge({ runId }: { runId: string }) {
             <div className="pointer-events-none fixed inset-0 z-50">
               <div
                 ref={popoverRef}
-                className="pointer-events-auto absolute w-max max-w-md rounded-md border border-border bg-background px-3 py-2 text-xs shadow-lg"
+                className="pointer-events-auto absolute w-max max-w-md overflow-y-auto overscroll-contain rounded-md border border-border bg-background px-3 py-2 text-xs shadow-lg"
                 style={{
                   left: `${position?.left ?? popover.left}px`,
                   top: `${position?.top ?? popover.bottom}px`,
+                  maxHeight: position === null ? undefined : `${position.maxHeight}px`,
                   visibility: position === null ? "hidden" : "visible",
                 }}
                 onMouseEnter={clearCloseTimer}
