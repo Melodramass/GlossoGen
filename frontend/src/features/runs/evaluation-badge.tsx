@@ -1,20 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { api } from "@/shared/lib/api-client";
 import { splitRunId } from "@/shared/lib/run-id";
 import { humanize } from "./format";
+import { type AnchorBox, type PopoverPosition, placePopover } from "./popover-placement";
 
 const HOVER_OPEN_DELAY_MS = 250;
 const HOVER_CLOSE_DELAY_MS = 80;
 
 export function EvaluationBadge({ runId }: { runId: string }) {
-  const [popover, setPopover] = useState<{ left: number; top: number } | null>(null);
+  const [popover, setPopover] = useState<AnchorBox | null>(null);
+  const [position, setPosition] = useState<PopoverPosition | null>(null);
   const openTimerRef = useRef<number | null>(null);
   const closeTimerRef = useRef<number | null>(null);
   const anchorRef = useRef<HTMLSpanElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["run-evaluation", runId],
@@ -59,7 +63,7 @@ export function EvaluationBadge({ runId }: { runId: string }) {
       if (!rect) {
         return;
       }
-      setPopover({ left: rect.left, top: rect.bottom + 4 });
+      setPopover({ left: rect.left, top: rect.top, bottom: rect.bottom });
     }, HOVER_OPEN_DELAY_MS);
   }
 
@@ -68,6 +72,7 @@ export function EvaluationBadge({ runId }: { runId: string }) {
     clearCloseTimer();
     closeTimerRef.current = window.setTimeout(() => {
       setPopover(null);
+      setPosition(null);
       closeTimerRef.current = null;
     }, HOVER_CLOSE_DELAY_MS);
   }
@@ -83,7 +88,10 @@ export function EvaluationBadge({ runId }: { runId: string }) {
     if (popover === null) {
       return undefined;
     }
-    const dismiss = () => setPopover(null);
+    const dismiss = () => {
+      setPopover(null);
+      setPosition(null);
+    };
     window.addEventListener("scroll", dismiss, true);
     window.addEventListener("resize", dismiss);
     return () => {
@@ -91,6 +99,24 @@ export function EvaluationBadge({ runId }: { runId: string }) {
       window.removeEventListener("resize", dismiss);
     };
   }, [popover]);
+
+  // Placed once rendered, since its size depends on what it shows; measured again
+  // as the report loads, before the browser paints.
+  useLayoutEffect(() => {
+    if (popover === null || popoverRef.current === null) {
+      return;
+    }
+    const { width, height } = popoverRef.current.getBoundingClientRect();
+    setPosition(
+      placePopover({
+        anchor: popover,
+        width,
+        height,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+      })
+    );
+  }, [popover, isLoading, data]);
 
   return (
     <>
@@ -104,48 +130,53 @@ export function EvaluationBadge({ runId }: { runId: string }) {
         <CheckCircle2 className="h-2.5 w-2.5" />
         Evaluated
       </span>
-      {popover !== null ? (
-        <div className="pointer-events-none fixed inset-0 z-50">
-          <div
-            className="pointer-events-auto absolute w-max max-w-md rounded-md border border-border bg-background px-3 py-2 text-xs shadow-lg"
-            style={{
-              left: `${Math.max(8, popover.left)}px`,
-              top: `${popover.top}px`,
-            }}
-            onMouseEnter={clearCloseTimer}
-            onMouseLeave={closeSoon}
-            onClick={e => e.stopPropagation()}
-          >
-            {isLoading ? (
-              <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Loading…
-              </span>
-            ) : data ? (
-              data.measurements.length === 0 ? (
-                <span className="text-muted-foreground">No measurements recorded.</span>
-              ) : (
-                <div className="space-y-0.5">
-                  {data.measurements.map((m, index) => (
-                    <div
-                      key={`${m.metric_name}::${index}`}
-                      className="flex items-baseline justify-between gap-4"
-                    >
-                      <span>{humanize(m.metric_name)}</span>
-                      <span className="font-mono text-muted-foreground">
-                        {m.score.toFixed(2)}
-                        <span className="ml-1 text-[10px] opacity-60">{m.score_unit}</span>
-                      </span>
+      {popover !== null && typeof document !== "undefined"
+        ? createPortal(
+            <div className="pointer-events-none fixed inset-0 z-50">
+              <div
+                ref={popoverRef}
+                className="pointer-events-auto absolute w-max max-w-md rounded-md border border-border bg-background px-3 py-2 text-xs shadow-lg"
+                style={{
+                  left: `${position?.left ?? popover.left}px`,
+                  top: `${position?.top ?? popover.bottom}px`,
+                  visibility: position === null ? "hidden" : "visible",
+                }}
+                onMouseEnter={clearCloseTimer}
+                onMouseLeave={closeSoon}
+                onClick={e => e.stopPropagation()}
+              >
+                {isLoading ? (
+                  <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Loading…
+                  </span>
+                ) : data ? (
+                  data.measurements.length === 0 ? (
+                    <span className="text-muted-foreground">No measurements recorded.</span>
+                  ) : (
+                    <div className="space-y-0.5">
+                      {data.measurements.map((m, index) => (
+                        <div
+                          key={`${m.metric_name}::${index}`}
+                          className="flex items-baseline justify-between gap-4"
+                        >
+                          <span>{humanize(m.metric_name)}</span>
+                          <span className="font-mono text-muted-foreground">
+                            {m.score.toFixed(2)}
+                            <span className="ml-1 text-[10px] opacity-60">{m.score_unit}</span>
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )
-            ) : (
-              <span className="text-muted-foreground">Evaluation report not available.</span>
-            )}
-          </div>
-        </div>
-      ) : null}
+                  )
+                ) : (
+                  <span className="text-muted-foreground">Evaluation report not available.</span>
+                )}
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </>
   );
 }
