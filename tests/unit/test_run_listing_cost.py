@@ -1,5 +1,8 @@
 """The run listing prices a run's logged responses at the model each agent ran under.
 
+Each response is priced at the rates in effect when it was logged, so a rate that
+changes during the run applies only to the responses after the change.
+
 A run without a ``simulation_ended`` event (in progress, starting, crashed) shows
 this scanned cost rather than the total the runner records at the end.
 """
@@ -59,31 +62,39 @@ def _cost(pricing: TokenPricing | None) -> float:
     )
 
 
+def _started(provider: str) -> SimulationStarted:
+    return SimulationStarted(
+        run_id="veyru/1788220800",
+        scenario_name="veyru",
+        scenario_description="",
+        channel_ids=["link"],
+        scenario_config={"round_count": 3},
+        provider=provider,
+        round_number=0,
+        timestamp=_at(seconds=0),
+    )
+
+
+def _registered(model: str, provider: str, seconds: int) -> AgentRegistered:
+    return AgentRegistered(
+        agent_id="field_observer",
+        role_name="Field Observer",
+        system_prompt="You are the field observer.",
+        channel_ids=["link"],
+        tool_names=["send_message"],
+        model=model,
+        provider=provider,
+        max_tokens=2048,
+        round_number=0,
+        timestamp=_at(seconds=seconds),
+    )
+
+
 def _swapped_run_events() -> list[SimulationEvent]:
     """A run whose one agent responds, is swapped to another model, and responds again."""
     return [
-        SimulationStarted(
-            run_id="veyru/1788220800",
-            scenario_name="veyru",
-            scenario_description="",
-            channel_ids=["link"],
-            scenario_config={"round_count": 3},
-            provider="anthropic",
-            round_number=0,
-            timestamp=_at(seconds=0),
-        ),
-        AgentRegistered(
-            agent_id="field_observer",
-            role_name="Field Observer",
-            system_prompt="You are the field observer.",
-            channel_ids=["link"],
-            tool_names=["send_message"],
-            model="claude-sonnet-4-6",
-            provider="anthropic",
-            max_tokens=2048,
-            round_number=0,
-            timestamp=_at(seconds=1),
-        ),
+        _started(provider="anthropic"),
+        _registered(model="claude-sonnet-4-6", provider="anthropic", seconds=1),
         _response(seconds=2),
         AgentSwappedMidRun(
             agent_id="field_observer",
@@ -120,6 +131,41 @@ async def test_responses_after_a_swap_are_priced_at_the_swapped_in_model(
     )
     assert before_swap != pytest.approx(after_swap)
     assert scan.cost_usd == pytest.approx(before_swap + after_swap, rel=1e-12)
+
+
+async def test_a_response_is_priced_at_the_rates_in_effect_when_it_was_logged(
+    tmp_path: Path,
+) -> None:
+    """genai-prices bills deepseek-chat at one rate at 12:00 UTC and another at 20:00."""
+    registered_at = 12 * 3600
+    responded_at = 20 * 3600
+    log_path = tmp_path / "veyru.jsonl"
+    _write_log(
+        log_path=log_path,
+        lines=[
+            event.model_dump(mode="json")
+            for event in [
+                _started(provider="deepseek"),
+                _registered(model="deepseek-chat", provider="deepseek", seconds=registered_at),
+                _response(seconds=responded_at),
+            ]
+        ],
+    )
+
+    scan = await scan_jsonl(file_path=log_path)
+
+    at_registration = _cost(
+        pricing=find_pricing(
+            model="deepseek-chat", provider="deepseek", at=_at(seconds=registered_at)
+        )
+    )
+    at_response = _cost(
+        pricing=find_pricing(
+            model="deepseek-chat", provider="deepseek", at=_at(seconds=responded_at)
+        )
+    )
+    assert at_registration != pytest.approx(at_response)
+    assert scan.cost_usd == pytest.approx(at_response, rel=1e-12)
 
 
 async def test_a_response_without_usage_fails_the_scan_naming_its_line(tmp_path: Path) -> None:

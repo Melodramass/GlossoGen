@@ -118,6 +118,24 @@ the commit log.
   `model_catalog.py`, without prices.
 
 ### Fixed
+- A scenario judge under a provider outside `JUDGE_PROVIDERS` (`judge_provider`,
+  or any model a scenario's `get_judge_models` returns) is refused at launch.
+  `judge_provider` accepts any `Provider`, and such a judge passed the credential
+  check, then failed at its first call after the run had started.
+- The evaluation picker offers only models under a judge provider, read from the
+  new `judge_models` field of `GET /scenarios`. It offered every model, and the
+  evaluate endpoint refused the ones under any other provider.
+- Each agent cycle's tokens are priced at the rates in effect when the cycle
+  ended: by the runner, which records the run's total, and by the run list, the run
+  detail and the ATIF export, which price the usage logged on a cycle's last
+  response at that response's timestamp. They were priced at the rates in effect
+  when the agent registered or its runner started, which misprices tokens when a
+  rate changes during a run, as `genai-prices`' time-of-day rates for
+  `deepseek-chat` do.
+- An `openai` agent is sent `reasoning.effort` and `reasoning.summary` only when
+  pydantic-ai marks its model as a reasoning model; a fine-tune is looked up by its
+  base model, the second field of its `ft:` name. A fine-tune of a model without
+  reasoning, such as `gpt-4.1-mini`, was sent both.
 - A knob the scenario does not declare is refused when a run is configured
   (`--config`, a `key=value` override, a request body) instead of being
   dropped: `BaseKnobs` forbids extra keys, so `max_round_duration_secs=5`
@@ -259,6 +277,16 @@ the commit log.
   this, is left out of a rebuilt history instead of being sent in that form.
 
 ### Added
+- Agents can run under `xai` (`XAI_API_KEY`), `groq` (`GROQ_API_KEY`), `mistral`
+  (`MISTRAL_API_KEY`), `deepseek` (`DEEPSEEK_API_KEY`) and `openrouter`
+  (`OPENROUTER_API_KEY`), and the run picker offers one priced model for each.
+  pydantic-ai's `groq`, `mistral`, `openrouter` and `xai` extras are required
+  dependencies, which adds `groq`, `mistralai`, `xai-sdk` and `grpcio` among the
+  installed packages. `PROVIDER_SPECS` in `model_catalog.py` has one row per
+  provider an agent can run under, with its credential variables, pydantic-ai
+  prefix, whether it is billed and its weights; the launch check, the model
+  factory, pricing and the `model_class` export column read it. `groq` and `deepseek` count as open
+  weights, `xai` as closed, and `mistral` and `openrouter` are not classified.
 - `textcraft_shared_workspace`: a team crafts every target of a synthetic layered
   recipe grid from one finite shared depot, with no target assigned and no
   coordinator. Team size is a knob separate from the grid, so one agent on the same

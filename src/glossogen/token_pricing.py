@@ -16,7 +16,8 @@ from typing import NamedTuple
 from genai_prices import Usage, calc_price
 from genai_prices.types import ModelInfo, TieredPrices
 
-from glossogen.model_catalog import Provider
+from glossogen.model_catalog import PROVIDER_SPECS, Provider
+from glossogen.models.event_base import TokenUsage
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +31,17 @@ class TokenPricing(NamedTuple):
     cache_write_per_mtok: float
 
 
+class BilledModel(NamedTuple):
+    """The model and provider an agent's tokens are billed under."""
+
+    model: str
+    provider: str
+
+
 # Served from hardware billed elsewhere, so their tokens cost nothing here.
-_ZERO_COST_PROVIDERS: frozenset[Provider] = frozenset({Provider.SELF_HOSTED, Provider.OLLAMA})
+_ZERO_COST_PROVIDERS: frozenset[Provider] = frozenset(
+    spec.provider for spec in PROVIDER_SPECS if not spec.billed
+)
 
 _SELF_HOSTED_PRICING = TokenPricing(
     input_per_mtok=0.0,
@@ -75,8 +85,8 @@ def _base_rate(price: Decimal | TieredPrices | None) -> float | None:
 def find_pricing(model: str, provider: str, at: datetime) -> TokenPricing | None:
     """The model's rates in effect at ``at``, or ``None`` when ``genai-prices`` does not know it.
 
-    ``genai-prices`` dates its price changes, so passing when the tokens were spent
-    prices an old run at the rates it ran under.
+    ``genai-prices`` dates its price changes, and some rates also depend on the time
+    of day the request is made, so ``at`` is when the tokens were spent.
 
     A rate with long-context tiers is taken at its base tier. The tier depends on a
     single request's input size, and the usage priced here is always a sum over
@@ -106,6 +116,25 @@ def find_pricing(model: str, provider: str, at: datetime) -> TokenPricing | None
         output_per_mtok=output_rate,
         cache_read_per_mtok=cache_read_rate,
         cache_write_per_mtok=cache_write_rate,
+    )
+
+
+def usage_cost_usd(model: str, provider: str, at: datetime, usage: TokenUsage) -> float | None:
+    """The cost of one recorded usage at the rates in effect at ``at``, or ``None`` when unpriced.
+
+    ``at`` is the time the usage was recorded. Pricing each record at its own time
+    keeps a rate that changes during a run, by date or by time of day, from being
+    applied to tokens spent before or after the change.
+    """
+    pricing = find_pricing(model=model, provider=provider, at=at)
+    if pricing is None:
+        return None
+    return compute_token_cost_usd(
+        pricing=pricing,
+        input_tokens=usage.input_tokens,
+        output_tokens=usage.output_tokens,
+        cache_read_tokens=usage.cache_read_input_tokens,
+        cache_write_tokens=usage.cache_creation_input_tokens,
     )
 
 

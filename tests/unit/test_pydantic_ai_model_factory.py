@@ -8,6 +8,7 @@ from pydantic_ai.models.google import GoogleModel
 from glossogen.model_catalog import Provider
 from glossogen.runners.pydantic_ai_model_factory import (
     build_pydantic_ai_model,
+    default_pydantic_ai_settings,
     resolve_self_hosted_base_url,
 )
 from glossogen.scenarios.base_knobs import BaseKnobs
@@ -46,3 +47,21 @@ def test_agent_output_token_limit_must_be_positive() -> None:
             model_overrides={},
             agent_max_tokens=0,
         )
+
+
+@pytest.mark.parametrize(
+    ("model", "reasons"),
+    [
+        ("gpt-5.4", True),
+        ("ft:o4-mini-2025-04-16:org:name:abc123", True),
+        ("gpt-4.1-mini", False),
+        ("ft:gpt-4.1-mini-2025-04-14:org:name:abc123", False),
+    ],
+)
+def test_openai_reasoning_settings_go_only_to_a_reasoning_model(model: str, reasons: bool) -> None:
+    """A fine-tune is judged by its base model, the second field of its ``ft:`` name."""
+    settings = default_pydantic_ai_settings(provider=Provider.OPENAI, model=model)
+
+    assert ("openai_reasoning_effort" in settings) is reasons
+    assert ("openai_reasoning_summary" in settings) is reasons
+    assert settings.get("max_tokens") == 32768

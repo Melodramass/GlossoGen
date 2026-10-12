@@ -41,7 +41,7 @@ export function StartEvaluationModal({
 
   if (!initialized && availableMetrics.length > 0 && data) {
     setSelectedMetrics(new Set(availableMetrics));
-    const haiku = data.models.find(m => m.model_prefix.includes("haiku"));
+    const haiku = data.judge_models.find(m => m.model_prefix.includes("haiku"));
     if (haiku) {
       setModel(haiku.model_prefix);
       setProvider(haiku.provider);
@@ -124,7 +124,7 @@ export function StartEvaluationModal({
           <form onSubmit={handleSubmit} className="space-y-4">
             <ModelPicker
               label="Model"
-              models={data?.models ?? []}
+              models={data?.judge_models ?? []}
               selectedModel={model}
               onSelect={handleModelSelect}
             />

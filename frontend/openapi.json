@@ -7161,6 +7161,13 @@
             "type": "array",
             "title": "Models"
           },
+          "judge_models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelInfo"
+            },
+            "type": "array",
+            "title": "Judge Models"
+          },
           "providers": {
             "items": {
               "type": "string"
@@ -7173,10 +7180,11 @@
         "required": [
           "scenarios",
           "models",
+          "judge_models",
           "providers"
         ],
         "title": "ScenariosResponse",
-        "description": "Response listing all available scenarios, models, and providers."
+        "description": "Response listing all available scenarios, models, and providers.\n\n``models`` is every offered model; ``judge_models`` is the subset an evaluation\ncan run its LLM judge under."
       },
       "ServerConfigResponse": {
         "properties": {

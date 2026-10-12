@@ -51,7 +51,7 @@ from glossogen.models.event import (
 from glossogen.models.tool_definition import RecordedToolDefinition
 from glossogen.runners.agent_tools import select_tool_definitions
 from glossogen.runners.communication_protocol import registered_runner_prompts
-from glossogen.token_pricing import find_pricing
+from glossogen.token_pricing import usage_cost_usd
 
 
 class _Generation(NamedTuple):
@@ -232,11 +232,6 @@ def _build_steps(context: AtifRunContext, generation: _Generation) -> _BuiltStep
     the cycle's usage, says how many LLM calls its metrics cover.
     """
     copied_ids = context.copied_context.copied_event_ids
-    pricing = find_pricing(
-        model=generation.model,
-        provider=generation.provider,
-        at=generation.registration.timestamp,
-    )
     results_by_call_id = {
         event.call_id: event for event in generation.events if isinstance(event, ToolResultReceived)
     }
@@ -280,7 +275,13 @@ def _build_steps(context: AtifRunContext, generation: _Generation) -> _BuiltStep
                 )
             cycle_response_count += 1
             # Usage is logged on a cycle's last response, so the next response opens a new cycle.
-            closes_cycle = build_step_metrics(usage=event.usage, pricing=pricing) is not None
+            cost_usd = usage_cost_usd(
+                model=generation.model,
+                provider=generation.provider,
+                at=event.timestamp,
+                usage=event.usage,
+            )
+            closes_cycle = build_step_metrics(usage=event.usage, cost_usd=cost_usd) is not None
             llm_call_count: int | None = None
             if closes_cycle:
                 llm_call_count = cycle_response_count
@@ -289,7 +290,7 @@ def _build_steps(context: AtifRunContext, generation: _Generation) -> _BuiltStep
                     step_id=len(steps) + 1,
                     event=event,
                     model_name=generation.model,
-                    pricing=pricing,
+                    cost_usd=cost_usd,
                     results_by_call_id=results_by_call_id,
                     failed_cycles=failed_cycles,
                     copied=copied,

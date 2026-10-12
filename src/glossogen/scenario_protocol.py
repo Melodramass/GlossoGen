@@ -299,6 +299,9 @@ class SimulationScenario(ABC):
         built on first use, so a run whose agents authenticate starts and spends
         before the missing credential is reached.
 
+        The launch check also refuses a model here whose provider is not in
+        ``JUDGE_PROVIDERS``, since a judge is built through ``create_provider``.
+
         The default reads the ``judge_model`` / ``judge_provider`` pair, the
         convention every scenario here follows. A scenario calling more than one
         model of its own, or naming the knobs differently, overrides this. One

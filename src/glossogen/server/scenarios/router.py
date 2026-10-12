@@ -9,7 +9,7 @@ import logging
 import orjson
 from fastapi import APIRouter, HTTPException
 
-from glossogen.model_catalog import list_models, list_providers
+from glossogen.model_catalog import list_judge_models, list_models, list_providers
 from glossogen.scenario_loader import find_scenario_class, iter_scenario_classes
 from glossogen.server.scenarios.filterable_knobs import filterable_knobs_from_schema
 from glossogen.server.scenarios.models import (
@@ -40,8 +40,14 @@ async def list_scenarios() -> ScenariosResponse:
     models = [
         ModelInfo(model_prefix=prefix, provider=provider) for prefix, provider in list_models()
     ]
+    judge_models = [
+        ModelInfo(model_prefix=prefix, provider=provider)
+        for prefix, provider in list_judge_models()
+    ]
     providers = [provider.value for provider in list_providers()]
-    return ScenariosResponse(scenarios=scenarios, models=models, providers=providers)
+    return ScenariosResponse(
+        scenarios=scenarios, models=models, judge_models=judge_models, providers=providers
+    )
 
 
 @router.get(
