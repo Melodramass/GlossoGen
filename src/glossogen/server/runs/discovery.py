@@ -44,7 +44,7 @@ from glossogen.server.runs.models import (
     RunSummary,
 )
 from glossogen.stream_manifest import delete_manifest, read_manifest
-from glossogen.token_pricing import TokenPricing, compute_token_cost_usd, find_pricing
+from glossogen.token_pricing import BilledModel, usage_cost_usd
 
 logger = logging.getLogger(__name__)
 
@@ -97,8 +97,9 @@ def _scan_jsonl_sync(file_path: Path) -> _SinglePassResult:
     token-based cost estimate — all in a single sequential pass.
 
     Cost is computed per LLM event using the emitting agent's current
-    model pricing (the latest ``agent_registered`` for that agent_id seen
-    so far in the chronological scan). For replace-agent runs, this means
+    model (the latest ``agent_registered`` or ``agent_swapped_mid_run`` for
+    that agent_id seen so far in the chronological scan), at the rates in
+    effect at the event's timestamp. For replace-agent runs, this means
     the post-resume field_observer is priced at gpt-5.4 / etc. while the
     non-replaced engineer stays at claude-opus-4-7. Source-run LLM events
     inherited from the cloned JSONL contribute zero cost because their
@@ -112,7 +113,7 @@ def _scan_jsonl_sync(file_path: Path) -> _SinglePassResult:
     first_bytes: bytes | None = None
     tail: list[bytes] = []
     agents_by_id: dict[str, _AgentModelInfo] = {}
-    pricing_by_agent: dict[str, TokenPricing | None] = {}
+    billed_by_agent: dict[str, BilledModel] = {}
     message_count = 0
     cost_usd = 0.0
     current_round = 0
@@ -145,28 +146,25 @@ def _scan_jsonl_sync(file_path: Path) -> _SinglePassResult:
                     model=event.model,
                     provider=event.provider,
                 )
-                pricing_by_agent[event.agent_id] = find_pricing(
-                    model=event.model,
-                    provider=event.provider,
-                    at=event.timestamp,
+                billed_by_agent[event.agent_id] = BilledModel(
+                    model=event.model, provider=event.provider
                 )
             elif isinstance(event, AgentSwappedMidRun):
                 # Responses after the swap are billed at the swapped-in model's rates.
-                pricing_by_agent[event.agent_id] = find_pricing(
-                    model=event.new_model,
-                    provider=event.new_provider,
-                    at=event.timestamp,
+                billed_by_agent[event.agent_id] = BilledModel(
+                    model=event.new_model, provider=event.new_provider
                 )
             elif isinstance(event, LLMResponseReceived):
-                pricing = pricing_by_agent.get(event.agent_id)
-                if pricing is not None:
-                    cost_usd += compute_token_cost_usd(
-                        pricing=pricing,
-                        input_tokens=event.usage.input_tokens,
-                        output_tokens=event.usage.output_tokens,
-                        cache_read_tokens=event.usage.cache_read_input_tokens,
-                        cache_write_tokens=event.usage.cache_creation_input_tokens,
+                billed = billed_by_agent.get(event.agent_id)
+                if billed is not None:
+                    event_cost = usage_cost_usd(
+                        model=billed.model,
+                        provider=billed.provider,
+                        at=event.timestamp,
+                        usage=event.usage,
                     )
+                    if event_cost is not None:
+                        cost_usd += event_cost
             elif isinstance(event, RoundAdvanced):
                 current_round = max(current_round, event.round_number)
 

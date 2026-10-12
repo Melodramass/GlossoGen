@@ -23,7 +23,6 @@ from glossogen.models.event import (
     ToolResultReceived,
 )
 from glossogen.models.event_base import TokenUsage
-from glossogen.token_pricing import TokenPricing, compute_token_cost_usd
 
 
 class RunnerPromptKind(str, Enum):
@@ -116,7 +115,7 @@ def build_agent_step(
     step_id: int,
     event: LLMResponseReceived,
     model_name: str,
-    pricing: TokenPricing | None,
+    cost_usd: float | None,
     results_by_call_id: dict[str, ToolResultReceived],
     failed_cycles: list[AgentRunCycleFailed],
     copied: bool,
@@ -153,7 +152,7 @@ def build_agent_step(
         reasoning_content=event.thinking,
         tool_calls=_build_tool_calls(event=event),
         observation=_build_observation(event=event, results_by_call_id=results_by_call_id),
-        metrics=build_step_metrics(usage=event.usage, pricing=pricing),
+        metrics=build_step_metrics(usage=event.usage, cost_usd=cost_usd),
         is_copied_context=copied_flag(copied=copied),
         llm_call_count=llm_call_count,
         extra=extra,
@@ -168,13 +167,13 @@ def failed_cycle_records(failures: list[AgentRunCycleFailed]) -> list[dict[str, 
     ]
 
 
-def build_step_metrics(usage: TokenUsage, pricing: TokenPricing | None) -> AtifMetrics | None:
+def build_step_metrics(usage: TokenUsage, cost_usd: float | None) -> AtifMetrics | None:
     """ATIF metrics from the token usage logged on one response, or ``None`` when it logged none.
 
     The runner records usage once per agent cycle, on the cycle's last response, and
     zeros on the others. A step's metrics therefore cover every LLM call of the cycle
-    it closes; the step's ``llm_call_count`` says how many. Cost is ``None`` for an
-    unpriced model.
+    it closes; the step's ``llm_call_count`` says how many. ``cost_usd`` is that
+    usage's cost, ``None`` for an unpriced model.
     """
     if (
         usage.input_tokens
@@ -184,15 +183,6 @@ def build_step_metrics(usage: TokenUsage, pricing: TokenPricing | None) -> AtifM
         == 0
     ):
         return None
-    cost_usd: float | None = None
-    if pricing is not None:
-        cost_usd = compute_token_cost_usd(
-            pricing=pricing,
-            input_tokens=usage.input_tokens,
-            output_tokens=usage.output_tokens,
-            cache_read_tokens=usage.cache_read_input_tokens,
-            cache_write_tokens=usage.cache_creation_input_tokens,
-        )
     return AtifMetrics(
         prompt_tokens=usage.input_tokens,
         completion_tokens=usage.output_tokens,

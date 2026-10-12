@@ -1,16 +1,20 @@
 """The models and providers a run can be launched with.
 
-``PROVIDER_SPECS`` is the one place a provider an agent can run under is
-described: the variables that carry its credential, the model prefix pydantic-ai
-reaches it by, whether its tokens are billed, and whether it serves open- or
-closed-weight models. The launch check, the model factory, pricing and the
-``model_class`` export column all read it, so adding a provider pydantic-ai and
-``genai-prices`` already know is a row here and a name in ``Provider``.
+``PROVIDER_SPECS`` has one row per provider an agent can run under: the variables
+that carry its credential, the model prefix pydantic-ai reaches it by, whether its
+tokens are billed, and whether it serves open- or closed-weight models. The launch
+check, the model factory, pricing and the ``model_class`` export column read it.
+Adding a provider that pydantic-ai and ``genai-prices`` already support takes a
+value in ``Provider``, a row here, and the pydantic-ai extra for its SDK in
+``pyproject.toml`` when it needs one. Behaviour that differs by provider beyond
+those fields, such as default model settings or history compaction, is keyed on
+the provider where it is implemented.
 
-The hosted entries are the models the run and evaluation pickers offer. Self-hosted
-models are discovered from the ``SELF_HOSTED_BASE_URLS`` environment variable (a
-JSON object mapping model name → endpoint URL), so adding a self-hosted deployment
-needs no code change here. Prices live elsewhere: see ``token_pricing``.
+The hosted entries are the models the run picker offers; the evaluation picker
+offers those whose provider is a judge provider. Self-hosted models are discovered
+from the ``SELF_HOSTED_BASE_URLS`` environment variable (a JSON object mapping
+model name → endpoint URL), so adding a self-hosted deployment needs no code change
+here. Prices live elsewhere: see ``token_pricing``.
 """
 
 import logging
@@ -178,8 +182,8 @@ JUDGE_PROVIDERS: tuple[Provider, ...] = (
 )
 
 
-# (model, provider) pairs offered for hosted APIs. Model names use dashes, matching
-# the IDs the APIs accept.
+# (model, provider) pairs offered for hosted APIs. Each model name is the ID its
+# provider's API accepts.
 _HOSTED_MODELS: tuple[tuple[str, Provider], ...] = (
     ("claude-opus-4-7", Provider.ANTHROPIC),
     ("claude-opus-4-6", Provider.ANTHROPIC),
@@ -242,3 +246,8 @@ def list_models() -> list[tuple[str, Provider]]:
     """
     self_hosted = [(name, Provider.SELF_HOSTED) for name in _get_self_hosted_model_names()]
     return list(_HOSTED_MODELS) + self_hosted
+
+
+def list_judge_models() -> list[tuple[str, Provider]]:
+    """Return the offered (model, provider) pairs whose provider an LLM judge can run under."""
+    return [(model, provider) for model, provider in list_models() if provider in JUDGE_PROVIDERS]

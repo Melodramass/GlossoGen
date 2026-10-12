@@ -3272,12 +3272,17 @@ export interface components {
         /**
          * ScenariosResponse
          * @description Response listing all available scenarios, models, and providers.
+         *
+         *     ``models`` is every offered model; ``judge_models`` is the subset an evaluation
+         *     can run its LLM judge under.
          */
         ScenariosResponse: {
             /** Scenarios */
             scenarios: components["schemas"]["ScenarioInfo"][];
             /** Models */
             models: components["schemas"]["ModelInfo"][];
+            /** Judge Models */
+            judge_models: components["schemas"]["ModelInfo"][];
             /** Providers */
             providers: string[];
         };

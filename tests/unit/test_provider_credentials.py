@@ -415,6 +415,35 @@ def test_a_scenario_judge_is_checked_even_when_the_agents_authenticate(
     assert "round judge" in str(raised.value)
 
 
+def test_a_judge_under_a_provider_no_judge_runs_under_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`judge_provider` accepts any provider, but a judge is built by `create_provider`.
+
+    With that provider's key set, the credential check alone passes, and the judge
+    would fail at its first call after the run started.
+    """
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    monkeypatch.setenv("XAI_API_KEY", "xai-key")
+    scenario_cls = get_scenario_class(name="veyru")
+    config = scenario_cls.prepare_config(
+        config=dict(scenario_cls.load_knobs_preset(preset_name="knobs_default"))
+    )
+    config["judge_model"] = "grok-4.6"
+    config["judge_provider"] = "xai"
+    with pytest.raises(ValueError) as raised:
+        require_reachable_models(
+            scenario_cls=scenario_cls,
+            scenario_config=config,
+            agent_overrides=None,
+            default_model="gpt-5.4",
+            default_provider="openai",
+            first_round=1,
+        )
+    assert "round judge (xai)" in str(raised.value)
+    assert "anthropic, huggingface, openai" in str(raised.value)
+
+
 def test_a_scenario_that_scores_without_an_llm_declares_no_judge(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

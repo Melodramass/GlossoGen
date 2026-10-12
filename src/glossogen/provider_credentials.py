@@ -2,8 +2,9 @@
 
 The check covers simulation agents, scenario judges, and scheduled agent swaps.
 For resumed runs it ignores swaps before ``first_round``. It validates required
-environment variables and the self-hosted model-to-endpoint map; providers can
-still reject invalid credentials or fail to reach a configured endpoint.
+environment variables, that each scenario judge names a provider a judge can run
+under, and the self-hosted model-to-endpoint map; providers can still reject
+invalid credentials or fail to reach a configured endpoint.
 """
 
 import os
@@ -11,6 +12,7 @@ from typing import Any, NamedTuple
 
 from glossogen.config_overrides import ResolvedAgentModel
 from glossogen.model_catalog import (
+    JUDGE_PROVIDERS,
     PROVIDER_SPECS,
     SELF_HOSTED_API_KEY_VAR,
     SELF_HOSTED_BASE_URLS_VAR,
@@ -67,13 +69,33 @@ def require_reachable_models(
         scenario_config=scenario_config,
         first_round=first_round,
     )
-    unreachable = find_unreachable_providers(
-        consumers=agents + scenario_cls.get_judge_models(knobs=scenario_config) + swaps
-    )
+    judges = scenario_cls.get_judge_models(knobs=scenario_config)
+    require_judge_providers(judges=judges)
+    unreachable = find_unreachable_providers(consumers=agents + judges + swaps)
     if unreachable:
         raise ValueError(describe_unreachable_providers(unreachable=unreachable))
     require_compaction_supported(
         scenario_cls=scenario_cls, scenario_config=scenario_config, agents=agents + swaps
+    )
+
+
+def require_judge_providers(judges: tuple[ModelConsumer, ...]) -> None:
+    """Raise ValueError naming every scenario judge under a provider no judge can run under.
+
+    A scenario builds its judge through ``create_provider`` on the judge's first
+    call, which accepts only ``JUDGE_PROVIDERS``. A knob such as ``judge_provider``
+    accepts any ``Provider``, so without this check a judge under another provider
+    passes the credential check and fails at its first call, after the run started.
+    Checked before credentials, so the message names the provider rather than a key.
+    """
+    unsupported = [judge for judge in judges if judge.provider not in JUDGE_PROVIDERS]
+    if not unsupported:
+        return
+    callers = ", ".join(f"{judge.name} ({judge.provider})" for judge in unsupported)
+    supported = ", ".join(JUDGE_PROVIDERS)
+    raise ValueError(
+        f"{callers}: a scenario judge runs only under {supported}. "
+        "Change the judge's provider to one of them."
     )
 
 

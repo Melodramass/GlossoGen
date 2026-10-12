@@ -46,9 +46,9 @@ _PROBE_INTRO = "PROTOCOL PROBE:"
 _ANTHROPIC_PROBE_MAX_TOKENS = 32768
 
 
-def _probe_model_settings(provider: Provider) -> ModelSettings:
+def _probe_model_settings(provider: Provider, model: str) -> ModelSettings:
     """Probe-call model settings: the per-provider defaults plus an Anthropic output cap."""
-    settings = default_pydantic_ai_settings(provider=provider)
+    settings = default_pydantic_ai_settings(provider=provider, model=model)
     if provider != Provider.ANTHROPIC:
         return settings
     merged = dict(settings)
@@ -88,7 +88,7 @@ async def run_structured_probe(
         model=build_pydantic_ai_model(model=model, provider=provider),
         system_prompt=full_system_prompt,
         output_type=output_type,
-        model_settings=_probe_model_settings(provider=provider),
+        model_settings=_probe_model_settings(provider=provider, model=model),
     )
     logger.info(
         "Probing agent %s (%s) under model=%s provider=%s history_len=%d output=%s",

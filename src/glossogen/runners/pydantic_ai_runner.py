@@ -486,7 +486,9 @@ class PydanticAIRunner(AgentRunner):
                 tools=build_agent_tools(
                     runtime=runtime, agent_id=agent_id, termination=termination
                 ),
-                model_settings=default_pydantic_ai_settings(provider=provider),
+                model_settings=default_pydantic_ai_settings(
+                    provider=provider, model=agent_config.model
+                ),
                 capabilities=capabilities,
             )
 
@@ -496,10 +498,6 @@ class PydanticAIRunner(AgentRunner):
             non_streaming_model_requests = provider == "self-hosted"
 
             message_history: list[ModelMessage] | None = agent_config.initial_message_history
-            total_input_tokens = 0
-            total_output_tokens = 0
-            total_cache_read_tokens = 0
-            total_cache_write_tokens = 0
             total_turns = 0
             cumulative_cost = 0.0
             last_completed_history = message_history
@@ -510,9 +508,6 @@ class PydanticAIRunner(AgentRunner):
             else:
                 checkpoint = _RunCheckpoint(messages=None, prompt=runner_prompts.initial)
             bus = self._event_bus
-            cycle_pricing = find_pricing(
-                model=agent_config.model, provider=agent_config.provider, at=datetime.now(tz=UTC)
-            )
 
             def _before_model_request() -> None:
                 runtime.scenario.on_model_request_started(agent_id=agent_id)
@@ -624,17 +619,21 @@ class PydanticAIRunner(AgentRunner):
                     # tasks are awaited before the runner returns.
                     all_background_tasks.extend(state.background_tasks)
                     cycle_usage = last_recorded_usage
-                    total_input_tokens += cycle_usage.input_tokens
-                    total_output_tokens += cycle_usage.output_tokens
-                    total_cache_read_tokens += cycle_usage.cache_read_tokens
-                    total_cache_write_tokens += cycle_usage.cache_write_tokens
+                    # Priced at the rates in effect as the cycle ends. Its usage is
+                    # logged just after, on its last LLMResponseReceived, and the run
+                    # views price it at that event's timestamp.
+                    cycle_pricing = find_pricing(
+                        model=agent_config.model,
+                        provider=agent_config.provider,
+                        at=datetime.now(tz=UTC),
+                    )
                     if cycle_pricing is not None:
-                        cumulative_cost = compute_token_cost_usd(
+                        cumulative_cost += compute_token_cost_usd(
                             pricing=cycle_pricing,
-                            input_tokens=total_input_tokens,
-                            output_tokens=total_output_tokens,
-                            cache_read_tokens=total_cache_read_tokens,
-                            cache_write_tokens=total_cache_write_tokens,
+                            input_tokens=cycle_usage.input_tokens,
+                            output_tokens=cycle_usage.output_tokens,
+                            cache_read_tokens=cycle_usage.cache_read_tokens,
+                            cache_write_tokens=cycle_usage.cache_write_tokens,
                         )
                         bus.publish(
                             event=AgentCostUpdated(

@@ -1,7 +1,7 @@
 """The provider table, row by row: each provider is reachable, priced and checked at launch.
 
-``PROVIDER_SPECS`` is what makes adding a provider a single row, so every row is
-held to what the rest of the platform reads from it.
+Every row of ``PROVIDER_SPECS`` is held to what the rest of the platform reads
+from it.
 """
 
 from datetime import UTC, datetime
@@ -10,6 +10,7 @@ import pytest
 from pydantic_ai.models import infer_model
 
 from glossogen.model_catalog import (
+    JUDGE_PROVIDERS,
     PROVIDER_SPECS,
     SELF_HOSTED_API_KEY_VAR,
     SELF_HOSTED_BASE_URLS_VAR,
@@ -23,6 +24,7 @@ from glossogen.provider_credentials import credential_variable_names, find_unrea
 from glossogen.run_export.model_weight_class import model_class_of
 from glossogen.runners.pydantic_ai_model_factory import build_pydantic_ai_model
 from glossogen.server.runs.models import AgentModelSummary
+from glossogen.server.scenarios.router import list_scenarios
 from glossogen.token_pricing import find_pricing
 
 SELF_HOSTED_MODEL = "my-fine-tune"
@@ -80,6 +82,18 @@ def test_each_provider_builds_its_model_from_the_variables_its_row_names(
 )
 def test_every_model_the_pickers_offer_is_priced(model: str, provider: Provider) -> None:
     assert find_pricing(model=model, provider=provider, at=datetime.now(tz=UTC)) is not None
+
+
+async def test_the_evaluation_picker_offers_only_models_a_judge_runs_under() -> None:
+    """The run picker offers every model; an evaluation refuses a non-judge provider."""
+    response = await list_scenarios()
+
+    offered = {(entry.model_prefix, entry.provider) for entry in response.models}
+    judge_offered = {(entry.model_prefix, entry.provider) for entry in response.judge_models}
+    assert judge_offered
+    assert {provider for _, provider in judge_offered} <= set(JUDGE_PROVIDERS)
+    assert ("grok-4.6", Provider.XAI) in offered
+    assert ("grok-4.6", Provider.XAI) not in judge_offered
 
 
 def test_the_launch_check_names_a_new_providers_missing_key() -> None:

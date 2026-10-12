@@ -1,6 +1,6 @@
 """Token costs are priced from the genai-prices catalog.
 
-The rates are resolved once per agent and applied with our own arithmetic, so
+The rates are resolved per recorded usage and applied with our own arithmetic, so
 these tests hold that arithmetic to what genai-prices itself charges for a single
 request below every long-context tier.
 """

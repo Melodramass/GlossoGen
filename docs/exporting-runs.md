@@ -70,9 +70,11 @@ JSON: a list like `scheduled_events` varies in length per run, and exploding it
 by index would invent columns that mean different things in different rows.
 
 `model_class` is `open`, `closed`, or `mixed`, read from the providers the run's
-agents used (`self-hosted` and `ollama` are open weights). Provider rather than
-model name, so a family nobody has run yet still classifies. An unrecognized
-provider gives an empty cell rather than a guess.
+agents used, each classified by its weights in the
+[providers table](running-simulations.md#providers). Provider rather than model
+name, so a family nobody has run yet still classifies. A provider serving both
+open- and closed-weight models, such as `openrouter`, or a provider the table does
+not list, gives an empty cell rather than a guess.
 
 The two label prefixes keep a cohort carrying both `budget` and `budget=800`
 from collapsing a flag and a value into one column. They also mean filtering

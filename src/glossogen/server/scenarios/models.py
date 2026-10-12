@@ -23,10 +23,15 @@ class ModelInfo(BaseModel):
 
 
 class ScenariosResponse(BaseModel):
-    """Response listing all available scenarios, models, and providers."""
+    """Response listing all available scenarios, models, and providers.
+
+    ``models`` is every offered model; ``judge_models`` is the subset an evaluation
+    can run its LLM judge under.
+    """
 
     scenarios: list[ScenarioInfo]
     models: list[ModelInfo]
+    judge_models: list[ModelInfo]
     providers: list[str]
 
 

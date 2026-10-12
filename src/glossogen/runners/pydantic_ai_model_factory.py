@@ -9,6 +9,7 @@ import os
 
 from pydantic_ai.models.anthropic import AnthropicModelSettings
 from pydantic_ai.models.openai import OpenAIChatModel, OpenAIResponsesModelSettings
+from pydantic_ai.profiles.openai import openai_model_profile
 from pydantic_ai.providers.openai import OpenAIProvider as PydanticAIOpenAIProvider
 from pydantic_ai.settings import ModelSettings
 
@@ -19,6 +20,8 @@ from glossogen.model_catalog import (
     provider_spec,
 )
 from glossogen.self_hosted_config import parse_self_hosted_base_urls
+
+_OPENAI_FINE_TUNE_PREFIX = "ft:"
 
 
 def resolve_self_hosted_base_url(model: str) -> str:
@@ -60,7 +63,7 @@ def build_pydantic_ai_model(model: str, provider: Provider) -> str | OpenAIChatM
     return f"{spec.pydantic_ai_prefix}:{model}"
 
 
-def default_pydantic_ai_settings(provider: Provider) -> ModelSettings:
+def default_pydantic_ai_settings(provider: Provider, model: str) -> ModelSettings:
     """Return the per-provider default ``ModelSettings`` used by both the runner and probes.
 
     On Anthropic we enable automatic prompt caching (``anthropic_cache=True``)
@@ -69,6 +72,10 @@ def default_pydantic_ai_settings(provider: Provider) -> ModelSettings:
     matching prefix across calls, which matters when many calls share the same
     ``system + history`` prefix but vary the trailing user prompt (e.g. the
     probe metric calls the whole question bank per agent).
+
+    On OpenAI the reasoning settings are sent only to a model pydantic-ai's
+    profile marks as a reasoning model; pydantic-ai sends them whenever they are
+    set, whatever the model.
     """
     if provider == Provider.ANTHROPIC:
         return AnthropicModelSettings(
@@ -81,9 +88,23 @@ def default_pydantic_ai_settings(provider: Provider) -> ModelSettings:
         # and the visible response; the provider default (≈4096 max_output) is
         # easy to exhaust on long structured outputs before any visible text
         # is emitted. 32k gives plenty of headroom without runaway costs.
+        if not _openai_model_reasons(model=model):
+            return OpenAIResponsesModelSettings(max_tokens=32768)
         return OpenAIResponsesModelSettings(
             openai_reasoning_effort="high",
             openai_reasoning_summary="concise",
             max_tokens=32768,
         )
     return ModelSettings()
+
+
+def _openai_model_reasons(model: str) -> bool:
+    """Return whether pydantic-ai's profile marks this OpenAI model as a reasoning model.
+
+    A fine-tune, named ``ft:<base model>:<org>:<suffix>:<id>``, is looked up by its
+    base model, since the profile matches on the name's leading characters.
+    """
+    profiled_name = model
+    if model.startswith(_OPENAI_FINE_TUNE_PREFIX):
+        profiled_name = model.split(":")[1]
+    return openai_model_profile(profiled_name).get("openai_supports_reasoning", False)

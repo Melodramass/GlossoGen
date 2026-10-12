@@ -58,7 +58,7 @@ from glossogen.server.runs.primary_channel_resolution import resolve_primary_cha
 from glossogen.server.runs.run_detail_types import AgentDetail, ChannelMessage
 from glossogen.server.runs.scenario_extension import SCENARIO_RUN_EXTENSIONS
 from glossogen.stream_manifest import delete_manifest, read_manifest
-from glossogen.token_pricing import TokenPricing, compute_token_cost_usd, find_pricing
+from glossogen.token_pricing import BilledModel, usage_cost_usd
 
 logger = logging.getLogger(__name__)
 
@@ -222,11 +222,7 @@ async def load_run_detail(
 
     tool_use_by_call_id: dict[str, ToolUseEntry] = {}
     pending_tool_results_by_call_id: dict[str, ToolResultReceived] = {}
-    total_input_tokens = 0
-    total_output_tokens = 0
-    total_cache_read_tokens = 0
-    total_cache_write_tokens = 0
-    pricing_by_agent: dict[str, TokenPricing | None] = {}
+    billed_by_agent: dict[str, BilledModel] = {}
     cost_from_tokens = 0.0
 
     for event in events:
@@ -260,8 +256,8 @@ async def load_run_detail(
                 provider=event.provider,
                 system_prompt=event.system_prompt,
             )
-            pricing_by_agent[event.agent_id] = find_pricing(
-                model=event.model, provider=event.provider, at=event.timestamp
+            billed_by_agent[event.agent_id] = BilledModel(
+                model=event.model, provider=event.provider
             )
 
         elif isinstance(event, AgentSwappedMidRun):
@@ -276,8 +272,8 @@ async def load_run_detail(
                     system_prompt=registered.system_prompt if registered else "",
                 )
             )
-            pricing_by_agent[event.agent_id] = find_pricing(
-                model=event.new_model, provider=event.new_provider, at=event.timestamp
+            billed_by_agent[event.agent_id] = BilledModel(
+                model=event.new_model, provider=event.new_provider
             )
 
         elif isinstance(event, ContextCompacted):
@@ -315,20 +311,16 @@ async def load_run_detail(
             tool_use_by_call_id[event.call_id] = tu_entry
 
         elif isinstance(event, LLMResponseReceived):
-            total_input_tokens += event.usage.input_tokens
-            total_output_tokens += event.usage.output_tokens
-            total_cache_read_tokens += event.usage.cache_read_input_tokens
-            total_cache_write_tokens += event.usage.cache_creation_input_tokens
-
-            event_pricing = pricing_by_agent.get(event.agent_id)
-            if event_pricing is not None:
-                cost_from_tokens += compute_token_cost_usd(
-                    pricing=event_pricing,
-                    input_tokens=event.usage.input_tokens,
-                    output_tokens=event.usage.output_tokens,
-                    cache_read_tokens=event.usage.cache_read_input_tokens,
-                    cache_write_tokens=event.usage.cache_creation_input_tokens,
+            billed = billed_by_agent.get(event.agent_id)
+            if billed is not None:
+                event_cost = usage_cost_usd(
+                    model=billed.model,
+                    provider=billed.provider,
+                    at=event.timestamp,
+                    usage=event.usage,
                 )
+                if event_cost is not None:
+                    cost_from_tokens += event_cost
 
             # Create reasoning entry for text content
             if event.text is not None and event.text.strip():
