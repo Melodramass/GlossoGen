@@ -160,6 +160,7 @@ cython_debug/
 
 # Claude Code
 .claude/scheduled_tasks.lock
+.claude/worktrees/
 
 # Ruff
 .ruff_cache/
