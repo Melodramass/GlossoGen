@@ -48,6 +48,7 @@ def summary(run_dir_name: str, labels: list[str]) -> RunSummary:
         duration_seconds=0.0,
         status=RunStatus.SCENARIO_COMPLETE,
         has_evaluation=False,
+        evaluation_scores=[],
         evaluation_in_progress=False,
         run_dir=f"/runs/veyru/{run_dir_name}",
         fork_source=None,

@@ -1760,6 +1760,8 @@ export interface components {
             labels: string[];
             /** Has Evaluation */
             has_evaluation: boolean;
+            /** Evaluation Scores */
+            evaluation_scores: components["schemas"]["EvaluationScore"][];
             /** Headline Measurements */
             headline_measurements: components["schemas"]["HeadlineMeasurement"][];
         };
@@ -1935,6 +1937,18 @@ export interface components {
             /** Measurements */
             measurements: components["schemas"]["Measurement"][];
             evaluation_cost: components["schemas"]["EvaluationCost"];
+        };
+        /**
+         * EvaluationScore
+         * @description One metric's overall score from a run's evaluation report, without its breakdowns.
+         */
+        EvaluationScore: {
+            /** Metric Name */
+            metric_name: string;
+            /** Score */
+            score: number;
+            /** Score Unit */
+            score_unit: string;
         };
         /**
          * EvaluationTokenUsage
@@ -2771,6 +2785,9 @@ export interface components {
         /**
          * RunSummary
          * @description Summary of a single simulation run for the runs list endpoint.
+         *
+         *     ``evaluation_scores`` holds every measurement in the run's evaluation report,
+         *     in report order, and is empty when ``has_evaluation`` is false.
          */
         RunSummary: {
             /** Run Id */
@@ -2797,6 +2814,8 @@ export interface components {
             status: components["schemas"]["RunStatus"];
             /** Has Evaluation */
             has_evaluation: boolean;
+            /** Evaluation Scores */
+            evaluation_scores: components["schemas"]["EvaluationScore"][];
             /** Evaluation In Progress */
             evaluation_in_progress: boolean;
             /** Run Dir */

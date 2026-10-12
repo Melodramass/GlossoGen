@@ -89,6 +89,14 @@ class CrossRunReplaceAgentSource(BaseModel):
     replaced_at: datetime
 
 
+class EvaluationScore(BaseModel):
+    """One metric's overall score from a run's evaluation report, without its breakdowns."""
+
+    metric_name: str
+    score: float
+    score_unit: str
+
+
 class HeadlineMeasurement(BaseModel):
     """Compact eval measurement surfaced inline on a derived run reference."""
 
@@ -129,6 +137,7 @@ class DerivedRunReference(BaseModel):
     total_cost_usd: float
     labels: list[str]
     has_evaluation: bool
+    evaluation_scores: list[EvaluationScore]
     headline_measurements: list[HeadlineMeasurement]
 
 
@@ -142,7 +151,11 @@ class AgentModelSummary(BaseModel):
 
 
 class RunSummary(BaseModel):
-    """Summary of a single simulation run for the runs list endpoint."""
+    """Summary of a single simulation run for the runs list endpoint.
+
+    ``evaluation_scores`` holds every measurement in the run's evaluation report,
+    in report order, and is empty when ``has_evaluation`` is false.
+    """
 
     run_id: str
     scenario_name: str
@@ -154,6 +167,7 @@ class RunSummary(BaseModel):
     duration_seconds: float
     status: RunStatus
     has_evaluation: bool
+    evaluation_scores: list[EvaluationScore]
     evaluation_in_progress: bool
     run_dir: str
     fork_source: ForkSource | None

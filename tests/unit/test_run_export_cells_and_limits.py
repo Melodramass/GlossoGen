@@ -59,6 +59,7 @@ def make_summary(
         duration_seconds=0.0,
         status=status,
         has_evaluation=False,
+        evaluation_scores=[],
         evaluation_in_progress=False,
         run_dir=f"/runs/{run_id}",
         fork_source=None,

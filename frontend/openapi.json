@@ -4093,6 +4093,13 @@
             "type": "boolean",
             "title": "Has Evaluation"
           },
+          "evaluation_scores": {
+            "items": {
+              "$ref": "#/components/schemas/EvaluationScore"
+            },
+            "type": "array",
+            "title": "Evaluation Scores"
+          },
           "headline_measurements": {
             "items": {
               "$ref": "#/components/schemas/HeadlineMeasurement"
@@ -4122,6 +4129,7 @@
           "total_cost_usd",
           "labels",
           "has_evaluation",
+          "evaluation_scores",
           "headline_measurements"
         ],
         "title": "DerivedRunReference",
@@ -4459,6 +4467,30 @@
         ],
         "title": "EvaluationReport",
         "description": "Aggregated evaluation output for a single simulation run.\n\nAttributes:\n    simulation_id: Unique identifier of the simulation that was evaluated.\n    scenario_name: Name of the scenario that was simulated.\n    measurements: Collection of measurements produced by all metrics.\n    evaluation_cost: Token usage and estimated dollar cost for the evaluation."
+      },
+      "EvaluationScore": {
+        "properties": {
+          "metric_name": {
+            "type": "string",
+            "title": "Metric Name"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "score_unit": {
+            "type": "string",
+            "title": "Score Unit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "metric_name",
+          "score",
+          "score_unit"
+        ],
+        "title": "EvaluationScore",
+        "description": "One metric's overall score from a run's evaluation report, without its breakdowns."
       },
       "EvaluationTokenUsage": {
         "properties": {
@@ -6212,6 +6244,13 @@
             "type": "boolean",
             "title": "Has Evaluation"
           },
+          "evaluation_scores": {
+            "items": {
+              "$ref": "#/components/schemas/EvaluationScore"
+            },
+            "type": "array",
+            "title": "Evaluation Scores"
+          },
           "evaluation_in_progress": {
             "type": "boolean",
             "title": "Evaluation In Progress"
@@ -6317,6 +6356,7 @@
           "duration_seconds",
           "status",
           "has_evaluation",
+          "evaluation_scores",
           "evaluation_in_progress",
           "run_dir",
           "fork_source",
@@ -6332,7 +6372,7 @@
           "evaluation_content_hash"
         ],
         "title": "RunSummary",
-        "description": "Summary of a single simulation run for the runs list endpoint."
+        "description": "Summary of a single simulation run for the runs list endpoint.\n\n``evaluation_scores`` holds every measurement in the run's evaluation report,\nin report order, and is empty when ``has_evaluation`` is false."
       },
       "SSEAgentConnected": {
         "properties": {

@@ -380,7 +380,7 @@ function RunRowComponent({
             />
             {run.has_evaluation ? (
               <span className="ml-auto inline-flex">
-                <EvaluationBadge runId={run.run_id} />
+                <EvaluationBadge scores={run.evaluation_scores} />
               </span>
             ) : null}
           </div>

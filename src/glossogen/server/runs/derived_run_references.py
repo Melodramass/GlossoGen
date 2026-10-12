@@ -183,6 +183,7 @@ async def _build_reference(
         total_cost_usd=summary.total_cost_usd,
         labels=summary.labels,
         has_evaluation=summary.has_evaluation,
+        evaluation_scores=summary.evaluation_scores,
         headline_measurements=headline_measurements,
     )
 

@@ -70,6 +70,7 @@ def make_summary(
         duration_seconds=600.0,
         status=RunStatus.SCENARIO_COMPLETE,
         has_evaluation=True,
+        evaluation_scores=[],
         evaluation_in_progress=False,
         run_dir=f"/runs/{run_id}",
         fork_source=None,

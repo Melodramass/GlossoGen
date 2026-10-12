@@ -66,7 +66,7 @@ function DerivedRunRow({ child }: { child: DerivedRunReference }) {
       <StatusPill status={child.status} />
       <HeadlineScores measurements={child.headline_measurements} />
       {child.has_evaluation && child.headline_measurements.length === 0 ? (
-        <EvaluationBadge runId={child.run_id} />
+        <EvaluationBadge scores={child.evaluation_scores} />
       ) : null}
       {child.total_cost_usd > 0 ? (
         <span className="ml-auto text-[11px] text-muted-foreground">
