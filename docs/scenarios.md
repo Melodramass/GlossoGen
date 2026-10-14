@@ -36,8 +36,9 @@ The budget is a knob (`round_time_budget_seconds`), and the rows from
 `hospital_bed_assignment_privacy` down do without it. `spot_the_difference` lets the
 team that spent fewest characters win instead, `hospital_bed_assignment_privacy` gets its pressure from an eavesdropper on
 the channel, `prisoners_dilemma` has no such knob, and `textcraft_shared_workspace`
-leaves it unlimited in its presets and budgets the team's actions and tokens. The column is each scenario's
-own default preset.
+leaves it unlimited in its presets and budgets the team's actions and tokens.
+`signal_game` has no channel to meter. The column is each scenario's own default
+preset.
 
 | Scenario | Agents | Round scoring | Default char budget |
 |---|---|---|---|
@@ -52,6 +53,7 @@ own default preset.
 | [spot_the_difference](../src/glossogen/scenarios/spot_the_difference/README.md) | 4 (2 per team) | LLM judge | none (`-1`) |
 | [prisoners_dilemma](../src/glossogen/scenarios/prisoners_dilemma/README.md) | 2 | Deterministic | no such knob |
 | [textcraft_shared_workspace](../src/glossogen/scenarios/textcraft_shared_workspace/README.md) | 3 (a knob; 1 is the baseline) | Deterministic | none (`-1`) |
+| [signal_game](../src/glossogen/scenarios/signal_game/README.md) | 2 | Deterministic | no channel |
 
 Each scenario's README is the reference for its domain, agents, tools, knobs and
 scoring rules. What follows is only enough to pick one.
@@ -165,6 +167,20 @@ the round finished with `read_notifications(wait_for="next_round")`. Its
 `virtual_clock` knob orders agents by simulated API latency rather than by when a
 shared inference server answered, so the simulated makespan does not depend on how
 fast the server was.
+
+## Signal game
+
+Two players each move a figure on their own small grid of coloured squares, and
+score when both finish on the same colour. Each sees its own colours and every move
+the partner makes, never the partner's colours. There is no channel and no tool
+that takes text, so a signal has to be made out of moves. It adapts the Embodied
+Communication Game of Scott-Phillips, Kirby & Ritchie (2009), and tells the agents
+what the paper told its participants: "coordinate with your partner". A control
+shows both grids, leaving nothing to signal.
+
+Judge-free. The `excess_moves` metric counts each player's moves beyond the shortest
+path to its final square, the costly movement the paper's participants used to mark
+a move as a signal.
 
 ## Working with scenarios
 

@@ -144,6 +144,8 @@ read them together, see [Communication metrics](communication-metrics.md).
   than going idle
 - `content_filter_refusal` — provider content-filter refusals, with per-round and
   per-agent breakdowns
+- `excess_moves` — signal_game only, and offered only for signal_game runs: each
+  player's moves beyond the shortest path to the square it finished on
 
 ### Protocol
 
