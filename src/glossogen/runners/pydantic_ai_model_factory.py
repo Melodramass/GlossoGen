@@ -98,6 +98,22 @@ def default_pydantic_ai_settings(provider: Provider, model: str) -> ModelSetting
     return ModelSettings()
 
 
+def agent_model_settings(
+    provider: Provider, model: str, parallel_tool_calls: bool
+) -> ModelSettings:
+    """Return the settings a simulation agent runs with.
+
+    The provider defaults from :func:`default_pydantic_ai_settings`, plus
+    ``parallel_tool_calls=False`` when the scenario allows one tool call per
+    model response. When parallel calls are allowed the key is left out, so the
+    provider's own default applies.
+    """
+    settings = default_pydantic_ai_settings(provider=provider, model=model)
+    if not parallel_tool_calls:
+        settings["parallel_tool_calls"] = False
+    return settings
+
+
 def _openai_model_reasons(model: str) -> bool:
     """Return whether pydantic-ai's profile marks this OpenAI model as a reasoning model.
 
