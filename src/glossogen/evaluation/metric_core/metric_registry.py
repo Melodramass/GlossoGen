@@ -125,10 +125,17 @@ def available_metrics(scenario_cls: type[SimulationScenario] | None) -> dict[str
     merged = dict(GENERIC_METRIC_REGISTRY)
     if scenario_cls is not None:
         for metric_cls in scenario_cls.scenario_metrics():
-            if metric_cls.name in merged:
+            if metric_cls.name in GENERIC_METRIC_REGISTRY:
                 logger.error(
                     "Scenario %r declares metric %r, which repeats a generic metric's name; "
                     "ignoring the scenario's",
+                    scenario_cls.name(),
+                    metric_cls.name,
+                )
+                continue
+            if metric_cls.name in merged:
+                logger.error(
+                    "Scenario %r declares metric %r more than once; keeping the first",
                     scenario_cls.name(),
                     metric_cls.name,
                 )

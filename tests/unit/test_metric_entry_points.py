@@ -104,6 +104,16 @@ class ShadowingScenario(SignalGameScenario):
         return (ShadowingMetric,)
 
 
+class DuplicatingScenario(SignalGameScenario):
+    """signal_game, declaring its own metric twice."""
+
+    @classmethod
+    def scenario_metrics(cls) -> tuple[type[Metric], ...]:
+        """excess_moves, twice."""
+        own = SignalGameScenario.scenario_metrics()[0]
+        return (own, own)
+
+
 def test_a_scenario_without_metrics_of_its_own_gets_the_generic_ones(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -169,6 +179,21 @@ def test_a_scenario_metric_taking_a_generic_name_is_logged(
     assert len(shadowing) == 1
     assert repr(ShadowingScenario.name()) in shadowing[0].message
     assert "round_success" in shadowing[0].message
+
+
+def test_a_scenario_metric_declared_twice_is_logged_as_a_duplicate(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A repeat of the scenario's own name is not reported as a clash with a generic one."""
+    declare(monkeypatch)
+
+    with caplog.at_level(logging.ERROR):
+        registry = available_metrics(scenario_cls=DuplicatingScenario)
+
+    errors = [record.message for record in caplog.records if record.levelno == logging.ERROR]
+    assert len(errors) == 1
+    assert "more than once" in errors[0]
+    assert "excess_moves" in registry
 
 
 def test_a_run_whose_scenario_is_gone_still_has_the_generic_metrics(

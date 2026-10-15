@@ -18,8 +18,11 @@ the commit log.
   is now unknown to `evaluate` on another scenario's run rather than reporting
   nothing. For a scenario in another package: import `RoundResult` and
   `PrimaryChannel` from `glossogen.scenario_base`, return any extension from
-  `run_detail_extension()` and drop its `scenario_name` class variable, and import
-  the extension contract from `glossogen.scenario_run_detail_extension`.
+  `run_detail_extension()` and drop its `scenario_name` class variable, import
+  the extension contract from `glossogen.scenario_run_detail_extension`, and
+  import `AgentDetail` and `ChannelMessage` from `glossogen.run_detail_types`. An
+  extension module the hook does not return is never imported, so nothing reports
+  it: the run page shows no scenario data.
 - `Metric.compute` takes `scenario: ScenarioBase`, the part of the scenario contract
   metrics read. A metric in another package annotates its override the same way.
   `available_metrics` takes the scenario class.
