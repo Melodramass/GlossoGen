@@ -36,10 +36,9 @@ PROTOCOL_CONTINUE_TEMPLATE = "protocol_continue.jinja"
 
 
 class Direction(str, Enum):
-    """A move. ``stay`` spends a move without changing square, and the partner sees it."""
+    """A move to the neighbouring square in one direction. There is no move that stays put."""
 
     UP = "up"
     DOWN = "down"
     LEFT = "left"
     RIGHT = "right"
-    STAY = "stay"

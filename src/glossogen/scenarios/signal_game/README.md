@@ -29,8 +29,10 @@ as the paper also guarantees ("at least one of the four colours will appear in b
 players' boxes").
 Grids come from `seed` and are the same in every run with that seed.
 
-Both figures start every round on row 1, col 1. A player has `moves_per_round` moves:
-`up`, `down`, `left`, `right` and `stay` each spend one. One `move` call takes a list
+Each figure starts every round on a square drawn at random, separately for each player
+and from `seed`, and the briefing tells each player both starts. A player has
+`moves_per_round` moves: `up`, `down`, `left` and `right` each spend one, and there is
+no move that stays put, as with the paper's arrow keys. One `move` call takes a list
 of up to 10 of them (`MAX_MOVES_PER_CALL`) and applies them in order. A step off the
 grid, or past the player's last move, stops the list there: the steps before it stand,
 and the refused step spends nothing and is not shown to the partner. `end_round` fixes the
@@ -51,12 +53,12 @@ The briefing gives the player its own grid (and the partner's, under
 carries the board:
 
 ```
-You moved: down (#1), stay (#2), right (#3).
+You moved: down (#3), right (#4), up (#5).
 Round 2. You are on row 1, col 2 (red), 197 move(s) left.
-Your partner is on row 2, col 1.
+Your partner is on row 1, col 1.
 Your partner's actions since you last looked, in order (#n counts every action on both grids this round):
   #1 down -> row 2, col 1
-  #2 stay -> row 2, col 1
+  #2 up -> row 1, col 1
 ```
 
 `#n` numbers the actions on both grids in one sequence, so a player can tell what the
@@ -77,7 +79,7 @@ wording beyond "coordinate" is this scenario's.
 
 | Tool | What it does |
 |---|---|
-| `move(directions)` | 1 to 10 steps, each `up`, `down`, `left`, `right` or `stay`, applied in order. Each step spends one move; returns the board |
+| `move(directions)` | 1 to 10 steps, each `up`, `down`, `left` or `right`, applied in order. Each step spends one move; returns the board |
 | `end_round()` | Fixes the player's square; returns the board |
 | `read_notifications()` | At startup and after a round changes, the briefing. Mid-round, waits until the partner acts and returns the board |
 | `read_notifications(wait_for="next_round")` | After `end_round`, waits for the next briefing |
@@ -119,9 +121,9 @@ the other platform knobs. The scenario adds:
 |---|---|---|
 | `grid_size` | Squares per side, 2 to 5 | 2 |
 | `colour_count` | Colours drawn from, at most the squares in a grid | 4 |
-| `moves_per_round` | Moves per player per round, `stay` included, at most 1000 | 200 |
+| `moves_per_round` | Moves per player per round, at most 1000 | 200 |
 | `partner_colours_visible` | Show each player the partner's colours too | `false` |
-| `seed` | The grids | 42 |
+| `seed` | The grids and start squares | 42 |
 
 `knobs_default` also sets `round_count` 10 and `max_round_duration_seconds` 600. The
 validator refuses `postmortem_enabled=true` (a debrief is a channel) and
@@ -140,12 +142,14 @@ default has nothing to be read against.
 | The paper | Here | Why |
 |---|---|---|
 | Players move in real time, and each sees the other's figure move continuously | A `move` call is a burst of up to 10 steps, applied without the partner acting in between. The partner sees each step, numbered in one sequence across both players | Agents act in model cycles, not in time. A burst stands in for a quick run of key presses and the gap between calls for a pause, so a gesture such as an oscillation is not broken up by the partner's moves. Speed and simultaneity are still lost |
-| No move limit; play for a fixed session time (40 minutes). The paper reports no move counts | 200 moves per player per round, and `max_round_duration_seconds` per round | A model can loop on moves indefinitely, so a cap bounds cost. 200 is set high enough that it does not shape play: the best human pair's signals took at most five moves, and a round of signalling, travel and replies fits many times over |
+| Arrow keys only. A pause carries meaning: in the paper's typical system a player walks to the default colour and pauses, and the partner follows or signals another colour | `up`, `down`, `left`, `right`; no `stay` | Waiting is a `read_notifications` call, which the partner does not see, so a pause cannot be a signal here |
+| No move limit; play for a fixed session time (40 minutes), which came to 193.5 rounds a pair on average | 200 moves per player per round, `max_round_duration_seconds` per round, and `round_count` rounds (10 in the presets) | A model can loop on moves indefinitely, so a cap bounds cost. 200 does not shape play: the paper's signals (oscillations, a loop around the box, a C-shape) take a handful of moves. In the paper's example pair a working system took about 100 rounds to appear; `round_count` sets how many rounds a run has |
+| A pair's score is its longest run of consecutive points ("points in succession"), shown on screen beside the highest so far | Players are told to score as many rounds as they can, and the briefing shows total points. Nothing tells them how many rounds the game has | The streak is measured after the run by `longest_streak`, beside `round_success`; it is not shown to the players |
 | A round ends when both players stop | `end_round`, or spending every move | An agent has no "stopped moving" state without one; the explicit call is the stop |
-| The partner's stopping is visible as the figure no longer moving | The partner's `end_round` appears in the action list | The same information, stated |
-| Start position: not stated in the paper | Both start on row 1, col 1 | A shared fixed start makes "shortest path to the final square" well defined for `excess_moves` |
+| Not stated whether a player sees the partner finish. Footnote 2 counts the end-of-turn key press as a game move | The partner's `end_round` appears in the action list | An assumption: without it a player cannot tell a partner who finished from one who is thinking |
+| Each figure starts on a random quadrant, chosen each round | The same: each player's start is drawn separately, from `seed` | The paper does not say whether the two draws are independent; here they are |
 | Grid 2 × 2, four colours | Defaults to the same; `grid_size` and `colour_count` are knobs | A larger grid gives more room for path shapes that read as signals |
-| One condition (told to coordinate) | The same, plus a shared-colour control | The control is a baseline: it shows whether agents can coordinate when nothing needs signalling |
+| Two conditions. In the second, a colour that scored cannot score in the next round, so a default colour cannot get a pair started; 2 of 12 pairs succeeded, against 7 of 12 in the first | The first condition only, plus a shared-colour control | The second condition is not implemented. The control is a baseline: it shows whether agents can coordinate when nothing needs signalling |
 
 ## Measurement
 
@@ -154,9 +158,9 @@ default has nothing to be read against.
 
 `excess_moves` is the scenario's own metric, in the registry's scenario-scoped list
 and advertised only by this scenario. Per round and player, it is the moves made
-minus the shortest path from the start to the square the player finished on: the
+minus the shortest path from that player's start to the square it finished on: the
 inefficiency measure of de Bie, Scott-Phillips, Kirby & Verheij (2010). A player that
-walks straight to its square scores 0; every stay, detour and back-and-forth adds 1.
+walks straight to its square scores 0; every detour and back-and-forth adds 1.
 `score` is the mean over player-rounds, `per_round[].value` the round's mean over the
 two players with each player's move trace in the note, and `per_agent[].value` each
 player's mean over rounds.
@@ -164,6 +168,12 @@ player's mean over rounds.
 It does not tell intent from confusion: a player wandering because it is unsure
 scores the same as one oscillating on purpose. Read it beside `round_success` and the
 traces in the notes, and against the control.
+
+`longest_streak`, also scenario-scoped, is the paper's score: the most rounds the pair
+won in a row. `per_round[].value` is the streak standing after each round, the curve
+the paper plots for one pair in its Fig. 4. A round missing from the log breaks a
+streak. Runs here are far shorter than the paper's sessions, so compare streaks
+between runs of the same `round_count`, not with the paper's numbers.
 
 `build_communication_rounds` renders each player's move trace as that round's message,
 with both grids and the final squares as the ground truth, so
@@ -175,7 +185,7 @@ with both grids and the final squares as the ground truth, so
 
 | Event | Holds |
 |---|---|
-| `signal_game_round_started` | Both grids, the start square, the move budget, whether colours are shared |
+| `signal_game_round_started` | Both grids, each player's start square, the move budget, whether colours are shared |
 | `signal_game_move_made` | Player, direction, from and to squares, sequence number, moves used |
 | `signal_game_player_finished` | Player, final square and colour, moves used |
 | `signal_game_round_resolved` | Final squares and colours, moves used, success, trigger |
@@ -196,7 +206,7 @@ positions and the action log of an open round are not rebuilt.
 | `wake_package.py` | The wake package `read_notifications` returns |
 | `scenario.py` | Agents, tools, briefings, board view, waiting and release, round end, verdict |
 | `prompts/` | System prompt, briefing, board view, release notice, runner prompts, `description.jinja` |
-| `evaluation/excess_moves_metric.py` | The metric above |
+| `evaluation/excess_moves_metric.py`, `evaluation/longest_streak_metric.py` | The metrics above |
 | `evaluation/build_communication_rounds.py` | The move-trace views |
 
 There is no `team_declaration.py`: `TeamSpec` requires a task channel, so agents are
@@ -204,7 +214,7 @@ built in `scenario.py`, as dead_drop and prisoners_dilemma do. The decision base
 `tests/engine/test_scenario_decisions_unchanged.py` leaves signal_game out, because
 its harness drives agents by chatting on a primary channel. `tests/scenarios/signal_game/`
 plays the round loop with scripted moves instead; `tests/metrics/test_excess_moves.py`
-covers the metric.
+and `tests/metrics/test_longest_streak.py` cover the metrics.
 
 ## Known limitations
 
@@ -225,7 +235,8 @@ covers the metric.
 - Scott-Phillips, T. C., Kirby, S., & Ritchie, G. R. S. (2007). Signalling signalhood:
   An exploratory study into the emergence of communicative intentions. *Proceedings of
   the ESSLLI 2007 Workshop on Language, Games, and Evolution*, 78–84. The exploratory
-  version of the same experiment, and the source of the game rules above.
+  version of the same experiment. Where the two differ, the rules above follow the 2009
+  paper.
 - de Bie, P., Scott-Phillips, T. C., Kirby, S., & Verheij, B. (2010). Using software
   agents to investigate the interactive origins of communication systems. *Evolution
   of Language: Proceedings of the 8th International Conference (EVOLANG8)*.

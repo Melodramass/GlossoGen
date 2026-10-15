@@ -179,6 +179,7 @@ opponent_decision  # unused variable (src/glossogen/scenarios/prisoners_dilemma/
 own_payoff  # unused variable (src/glossogen/scenarios/prisoners_dilemma/scenario.py:239)
 opponent_payoff  # unused variable (src/glossogen/scenarios/prisoners_dilemma/scenario.py:240)
 _._backfill_round_time_budget_seconds  # unused method (src/glossogen/scenarios/satellite_contact_window/events.py:58)
+_._backfill_start_squares  # unused method (src/glossogen/scenarios/signal_game/events.py:23)
 _._validate_round_time_budget_seconds  # unused method (src/glossogen/scenarios/satellite_contact_window/knobs.py:46)
 _._validate_round_count  # unused method (src/glossogen/scenarios/satellite_contact_window/knobs.py:54)
 _._validate_pattern_count_bounds  # unused method (src/glossogen/scenarios/satellite_contact_window/knobs.py:60)

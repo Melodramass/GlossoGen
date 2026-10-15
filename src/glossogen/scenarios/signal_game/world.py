@@ -9,7 +9,6 @@ from typing import NamedTuple
 
 from glossogen.runtime.scenario_world import ScenarioWorld
 from glossogen.scenarios.signal_game.board import (
-    START_SQUARE,
     RoundBoards,
     Square,
     colour_at,
@@ -60,10 +59,10 @@ class SignalGameWorld(ScenarioWorld):
         self._outcomes: dict[int, RoundOutcome] = {}
 
     def start_round(self, boards: RoundBoards) -> None:
-        """Put both players on the start square with a full move budget."""
+        """Put each player on its start square with a full move budget."""
         self._open = _OpenRound(
             boards=boards,
-            squares=dict.fromkeys(AGENT_IDS, START_SQUARE),
+            squares=dict(boards.starts),
             moves_used=dict.fromkeys(AGENT_IDS, 0),
             ended=set(),
             log=[],

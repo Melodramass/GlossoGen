@@ -13,7 +13,7 @@ class SignalGameKnobs(BaseKnobs):
 
     Each player's grid is ``grid_size`` squares on a side, each square coloured
     from the first ``colour_count`` colours of the palette. ``moves_per_round``
-    caps the moves (``stay`` included) one player makes in a round.
+    caps the moves one player makes in a round.
     ``partner_colours_visible`` shows each player the partner's colours too,
     which removes the private information and is the control condition.
     """

@@ -146,6 +146,8 @@ read them together, see [Communication metrics](communication-metrics.md).
   per-agent breakdowns
 - `excess_moves` — signal_game only, and offered only for signal_game runs: each
   player's moves beyond the shortest path to the square it finished on
+- `longest_streak` — signal_game only: the most rounds the pair won in a row, the
+  score the source paper reports
 
 ### Protocol
 

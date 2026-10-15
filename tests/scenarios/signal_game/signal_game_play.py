@@ -13,7 +13,7 @@ from glossogen.testing.simulation_harness import SimulationResult, never_times_o
 
 ONE_ROUND: dict[str, Any] = {"round_count": 1}
 """Round 1 under seed 42: player_a's grid is red red / green blue, player_b's is
-blue blue / red red."""
+blue blue / red red, and both start on row 2, col 2 (player_a on blue, player_b on red)."""
 
 
 def build(preset_name: str, overrides: dict[str, Any]) -> SignalGameScenario:

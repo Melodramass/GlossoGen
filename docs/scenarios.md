@@ -180,7 +180,8 @@ shows both grids, leaving nothing to signal.
 
 Judge-free. The `excess_moves` metric counts each player's moves beyond the shortest
 path to its final square, the costly movement the paper's participants used to mark
-a move as a signal.
+a move as a signal. `longest_streak` is the paper's own score, the most rounds won
+in a row.
 
 ## Working with scenarios
 

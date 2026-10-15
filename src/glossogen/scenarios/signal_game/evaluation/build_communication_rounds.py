@@ -58,11 +58,14 @@ def build_communication_rounds(events: list[SimulationEvent]) -> list[Communicat
 
 
 def _ground_truth(started: SignalGameRoundStarted, resolved: SignalGameRoundResolved | None) -> str:
-    """Both grids, row by row, and each player's final square and colour."""
+    """Both grids, row by row, and each player's start and final square."""
     lines: list[str] = []
     for agent_id, grid in sorted(started.grids.items()):
         rows = " / ".join(" ".join(row) for row in grid)
-        lines.append(f"{agent_id} grid (rows top to bottom): {rows}")
+        start = started.start_squares[agent_id]
+        lines.append(
+            f"{agent_id} grid (rows top to bottom): {rows}; starts on r{start[0]}c{start[1]}"
+        )
     if resolved is not None:
         for agent_id, square in sorted(resolved.final_squares.items()):
             lines.append(
@@ -74,7 +77,8 @@ def _ground_truth(started: SignalGameRoundStarted, resolved: SignalGameRoundReso
     if started.partner_colours_visible:
         visibility = "both grids' colours"
     lines.append(
-        f"Both players start on r1c1 and see each other's moves and {visibility}. A message "
+        "Each player starts on its own random square and sees both players' moves and "
+        f"{visibility}. A message "
         "is one player's move trace; #n orders both players' actions."
     )
     return "\n".join(lines)

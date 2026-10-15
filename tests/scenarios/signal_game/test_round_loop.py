@@ -40,6 +40,14 @@ def resolved(result: SimulationResult) -> SignalGameRoundResolved:
     return outcome
 
 
+def resolved_rounds(result: SimulationResult) -> dict[int, tuple[int, int]]:
+    """player_a's final square per round."""
+    return {
+        outcome.round_number: outcome.final_squares[PLAYER_A]
+        for outcome in result.of_type(event_type=SignalGameRoundResolved)
+    }
+
+
 def results_for(result: SimulationResult, agent_id: str, tool_name: str) -> list[str]:
     return [
         event.result
@@ -53,8 +61,8 @@ async def test_finishing_on_the_same_colour_wins_the_round(
 ) -> None:
     scenario = build(preset_name="knobs_default", overrides=ONE_ROUND)
     scripts: dict[str, list[ScriptedTurn]] = {
-        PLAYER_A: [read(), end_round(), wait_for_next_round()],
-        PLAYER_B: [read(), move(directions=["down"]), end_round(), wait_for_next_round()],
+        PLAYER_A: [read(), move(directions=["up"]), end_round(), wait_for_next_round()],
+        PLAYER_B: [read(), end_round(), wait_for_next_round()],
     }
     result = await play(
         scenario=scenario, scripts=scripts, tmp_path=tmp_path, monkeypatch=monkeypatch
@@ -65,7 +73,7 @@ async def test_finishing_on_the_same_colour_wins_the_round(
     assert outcome.success
     assert outcome.trigger == BOTH_FINISHED_TRIGGER
     assert outcome.final_colours == {PLAYER_A: "red", PLAYER_B: "red"}
-    assert outcome.moves_used == {PLAYER_A: 0, PLAYER_B: 1}
+    assert outcome.moves_used == {PLAYER_A: 1, PLAYER_B: 0}
 
 
 async def test_different_colours_lose_the_round(
@@ -82,7 +90,37 @@ async def test_different_colours_lose_the_round(
 
     outcome = resolved(result=result)
     assert not outcome.success
-    assert outcome.final_colours == {PLAYER_A: "red", PLAYER_B: "blue"}
+    assert outcome.final_colours == {PLAYER_A: "blue", PLAYER_B: "red"}
+
+
+async def test_the_briefing_gives_each_players_own_random_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    scenario = build(preset_name="knobs_default", overrides={"round_count": 2})
+    one_round: list[ScriptedTurn] = [end_round(), wait_for_next_round()]
+    scripts: dict[str, list[ScriptedTurn]] = {
+        PLAYER_A: [read(), *one_round, *one_round],
+        PLAYER_B: [read(), *one_round, *one_round],
+    }
+    result = await play(
+        scenario=scenario, scripts=scripts, tmp_path=tmp_path, monkeypatch=monkeypatch
+    )
+
+    starts = {
+        started.round_number: started.start_squares
+        for started in result.of_type(event_type=SignalGameRoundStarted)
+    }
+    assert starts == {
+        1: {PLAYER_A: (2, 2), PLAYER_B: (2, 2)},
+        2: {PLAYER_A: (1, 1), PLAYER_B: (2, 1)},
+    }
+    second_briefing = next(
+        text
+        for text in results_for(result=result, agent_id=PLAYER_B, tool_name="read_notifications")
+        if "ROUND 2" in text
+    )
+    assert "You start on row 2, col 1. Your partner starts on row 1, col 1." in second_briefing
+    assert resolved_rounds(result=result) == {1: (2, 2), 2: (1, 1)}
 
 
 async def test_the_partner_sees_every_move_once_and_in_order(
@@ -97,9 +135,9 @@ async def test_the_partner_sees_every_move_once_and_in_order(
     scripts: dict[str, list[ScriptedTurn]] = {
         PLAYER_A: [
             read(),
-            move(directions=["right"]),
             move(directions=["left"]),
-            move(directions=["stay"]),
+            move(directions=["right"]),
+            move(directions=["up"]),
             end_round(),
             wait_for_next_round(),
         ],
@@ -113,13 +151,13 @@ async def test_the_partner_sees_every_move_once_and_in_order(
         results_for(result=result, agent_id=PLAYER_B, tool_name="read_notifications")
         + results_for(result=result, agent_id=PLAYER_B, tool_name="end_round")
     )
-    for line in ("#1 right", "#2 left", "#3 stay", "#4 end_round"):
+    for line in ("#1 left", "#2 right", "#3 up", "#4 end_round"):
         assert seen.count(line) == 1, line
-    assert seen.index("#1 right") < seen.index("#2 left") < seen.index("#3 stay")
+    assert seen.index("#1 left") < seen.index("#2 right") < seen.index("#3 up")
     assert [move.direction for move in result.of_type(event_type=SignalGameMoveMade)] == [
-        "right",
         "left",
-        "stay",
+        "right",
+        "up",
     ]
 
 
@@ -128,7 +166,7 @@ async def test_a_move_off_the_grid_is_refused_and_spends_nothing(
 ) -> None:
     scenario = build(preset_name="knobs_default", overrides=ONE_ROUND)
     scripts: dict[str, list[ScriptedTurn]] = {
-        PLAYER_A: [read(), move(directions=["up"]), end_round(), wait_for_next_round()],
+        PLAYER_A: [read(), move(directions=["down"]), end_round(), wait_for_next_round()],
         PLAYER_B: [read(), end_round(), wait_for_next_round()],
     }
     result = await play(
@@ -146,8 +184,8 @@ async def test_a_player_out_of_moves_counts_as_finished(
 ) -> None:
     scenario = build(preset_name="knobs_default", overrides={**ONE_ROUND, "moves_per_round": 1})
     scripts: dict[str, list[ScriptedTurn]] = {
-        PLAYER_A: [read(), move(directions=["right"]), wait_for_next_round()],
-        PLAYER_B: [read(), move(directions=["down"]), wait_for_next_round()],
+        PLAYER_A: [read(), move(directions=["up"]), wait_for_next_round()],
+        PLAYER_B: [read(), move(directions=["left"]), wait_for_next_round()],
     }
     result = await play(
         scenario=scenario, scripts=scripts, tmp_path=tmp_path, monkeypatch=monkeypatch
@@ -197,7 +235,7 @@ async def test_two_rounds_brief_the_previous_result_and_reveal_the_partner_grid(
     second_briefing = next(
         text
         for text in results_for(result=result, agent_id=PLAYER_A, tool_name="read_notifications")
-        if "ROUND 2 OF 2" in text
+        if "ROUND 2" in text
     )
     assert "Round 1 result: no point" in second_briefing
     assert "blue | blue" in second_briefing
@@ -245,7 +283,7 @@ async def test_a_batch_is_applied_in_order_and_the_partner_sees_each_step_once(
     scripts: dict[str, list[ScriptedTurn]] = {
         PLAYER_A: [
             read(),
-            move(directions=["right", "left", "right", "left", "stay"]),
+            move(directions=["left", "right", "left", "right", "up"]),
             end_round(),
             wait_for_next_round(),
         ],
@@ -257,19 +295,19 @@ async def test_a_batch_is_applied_in_order_and_the_partner_sees_each_step_once(
 
     moves = result.of_type(event_type=SignalGameMoveMade)
     assert [(m.sequence, m.direction) for m in moves] == [
-        (1, "right"),
-        (2, "left"),
-        (3, "right"),
-        (4, "left"),
-        (5, "stay"),
+        (1, "left"),
+        (2, "right"),
+        (3, "left"),
+        (4, "right"),
+        (5, "up"),
     ]
     [a_result] = results_for(result=result, agent_id=PLAYER_A, tool_name="move")
-    assert "You moved: right (#1), left (#2), right (#3), left (#4), stay (#5)." in a_result
+    assert "You moved: left (#1), right (#2), left (#3), right (#4), up (#5)." in a_result
     seen = "\n".join(
         results_for(result=result, agent_id=PLAYER_B, tool_name="read_notifications")
         + results_for(result=result, agent_id=PLAYER_B, tool_name="end_round")
     )
-    for line in ("#1 right", "#2 left", "#3 right", "#4 left", "#5 stay"):
+    for line in ("#1 left", "#2 right", "#3 left", "#4 right", "#5 up"):
         assert seen.count(line) == 1, line
     assert resolved(result=result).moves_used[PLAYER_A] == 5
 
@@ -281,7 +319,7 @@ async def test_a_step_off_the_grid_stops_the_batch_and_the_steps_before_it_stand
     scripts: dict[str, list[ScriptedTurn]] = {
         PLAYER_A: [
             read(),
-            move(directions=["right", "right", "down"]),
+            move(directions=["left", "left", "up"]),
             end_round(),
             wait_for_next_round(),
         ],
@@ -292,9 +330,23 @@ async def test_a_step_off_the_grid_stops_the_batch_and_the_steps_before_it_stand
     )
 
     [a_result] = results_for(result=result, agent_id=PLAYER_A, tool_name="move")
-    assert "Stopped after 1 of 3 steps: Moving right from row 1, col 2 leaves the grid" in a_result
-    assert [m.direction for m in result.of_type(event_type=SignalGameMoveMade)] == ["right"]
-    assert resolved(result=result).final_squares[PLAYER_A] == (1, 2)
+    assert "Stopped after 1 of 3 steps: Moving left from row 2, col 1 leaves the grid" in a_result
+    assert [m.direction for m in result.of_type(event_type=SignalGameMoveMade)] == ["left"]
+    assert resolved(result=result).final_squares[PLAYER_A] == (2, 1)
+
+
+async def test_there_is_no_stay_move(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    scenario = build(preset_name="knobs_default", overrides=ONE_ROUND)
+    scripts: dict[str, list[ScriptedTurn]] = {
+        PLAYER_A: [read(), move(directions=["stay"]), end_round(), wait_for_next_round()],
+        PLAYER_B: [read(), end_round(), wait_for_next_round()],
+    }
+    result = await play(
+        scenario=scenario, scripts=scripts, tmp_path=tmp_path, monkeypatch=monkeypatch
+    )
+
+    assert result.of_type(event_type=SignalGameMoveMade) == []
+    assert resolved(result=result).moves_used[PLAYER_A] == 0
 
 
 async def test_a_batch_longer_than_the_moves_left_stops_at_the_budget(
@@ -302,7 +354,7 @@ async def test_a_batch_longer_than_the_moves_left_stops_at_the_budget(
 ) -> None:
     scenario = build(preset_name="knobs_default", overrides={**ONE_ROUND, "moves_per_round": 2})
     scripts: dict[str, list[ScriptedTurn]] = {
-        PLAYER_A: [read(), move(directions=["stay", "stay", "stay"]), wait_for_next_round()],
+        PLAYER_A: [read(), move(directions=["up", "down", "up"]), wait_for_next_round()],
         PLAYER_B: [read(), end_round(), wait_for_next_round()],
     }
     result = await play(
@@ -314,7 +366,7 @@ async def test_a_batch_longer_than_the_moves_left_stops_at_the_budget(
     assert resolved(result=result).moves_used[PLAYER_A] == 2
 
 
-@pytest.mark.parametrize("directions", [[], ["stay"] * (MAX_MOVES_PER_CALL + 1)])
+@pytest.mark.parametrize("directions", [[], ["up"] * (MAX_MOVES_PER_CALL + 1)])
 async def test_an_empty_or_overlong_batch_moves_nothing(
     directions: list[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -357,3 +409,13 @@ async def test_the_runner_asks_the_provider_for_one_tool_call_per_response(
     await play(scenario=scenario, scripts=scripts, tmp_path=tmp_path, monkeypatch=monkeypatch)
 
     assert requested == [False, False]
+
+
+def test_no_prompt_or_briefing_states_how_many_rounds_the_game_has() -> None:
+    """Players learn the game is over only when it ends, as the paper's did."""
+    scenario = build(preset_name="knobs_default", overrides={"round_count": 7})
+    for agent in scenario.get_agents(default_model="test", default_provider="anthropic"):
+        assert "7" not in agent.system_prompt
+    briefing = scenario.get_injection(round_number=1, agent_id=PLAYER_A)
+    assert briefing.startswith("ROUND 1\n")
+    assert "7" not in briefing

@@ -4,7 +4,6 @@ import pytest
 from pydantic import ValidationError
 
 from glossogen.scenarios.signal_game.board import (
-    START_SQUARE,
     Square,
     generate_boards,
     path_length,
@@ -13,17 +12,18 @@ from glossogen.scenarios.signal_game.board import (
 from glossogen.scenarios.signal_game.ids import AGENT_IDS, PALETTE, Direction
 from glossogen.scenarios.signal_game.scenario import SignalGameScenario
 
+TOP_LEFT = Square(row=1, col=1)
+
 
 def test_a_move_off_the_grid_goes_nowhere() -> None:
-    assert step(square=START_SQUARE, direction=Direction.UP, grid_size=2) is None
-    assert step(square=START_SQUARE, direction=Direction.LEFT, grid_size=2) is None
-    assert step(square=START_SQUARE, direction=Direction.RIGHT, grid_size=2) == Square(row=1, col=2)
-    assert step(square=START_SQUARE, direction=Direction.STAY, grid_size=2) == START_SQUARE
+    assert step(square=TOP_LEFT, direction=Direction.UP, grid_size=2) is None
+    assert step(square=TOP_LEFT, direction=Direction.LEFT, grid_size=2) is None
+    assert step(square=TOP_LEFT, direction=Direction.RIGHT, grid_size=2) == Square(row=1, col=2)
 
 
 def test_the_shortest_path_is_the_manhattan_distance() -> None:
-    assert path_length(start=START_SQUARE, end=Square(row=2, col=2)) == 2
-    assert path_length(start=START_SQUARE, end=START_SQUARE) == 0
+    assert path_length(start=TOP_LEFT, end=Square(row=2, col=2)) == 2
+    assert path_length(start=TOP_LEFT, end=TOP_LEFT) == 0
 
 
 def test_every_round_shares_a_colour_and_uses_only_the_palette() -> None:
@@ -35,6 +35,21 @@ def test_every_round_shares_a_colour_and_uses_only_the_palette() -> None:
         )
         assert first & second
         assert first | second <= set(PALETTE[:3])
+
+
+def test_each_player_starts_on_its_own_random_square() -> None:
+    boards = generate_boards(seed=42, round_count=200, grid_size=3, colour_count=4)
+    every_square = {Square(row=row, col=col) for row in range(1, 4) for col in range(1, 4)}
+    for round_boards in boards:
+        assert set(round_boards.starts) == set(AGENT_IDS)
+        assert set(round_boards.starts.values()) <= every_square
+    for agent_id in AGENT_IDS:
+        assert {round_boards.starts[agent_id] for round_boards in boards} == every_square
+    pairs = [
+        tuple(round_boards.starts[agent_id] for agent_id in AGENT_IDS) for round_boards in boards
+    ]
+    assert any(first == second for first, second in pairs)
+    assert any(first != second for first, second in pairs)
 
 
 def test_the_same_seed_draws_the_same_boards() -> None:

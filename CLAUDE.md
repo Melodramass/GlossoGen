@@ -1073,7 +1073,8 @@ Generic metrics (available to all scenarios):
 
 Scenario-scoped metrics (in `SCENARIO_METRIC_REGISTRY`, advertised only by their scenario's `get_available_metric_names`; another scenario's run gets `[]`):
 
-- `excess_moves` — signal_game. Per round and player, the moves made minus the shortest path from the start to the square the player finished on (the inefficiency measure of de Bie et al. 2010): stays, detours and oscillations, the costly movement that marks a move as a signal. `score` = mean over player-rounds; `per_round[].value` = the round's mean over the two players, with each player's move trace in the note; `per_agent[].value` = each player's mean over rounds. It does not tell intent from confusion.
+- `excess_moves` — signal_game. Per round and player, the moves made minus the shortest path from the start to the square the player finished on (the inefficiency measure of de Bie et al. 2010): detours and oscillations, the costly movement that marks a move as a signal. `score` = mean over player-rounds; `per_round[].value` = the round's mean over the two players, with each player's move trace in the note; `per_agent[].value` = each player's mean over rounds. It does not tell intent from confusion.
+- `longest_streak` — signal_game. The most rounds the pair won in a row, the score Scott-Phillips, Kirby & Ritchie (2009) report ("points in succession"). `score` = the longest streak; `per_round[].value` = the streak standing after each round. A round missing from the log breaks a streak.
 
 Scenarios opt into most platform metrics by implementing the corresponding hooks on `SimulationScenario`. `judge_round_result` and `get_primary_channels` are **required** (abstract): every scenario must implement them, since round-success and primary-channel throughput/language metrics are core; the rest below are opt-in:
 

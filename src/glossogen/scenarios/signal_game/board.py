@@ -14,7 +14,6 @@ _STEPS: dict[Direction, tuple[int, int]] = {
     Direction.DOWN: (1, 0),
     Direction.LEFT: (0, -1),
     Direction.RIGHT: (0, 1),
-    Direction.STAY: (0, 0),
 }
 
 
@@ -29,15 +28,16 @@ class Square(NamedTuple):
         return f"row {self.row}, col {self.col}"
 
 
-START_SQUARE = Square(row=1, col=1)
-"""Every player starts each round on the top-left square."""
-
-
 class RoundBoards(NamedTuple):
-    """Each player's grid for one round: ``grids[agent_id][row - 1][col - 1]`` is a colour."""
+    """Each player's grid and start square for one round.
+
+    ``grids[agent_id][row - 1][col - 1]`` is a colour; ``starts[agent_id]`` is
+    where that player's figure begins the round.
+    """
 
     round_number: int
     grids: dict[str, list[list[str]]]
+    starts: dict[str, Square]
 
 
 def colour_at(grid: list[list[str]], square: Square) -> str:
@@ -63,13 +63,19 @@ def path_length(start: Square, end: Square) -> int:
 def generate_boards(
     seed: int, round_count: int, grid_size: int, colour_count: int
 ) -> list[RoundBoards]:
-    """Every round's grids, drawn from ``seed``.
+    """Every round's grids and start squares, drawn from ``seed``.
 
     Each square is coloured independently from the first ``colour_count``
     colours, so a colour can repeat on a grid or be missing from it. A pair of
     grids sharing no colour is drawn again, so every round can be won.
+
+    Each player's start square is drawn separately, uniformly over its grid, as
+    in the paper. Starts come from their own generator, so a seed gives the
+    grids it gave before starts were random, and a round's start does not
+    depend on ``round_count``.
     """
     rng = random.Random(seed)
+    start_rng = random.Random(f"signal_game starts {seed}")
     colours = PALETTE[:colour_count]
     boards: list[RoundBoards] = []
     for round_number in range(1, round_count + 1):
@@ -85,5 +91,11 @@ def generate_boards(
             )
             if first & second:
                 break
-        boards.append(RoundBoards(round_number=round_number, grids=grids))
+        starts = {
+            agent_id: Square(
+                row=start_rng.randint(1, grid_size), col=start_rng.randint(1, grid_size)
+            )
+            for agent_id in AGENT_IDS
+        }
+        boards.append(RoundBoards(round_number=round_number, grids=grids, starts=starts))
     return boards

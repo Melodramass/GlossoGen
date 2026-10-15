@@ -28,7 +28,6 @@ from glossogen.runtime.wait_for import WaitFor
 from glossogen.runtime.wait_registry import WakeReason
 from glossogen.scenario_protocol import PrimaryChannel, RoundResult, SimulationScenario
 from glossogen.scenarios.signal_game.board import (
-    START_SQUARE,
     Square,
     colour_at,
     generate_boards,
@@ -37,6 +36,7 @@ from glossogen.scenarios.signal_game.evaluation.build_communication_rounds impor
     build_communication_rounds,
 )
 from glossogen.scenarios.signal_game.evaluation.excess_moves_metric import ExcessMovesMetric
+from glossogen.scenarios.signal_game.evaluation.longest_streak_metric import LongestStreakMetric
 from glossogen.scenarios.signal_game.events import (
     SignalGameMoveMade,
     SignalGamePlayerFinished,
@@ -80,7 +80,7 @@ wake renders it as a reason and shows the board, not as a notice."""
 
 MOVE_DESCRIPTION = (
     f"Move your figure through 1 to {MAX_MOVES_PER_CALL} steps, applied in order. Each step "
-    "is up, down, left or right (one square), or stay, and spends one of your moves for the "
+    "is up, down, left or right (one square) and spends one of your moves for the "
     "round. Your partner sees every step. A step off the grid, or past your last move, stops "
     "the sequence there: the steps before it stand. Returns the board and your partner's "
     "actions since you last looked."
@@ -139,8 +139,11 @@ class SignalGameScenario(SimulationScenario):
 
     @classmethod
     def get_available_metric_names(cls) -> list[str]:
-        """Every generic metric, plus ``excess_moves``, which only reads signal_game runs."""
-        return sorted(set(super().get_available_metric_names()) | {ExcessMovesMetric.name})
+        """Every generic metric, plus the metrics that only read signal_game runs."""
+        return sorted(
+            set(super().get_available_metric_names())
+            | {ExcessMovesMetric.name, LongestStreakMetric.name}
+        )
 
     def __init__(self, knobs: SignalGameKnobs) -> None:
         self._knobs = knobs
@@ -202,7 +205,6 @@ class SignalGameScenario(SimulationScenario):
         return self._renderer.render(
             template_name=SYSTEM_TEMPLATE,
             template_variables={
-                "round_count": self._knobs.round_count,
                 "grid_size": self._knobs.grid_size,
                 "colours": list(PALETTE[: self._knobs.colour_count]),
                 "partner_colours_visible": self._knobs.partner_colours_visible,
@@ -352,7 +354,7 @@ class SignalGameScenario(SimulationScenario):
         self._request_round[agent_id] = self.runtime.current_round
 
     def get_injection(self, round_number: int, agent_id: str) -> str:
-        """The round briefing: the previous result, revealed grid, and this round's grid."""
+        """The round briefing: the previous result, revealed grid, this round's grid and starts."""
         boards = self._boards[round_number - 1]
         partner = PARTNER_OF[agent_id]
         previous: PreviousRound | None = None
@@ -374,17 +376,18 @@ class SignalGameScenario(SimulationScenario):
             template_name=INJECTION_TEMPLATE,
             template_variables={
                 "round_number": round_number,
-                "round_count": self._knobs.round_count,
                 "previous": previous,
                 "rounds_won": self._world.rounds_won(),
                 "own_grid": boards.grids[agent_id],
                 "partner_grid": partner_grid,
+                "own_start": boards.starts[agent_id].label(),
+                "partner_start": boards.starts[partner].label(),
                 "moves_per_round": self._knobs.moves_per_round,
             },
         )
 
     async def on_round_advanced(self, round_number: int) -> None:
-        """Put both players on the start square and log the round's grids."""
+        """Put each player on its start square and log the round's grids and starts."""
         if round_number <= self._started_round:
             return
         boards = self._boards[round_number - 1]
@@ -394,7 +397,9 @@ class SignalGameScenario(SimulationScenario):
             event=SignalGameRoundStarted(
                 round_number=round_number,
                 grids=boards.grids,
-                start_square=(START_SQUARE.row, START_SQUARE.col),
+                start_squares={
+                    agent_id: (square.row, square.col) for agent_id, square in boards.starts.items()
+                },
                 moves_per_round=self._knobs.moves_per_round,
                 partner_colours_visible=self._knobs.partner_colours_visible,
             )

@@ -25,7 +25,7 @@ async def test_each_round_holds_each_players_trace_and_both_grids(
 ) -> None:
     scenario = build(preset_name="knobs_default", overrides=ONE_ROUND)
     scripts: dict[str, list[ScriptedTurn]] = {
-        PLAYER_A: [read(), move(directions=["right"]), end_round(), wait_for_next_round()],
+        PLAYER_A: [read(), move(directions=["left"]), end_round(), wait_for_next_round()],
         PLAYER_B: [read(), end_round(), wait_for_next_round()],
     }
     result = await play(
@@ -36,8 +36,11 @@ async def test_each_round_holds_each_players_trace_and_both_grids(
 
     traces = {line.sender_agent_id: line.text for line in view.messages}
     assert all(line.channel_id == MOVES_CHANNEL for line in view.messages)
-    assert "right->r1c2" in traces[PLAYER_A]
+    assert "left->r2c1" in traces[PLAYER_A]
     assert traces[PLAYER_A].endswith("end_round")
     assert traces[PLAYER_B] == "end_round"
-    assert "player_a grid (rows top to bottom): red red / green blue" in view.ground_truth_block
+    assert (
+        "player_a grid (rows top to bottom): red red / green blue; starts on r2c2"
+        in view.ground_truth_block
+    )
     assert "round success: False" in view.ground_truth_block

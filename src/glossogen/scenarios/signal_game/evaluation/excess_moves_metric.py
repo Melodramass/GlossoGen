@@ -1,11 +1,12 @@
 """``excess_moves``: the moves each player made beyond the shortest path to its final square.
 
 Deterministic, read from signal_game's own events. A player that walks straight
-to the square it finishes on makes no excess moves. Every stay, detour or
-back-and-forth counts, so this is the costly behaviour that has no use for
-reaching the square, which is what the paper's participants used to show that a
-movement was a signal. It is the inefficiency measure of de Bie et al. (2010):
-moves used minus the minimal number of moves required to reach the end square.
+to the square it finishes on makes no excess moves. Every detour or
+back-and-forth counts (and a stay, in runs from before ``stay`` was removed), so
+this is the costly behaviour that has no use for reaching the square, which is
+what the paper's participants used to show that a movement was a signal. It is
+the inefficiency measure of de Bie et al. (2010): moves used minus the minimal
+number of moves required to reach the end square.
 
 The metric does not say whether the excess was meant as a signal. A player
 wandering because it is unsure also scores. Read it beside ``round_success`` and
@@ -41,12 +42,13 @@ def excess_moves_by_agent(
     started: SignalGameRoundStarted, resolved: SignalGameRoundResolved
 ) -> dict[str, int]:
     """Each player's moves in the round minus the shortest path to where it finished."""
-    start = Square(row=started.start_square[0], col=started.start_square[1])
-    return {
-        agent_id: resolved.moves_used[agent_id]
-        - path_length(start=start, end=Square(row=square[0], col=square[1]))
-        for agent_id, square in sorted(resolved.final_squares.items())
-    }
+    excess: dict[str, int] = {}
+    for agent_id, square in sorted(resolved.final_squares.items()):
+        start = started.start_squares[agent_id]
+        excess[agent_id] = resolved.moves_used[agent_id] - path_length(
+            start=Square(row=start[0], col=start[1]), end=Square(row=square[0], col=square[1])
+        )
+    return excess
 
 
 class ExcessMovesMetric(Metric):
