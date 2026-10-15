@@ -420,8 +420,7 @@ is a base tool or one of these.
 should be chosen after seeing the result of the one before: the runner then asks
 the provider for at most one tool call per model response. Without it, a model
 can act and commit in a single response, before anything another agent does can
-reach it. A turn-based game where each move answers the partner's last one is
-the case it is for.
+reach it. signal_game turns it off for that reason.
 
 ### Replacing `send_message`
 

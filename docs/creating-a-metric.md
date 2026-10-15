@@ -206,7 +206,7 @@ scenario's `evaluation/` directory and add it to `_SCENARIO_METRICS` in
 instead of `_GENERIC_METRICS`, leaving `GENERIC_METRIC_NAMES` alone. That makes it
 runnable without offering it for every scenario's runs. Then have the scenario
 override `get_available_metric_names`, calling `super()` and adding the metric's
-name to what it returns. Replacing the
+name to what it returns; signal_game does this for `excess_moves`. Replacing the
 list wholesale drops every generic and externally-installed metric for that
 scenario. Prefer a generic metric that reads a scenario hook: every scoring concept
 the platform has ended up expressible that way.
