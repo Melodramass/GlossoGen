@@ -14,6 +14,7 @@ holds for external packages is the last one here.
 import logging
 import sys
 from importlib.metadata import EntryPoint
+from typing import get_args
 
 import pytest
 
@@ -133,7 +134,7 @@ def test_each_built_in_extension_is_collected_under_its_own_scenario(
     assert "signal_game" not in extensions
     for name, extension in extensions.items():
         field = extension.extras_model_cls.model_fields["scenario_name"]
-        assert field.default == name
+        assert get_args(field.annotation) == (name,)
 
 
 def test_an_external_scenario_contributes_its_run_detail_extension(

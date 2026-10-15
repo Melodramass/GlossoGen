@@ -179,6 +179,18 @@ class OtherScenarioExtras(ScenarioRunExtrasBase):
     scenario_name: Literal["signal_game"] = "signal_game"
 
 
+class NoDefaultExtras(ScenarioRunExtrasBase):
+    """veyru's discriminator declared as a literal with no default."""
+
+    scenario_name: Literal["veyru"]
+
+
+class PlainStringExtras(ScenarioRunExtrasBase):
+    """A ``scenario_name`` typed as any string, which cannot discriminate."""
+
+    scenario_name: str = "veyru"
+
+
 class NoDiscriminatorExtras(ScenarioRunExtrasBase):
     """An extras payload with no ``scenario_name`` at all."""
 
@@ -246,3 +258,21 @@ def test_an_extension_without_a_discriminator_is_reported(
     declare_extension(monkeypatch, VeyruScenario, extension_for(NoDiscriminatorExtras))
 
     assert "has no scenario_name field" in failure_detail(EXTENSION, VeyruScenario)
+
+
+def test_an_extension_whose_literal_has_no_default_passes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The literal is what discriminates; a default is not needed for that."""
+    declare_extension(monkeypatch, VeyruScenario, extension_for(NoDefaultExtras))
+
+    assert passes(EXTENSION, VeyruScenario)
+
+
+def test_an_extension_typing_the_discriminator_as_a_plain_string_is_reported(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A default naming the scenario is not enough when the type admits any name."""
+    declare_extension(monkeypatch, VeyruScenario, extension_for(PlainStringExtras))
+
+    assert "PlainStringExtras" in failure_detail(EXTENSION, VeyruScenario)
