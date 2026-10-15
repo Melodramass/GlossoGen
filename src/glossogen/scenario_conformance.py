@@ -25,7 +25,7 @@ import logging
 import os
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, get_args
 
 from pydantic_core import PydanticUndefined
 
@@ -560,8 +560,10 @@ def _scenario_metrics_are_well_formed(built: BuiltScenario) -> str | None:
 def _run_detail_extension_names_the_scenario(built: BuiltScenario) -> str | None:
     """The extras payload discriminates on this scenario's own name.
 
-    The run-detail response picks the payload model by ``scenario_name``, so an
-    extras model naming another scenario would be validated as that one's.
+    The run-detail response picks the payload model by the ``scenario_name``
+    literal, so an extras model naming another scenario would be validated as
+    that one's. The annotation is what discriminates, so it is read rather than
+    the default.
     """
     extension = type(built.scenario).run_detail_extension()
     if extension is None:
@@ -569,10 +571,11 @@ def _run_detail_extension_names_the_scenario(built: BuiltScenario) -> str | None
     field = extension.extras_model_cls.model_fields.get("scenario_name")
     if field is None:
         return f"{extension.extras_model_cls.__qualname__} has no scenario_name field"
-    if field.default != built.name:
+    declared = get_args(field.annotation)
+    if declared != (built.name,):
         return (
-            f"{extension.extras_model_cls.__qualname__}.scenario_name is {field.default!r}, "
-            f"not {built.name!r}"
+            f"{extension.extras_model_cls.__qualname__}.scenario_name is "
+            f"{field.annotation!r}, not Literal[{built.name!r}]"
         )
     return None
 
