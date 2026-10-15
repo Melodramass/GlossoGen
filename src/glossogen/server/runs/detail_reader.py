@@ -30,6 +30,7 @@ from glossogen.models.event import (
     ToolCallInvoked,
     ToolResultReceived,
 )
+from glossogen.run_detail_types import AgentDetail, ChannelMessage
 from glossogen.server.runs.manifest_sources import (
     read_cross_run_replace_agent_source,
     read_fork_at_round_source,
@@ -57,7 +58,6 @@ from glossogen.server.runs.models import (
 )
 from glossogen.server.runs.primary_channel_resolution import resolve_primary_channel_ids
 from glossogen.server.runs.reasoning_entries import reasoning_entries_of
-from glossogen.server.runs.run_detail_types import AgentDetail, ChannelMessage
 from glossogen.server.runs.scenario_extension import SCENARIO_RUN_EXTENSIONS
 from glossogen.stream_manifest import delete_manifest, read_manifest
 from glossogen.token_pricing import BilledModel, usage_cost_usd

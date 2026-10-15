@@ -73,7 +73,7 @@ def test_an_undeclared_scenario_says_to_declare_it(monkeypatch: pytest.MonkeyPat
         assert_scenario_is_registered(scenario_cls=ExternalScenario)
 
     assert "nothing is registered under" in str(raised.value)
-    assert "glossogen.scenarios.v1" in str(raised.value)
+    assert scenario_entry_points.SCENARIO_ENTRY_POINT_GROUP in str(raised.value)
 
 
 def test_a_name_a_built_in_holds_reports_whose_class_won(

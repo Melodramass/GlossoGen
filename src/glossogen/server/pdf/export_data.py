@@ -9,8 +9,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from glossogen.run_detail_types import AgentDetail, ChannelMessage
 from glossogen.server.runs.models import ReasoningEntry, RunDetailResponse, ToolUseEntry
-from glossogen.server.runs.run_detail_types import AgentDetail, ChannelMessage
 
 # ---------------------------------------------------------------------------
 # Color palettes — hex equivalents of Tailwind classes in agent-colors.ts

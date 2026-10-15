@@ -26,7 +26,8 @@ from glossogen.scenario_submodule_discovery import (
     import_scenario_submodules,
     scenario_packages,
 )
-from glossogen.server.runs.scenario_extension import ScenarioRunDetailExtension
+from glossogen.server.runs.scenario_extension import collect_scenario_extensions
+from tests.fakes.external_scenario.run_detail_extension import ExternalScenarioRunDetailExtension
 from tests.unit.test_scenario_loader import declare_in_groups
 
 FAKE_PACKAGE = "tests.fakes.external_scenario"
@@ -108,23 +109,21 @@ def test_an_external_events_module_is_imported_and_its_types_registered(
     assert "ExternalScenarioProbed" in discovered
 
 
-def test_an_external_run_detail_extension_is_discovered(
+def test_an_external_scenario_contributes_its_run_detail_extension(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The other submodule discovery is called with, covered for an external package.
+    """An external scenario's ``run_detail_extension()`` is collected like a built-in's.
 
-    This one feeds the ``scenario_extras`` discriminated union on the run-detail
-    response, so an extension that is never imported leaves the scenario's own
+    This feeds the ``scenario_extras`` discriminated union on the run-detail
+    response, so an extension that is never collected leaves the scenario's own
     data missing from the API with nothing logged.
     """
     declare(monkeypatch, external_entry_point())
-    monkeypatch.delitem(sys.modules, f"{FAKE_PACKAGE}.run_detail_extension", raising=False)
 
-    import_scenario_submodules(submodule_name="run_detail_extension")
+    extensions = collect_scenario_extensions()
 
-    assert f"{FAKE_PACKAGE}.run_detail_extension" in sys.modules
-    discovered = {cls.scenario_name for cls in concrete_subclasses(base=ScenarioRunDetailExtension)}
-    assert "external_scenario" in discovered
+    assert isinstance(extensions["external_scenario"], ExternalScenarioRunDetailExtension)
+    assert "veyru" in extensions, "a built-in extension went missing"
 
 
 def test_a_broken_external_events_module_is_tolerated(

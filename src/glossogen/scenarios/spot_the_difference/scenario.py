@@ -37,7 +37,9 @@ from glossogen.models.channel import Channel, ChannelTemplateEntry
 from glossogen.models.event import SimulationEvent
 from glossogen.runtime.scenario_tool import ScenarioTool
 from glossogen.runtime.scenario_world import ScenarioWorld
-from glossogen.scenario_protocol import PrimaryChannel, RoundResult, SimulationScenario
+from glossogen.scenario_base import PrimaryChannel, RoundResult
+from glossogen.scenario_protocol import SimulationScenario
+from glossogen.scenario_run_detail_extension import ScenarioRunDetailExtension
 from glossogen.scenarios.channel_noise import apply_character_noise
 from glossogen.scenarios.spot_the_difference.case_event_conversion import case_started_event
 from glossogen.scenarios.spot_the_difference.evaluation.build_communication_rounds import (
@@ -71,6 +73,9 @@ from glossogen.scenarios.spot_the_difference.injection_rendering import (
     render_round_injection,
 )
 from glossogen.scenarios.spot_the_difference.knobs import SpotTheDifferenceKnobs
+from glossogen.scenarios.spot_the_difference.run_detail_extension import (
+    SpotTheDifferenceRunDetailExtension,
+)
 from glossogen.scenarios.spot_the_difference.scene_generation import get_cases
 from glossogen.scenarios.spot_the_difference.team_declaration import spot_teams
 from glossogen.scenarios.spot_the_difference.team_routing import (
@@ -125,6 +130,11 @@ class SpotTheDifferenceScenario(SimulationScenario):
             AgentRole(agent_id=VIEWER_LEFT_ID, role_name=VIEWER_LEFT_ROLE),
             AgentRole(agent_id=VIEWER_RIGHT_ID, role_name=VIEWER_RIGHT_ROLE),
         ]
+
+    @classmethod
+    def run_detail_extension(cls) -> ScenarioRunDetailExtension:
+        """The case ground truth and judge verdicts the run page shows."""
+        return SpotTheDifferenceRunDetailExtension()
 
     @classmethod
     def knobs_model(cls) -> type[SpotTheDifferenceKnobs]:

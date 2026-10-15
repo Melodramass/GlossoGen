@@ -56,7 +56,7 @@ async def run_scenario_evaluation(
         reasoning_effort=reasoning_effort,
     )
 
-    registry: dict[str, type[Metric]] = available_metrics()
+    registry: dict[str, type[Metric]] = available_metrics(scenario_cls=type(scenario))
     declared_externally = set(external_metric_names())
     for metric_name in metric_names:
         if metric_name in registry:

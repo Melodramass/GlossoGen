@@ -1,10 +1,9 @@
 """Leaf DTOs shared by run-detail consumers and scenario extensions.
 
-Lives outside :mod:`glossogen.server.runs.models` so that
-:mod:`glossogen.server.runs.scenario_extension` (and scenario-side
-``run_detail_extension`` modules it auto-discovers) can import these types
-without triggering the import cycle that would otherwise form against
-:data:`glossogen.server.runs.models.RunDetailResponse`.
+Lives outside :mod:`glossogen.server` so that the scenario contract, through
+:mod:`glossogen.scenario_run_detail_extension`, can name these types without
+depending on the server package, and outside :mod:`glossogen.server.runs.models`
+so that importing them does not build :data:`RunDetailResponse`.
 """
 
 from datetime import datetime

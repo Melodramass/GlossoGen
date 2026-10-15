@@ -43,7 +43,7 @@ from glossogen.runners.communication_protocol import (
     build_full_system_prompt,
     runner_prompts_from_events,
 )
-from glossogen.scenario_protocol import SimulationScenario
+from glossogen.scenario_base import ScenarioBase
 from glossogen.template_renderer import TemplateRenderer
 
 logger = logging.getLogger(__name__)
@@ -81,7 +81,7 @@ class ProtocolProbeMetric(Metric):
         self,
         events: list[SimulationEvent],
         agent_configs: list[AgentConfig],
-        scenario: SimulationScenario,
+        scenario: ScenarioBase,
         llm_provider: LLMProvider,
         run_dir: Path,
         options: MetricRunOptions,

@@ -11,13 +11,24 @@ still passing against code nobody calls.
 
 from pathlib import Path
 
-from glossogen.evaluation.metric_core.metric_registry import BUILT_IN_METRIC_REGISTRY
+from glossogen.evaluation.metric_core.metric_registry import GENERIC_METRIC_REGISTRY
+from glossogen.scenario_registry import SCENARIO_REGISTRY
 
 METRICS_TEST_DIR = Path(__file__).resolve().parents[1] / "metrics"
 
 # Files under tests/metrics that cover the shared machinery rather than one
 # metric. Anything else there is expected to be named after a metric.
 NON_METRIC_FILES = frozenset({"shared_run", "report_writing"})
+
+
+def shipped_metric_names() -> set[str]:
+    """Return every metric shipped here: the generic ones and each scenario's own."""
+    own = {
+        metric_cls.name
+        for scenario_cls in SCENARIO_REGISTRY.values()
+        for metric_cls in scenario_cls.scenario_metrics()
+    }
+    return set(GENERIC_METRIC_REGISTRY) | own
 
 
 def metric_test_names() -> set[str]:
@@ -27,7 +38,7 @@ def metric_test_names() -> set[str]:
 
 def test_every_registered_metric_has_a_test_file() -> None:
     """A new metric needs `tests/metrics/test_<name>.py` before it can land."""
-    missing = sorted(set(BUILT_IN_METRIC_REGISTRY) - metric_test_names())
+    missing = sorted(shipped_metric_names() - metric_test_names())
     assert not missing, (
         f"registered but never tested: {missing}. Add tests/metrics/test_<name>.py; "
         f"the shared run and harness are already there."
@@ -36,7 +47,7 @@ def test_every_registered_metric_has_a_test_file() -> None:
 
 def test_every_metric_test_file_names_a_real_metric() -> None:
     """A file for a metric that was renamed or deleted tests nothing."""
-    unknown = sorted(metric_test_names() - set(BUILT_IN_METRIC_REGISTRY) - NON_METRIC_FILES)
+    unknown = sorted(metric_test_names() - shipped_metric_names() - NON_METRIC_FILES)
     assert not unknown, (
         f"test files that match no registered metric: {unknown}. Rename the file to "
         f"the metric it covers, or add it to NON_METRIC_FILES if it covers shared machinery."

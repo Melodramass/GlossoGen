@@ -264,13 +264,13 @@ async def test_the_reader_returns_only_the_metrics_this_run_has_files_for(
         payload={"scores": [score_row(category_id="a", confidence=0.5)]},
     )
 
-    found = await read_keyed_observations(run_dir=tmp_path)
+    found = await read_keyed_observations(run_dir=tmp_path, scenario_name="veyru")
 
     assert list(found) == ["communication_feature_presence"]
 
 
 async def test_a_run_with_no_sidecars_reads_as_nothing(tmp_path: Path) -> None:
-    assert await read_keyed_observations(run_dir=tmp_path) == {}
+    assert await read_keyed_observations(run_dir=tmp_path, scenario_name="veyru") == {}
 
 
 async def test_an_unreadable_sidecar_costs_that_metric_and_not_the_run(
@@ -285,7 +285,7 @@ async def test_an_unreadable_sidecar_costs_that_metric_and_not_the_run(
         payload={"labels": [label_row(text="still readable")]},
     )
 
-    found = await read_keyed_observations(run_dir=tmp_path)
+    found = await read_keyed_observations(run_dir=tmp_path, scenario_name="veyru")
 
     assert list(found) == ["communication_open_coding"]
 

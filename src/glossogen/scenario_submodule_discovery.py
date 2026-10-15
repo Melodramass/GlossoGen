@@ -1,6 +1,6 @@
 """Helpers for discovering scenario-contributed classes without namespace scanning.
 
-Scenarios register plug-in classes (event types, run-detail extensions) by
+Scenarios register their event types by
 defining them in a conventionally-named submodule of their package. Discovery
 is two steps: import every scenario's submodule so its classes are defined,
 then read the base class's ``__subclasses__`` registry. This avoids scanning a

@@ -134,7 +134,9 @@ async def load_analysis_records(
             record = await load_export_run_record(summary=summary)
             keyed: dict[str, list[KeyedObservation]] = {}
             if read_sidecars:
-                keyed = await read_keyed_observations(run_dir=Path(summary.run_dir))
+                keyed = await read_keyed_observations(
+                    run_dir=Path(summary.run_dir), scenario_name=summary.scenario_name
+                )
             return project_run_record(record=record, keyed=keyed)
 
     return list(await asyncio.gather(*(load_one(summary=summary) for summary in runs)))

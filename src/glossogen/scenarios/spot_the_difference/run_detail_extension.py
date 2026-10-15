@@ -13,6 +13,15 @@ from typing import ClassVar, Literal
 from pydantic import BaseModel
 
 from glossogen.models.event import RoundResultRecorded, SimulationEvent, ToolResultReceived
+from glossogen.run_detail_types import (
+    AgentDetail,
+    ChannelMessage,
+    JudgeGroundTruthMetadata,
+)
+from glossogen.scenario_run_detail_extension import (
+    ScenarioRunDetailExtension,
+    ScenarioRunExtrasBase,
+)
 from glossogen.scenarios.spot_the_difference.events import (
     DifferenceSubmissionJudged,
     SpotObject,
@@ -23,15 +32,6 @@ from glossogen.scenarios.spot_the_difference.ids import (
     SUBMISSION_RECORDED_MARKER,
     SUBMISSION_WAITING_MARKER,
     SUBMIT_DIFFERENCES_TOOL,
-)
-from glossogen.server.runs.run_detail_types import (
-    AgentDetail,
-    ChannelMessage,
-    JudgeGroundTruthMetadata,
-)
-from glossogen.server.runs.scenario_extension import (
-    ScenarioRunDetailExtension,
-    ScenarioRunExtrasBase,
 )
 
 
@@ -199,7 +199,6 @@ def _build_judge_ground_truth_by_call_id(
 class SpotTheDifferenceRunDetailExtension(ScenarioRunDetailExtension):
     """spot_the_difference hook into :class:`RunDetailResponse.scenario_extras`."""
 
-    scenario_name: ClassVar[str] = "spot_the_difference"
     extras_model_cls: ClassVar[type[ScenarioRunExtrasBase]] = SpotTheDifferenceRunExtras
     sse_event_classes: ClassVar[tuple[type[BaseModel], ...]] = ()
 

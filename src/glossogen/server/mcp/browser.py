@@ -23,6 +23,7 @@ from pydantic import AnyHttpUrl
 
 from glossogen.atif_export.atif_models import AtifAgentExport
 from glossogen.atif_export.atif_trajectory_builder import build_agent_trajectories_from_run_dir
+from glossogen.evaluation.metric_core.scenario_metric_names import available_metric_names
 from glossogen.evaluation.reports.evaluation_report import load_report_tolerant
 from glossogen.mcp_tool_rejection import surface_value_errors
 from glossogen.model_catalog import list_models, list_providers
@@ -326,7 +327,7 @@ async def _tool_list_scenarios() -> McpListScenariosResult:
             McpScenario(
                 name=name,
                 knobs_files=scenario_cls.knobs_preset_names(),
-                metrics=scenario_cls.get_available_metric_names(),
+                metrics=available_metric_names(scenario_cls=scenario_cls),
             )
         )
 

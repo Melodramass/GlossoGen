@@ -35,7 +35,9 @@ from glossogen.models.agent_config import AgentConfig, AgentRole
 from glossogen.models.channel import Channel, ChannelTemplateEntry
 from glossogen.runtime.scenario_tool import ScenarioTool
 from glossogen.runtime.scenario_world import ScenarioWorld
-from glossogen.scenario_protocol import PrimaryChannel, RoundResult, SimulationScenario
+from glossogen.scenario_base import PrimaryChannel, RoundResult
+from glossogen.scenario_protocol import SimulationScenario
+from glossogen.scenario_run_detail_extension import ScenarioRunDetailExtension
 from glossogen.scenarios.channel_noise import apply_character_noise
 from glossogen.scenarios.orbital_anomaly.events import (
     OrbitalAnomalyCaseStage,
@@ -57,6 +59,9 @@ from glossogen.scenarios.orbital_anomaly.injection_rendering import (
 )
 from glossogen.scenarios.orbital_anomaly.knobs import OrbitalAnomalyKnobs
 from glossogen.scenarios.orbital_anomaly.orbital_anomaly_cases import FAULT_SIGNATURES, get_cases
+from glossogen.scenarios.orbital_anomaly.run_detail_extension import (
+    OrbitalAnomalyRunDetailExtension,
+)
 from glossogen.scenarios.orbital_anomaly.team_declaration import orbital_teams
 from glossogen.scenarios.orbital_anomaly.tools import build_tools
 from glossogen.scenarios.orbital_anomaly.world import OrbitalAnomalyWorld
@@ -81,6 +86,11 @@ class OrbitalAnomalyScenario(SimulationScenario):
             AgentRole(agent_id=TELEMETRY_OFFICER_ID, role_name=TELEMETRY_OFFICER_ROLE),
             AgentRole(agent_id=SYSTEMS_ENGINEER_ID, role_name=SYSTEMS_ENGINEER_ROLE),
         ]
+
+    @classmethod
+    def run_detail_extension(cls) -> ScenarioRunDetailExtension:
+        """The case ground truth and judge verdicts the run page shows."""
+        return OrbitalAnomalyRunDetailExtension()
 
     @classmethod
     def knobs_model(cls) -> type[OrbitalAnomalyKnobs]:

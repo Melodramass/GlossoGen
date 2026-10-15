@@ -6,7 +6,7 @@ keyed by tool ``call_id``, so the round-timeline modal can show exactly what
 was wrong, the expected fix, the action the technician sent, and the judge's
 ruling.
 
-The platform discovers this module at startup and wires
+``DriveModuleRepairScenario.run_detail_extension`` returns the extension, and the server wires
 :class:`DriveModuleRepairRunExtras` into the discriminated-union
 ``scenario_extras`` field on :class:`RunDetailResponse`.
 """
@@ -17,20 +17,20 @@ from typing import ClassVar, Literal
 from pydantic import BaseModel
 
 from glossogen.models.event import SimulationEvent, ToolResultReceived
+from glossogen.run_detail_types import (
+    AgentDetail,
+    ChannelMessage,
+    JudgeGroundTruthMetadata,
+)
+from glossogen.scenario_run_detail_extension import (
+    ScenarioRunDetailExtension,
+    ScenarioRunExtrasBase,
+)
 from glossogen.scenarios.drive_module_repair.events import (
     DriveModuleCaseStarted,
     DriveModuleReplacementJudged,
 )
 from glossogen.scenarios.drive_module_repair.ids import SERVICE_COMPONENT_TOOL
-from glossogen.server.runs.run_detail_types import (
-    AgentDetail,
-    ChannelMessage,
-    JudgeGroundTruthMetadata,
-)
-from glossogen.server.runs.scenario_extension import (
-    ScenarioRunDetailExtension,
-    ScenarioRunExtrasBase,
-)
 
 # The field technician's action tool. ``service_component`` is the current name;
 # ``replace_component`` is the name recorded in run logs created before the rename,
@@ -167,7 +167,6 @@ def _build_judge_ground_truth_by_call_id(
 class DriveModuleRepairRunDetailExtension(ScenarioRunDetailExtension):
     """drive_module_repair hook into :class:`RunDetailResponse.scenario_extras`."""
 
-    scenario_name: ClassVar[str] = "drive_module_repair"
     extras_model_cls: ClassVar[type[ScenarioRunExtrasBase]] = DriveModuleRepairRunExtras
     sse_event_classes: ClassVar[tuple[type[BaseModel], ...]] = (SSEDriveModuleReplacementJudged,)
 

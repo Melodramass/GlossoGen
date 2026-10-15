@@ -45,7 +45,9 @@ from glossogen.models.channel import Channel, ChannelTemplateEntry
 from glossogen.models.event import SimulationEvent
 from glossogen.runtime.scenario_tool import ScenarioTool
 from glossogen.runtime.scenario_world import ScenarioWorld
-from glossogen.scenario_protocol import PrimaryChannel, RoundResult, SimulationScenario
+from glossogen.scenario_base import PrimaryChannel, RoundResult
+from glossogen.scenario_protocol import SimulationScenario
+from glossogen.scenario_run_detail_extension import ScenarioRunDetailExtension
 from glossogen.scenarios.channel_noise import apply_character_noise
 from glossogen.scenarios.drive_module_repair.case_event_conversion import case_started_event
 from glossogen.scenarios.drive_module_repair.drive_module_cases import (
@@ -70,6 +72,9 @@ from glossogen.scenarios.drive_module_repair.injection_rendering import (
     render_round_injection,
 )
 from glossogen.scenarios.drive_module_repair.knobs import DriveModuleRepairKnobs
+from glossogen.scenarios.drive_module_repair.run_detail_extension import (
+    DriveModuleRepairRunDetailExtension,
+)
 from glossogen.scenarios.drive_module_repair.team_declaration import drive_module_teams
 from glossogen.scenarios.drive_module_repair.tools import build_tools
 from glossogen.scenarios.drive_module_repair.world import DriveModuleWorld
@@ -103,6 +108,11 @@ class DriveModuleRepairScenario(SimulationScenario):
             AgentRole(agent_id=DIAGNOSTICS_ENGINEER_ID, role_name=DIAGNOSTICS_ENGINEER_ROLE),
             AgentRole(agent_id=SPEC_ENGINEER_ID, role_name=SPEC_ENGINEER_ROLE),
         ]
+
+    @classmethod
+    def run_detail_extension(cls) -> ScenarioRunDetailExtension:
+        """The case ground truth and judge verdicts the run page shows."""
+        return DriveModuleRepairRunDetailExtension()
 
     @classmethod
     def knobs_model(cls) -> type[DriveModuleRepairKnobs]:

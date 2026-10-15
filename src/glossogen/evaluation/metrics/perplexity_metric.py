@@ -37,7 +37,7 @@ from glossogen.evaluation.metric_core.surprisal_stats import mean, population_st
 from glossogen.llm.provider import LLMProvider
 from glossogen.models.agent_config import AgentConfig
 from glossogen.models.event import SimulationEvent
-from glossogen.scenario_protocol import SimulationScenario
+from glossogen.scenario_base import ScenarioBase
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ class PerplexityMetric(Metric):
         self,
         events: list[SimulationEvent],
         agent_configs: list[AgentConfig],
-        scenario: SimulationScenario,
+        scenario: ScenarioBase,
         llm_provider: LLMProvider,
         run_dir: Path,
         options: MetricRunOptions,

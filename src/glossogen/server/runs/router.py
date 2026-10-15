@@ -18,6 +18,7 @@ from glossogen.atif_export.atif_models import AtifAgentExport
 from glossogen.atif_export.atif_trajectory_builder import build_agent_trajectories_from_run_dir
 from glossogen.db.queries import update_run_evaluation_content_hash, update_run_labels
 from glossogen.eval_manifest import read_eval_manifest
+from glossogen.evaluation.metric_core.scenario_metric_names import available_metric_names
 from glossogen.evaluation.reports.evaluation_report import (
     EvaluationReport,
     compute_measurements_hash,
@@ -474,7 +475,7 @@ async def start_evaluation(
             detail=f"Unknown scenario: {resolved.scenario_name}",
         )
 
-    available = scenario_cls.get_available_metric_names()
+    available = available_metric_names(scenario_cls=scenario_cls)
     for name in body.metrics:
         if name not in available:
             raise HTTPException(

@@ -28,7 +28,7 @@ from typing import Any
 import pytest
 
 from glossogen.scenario_registry import SCENARIO_REGISTRY
-from glossogen.testing.scenario_runtime import run_rounds
+from glossogen.testing.scenario_runtime import build_scenario, run_rounds
 from tests.structural_equivalence import (
     decision_events,
     deliveries_by_recipient,
@@ -71,12 +71,21 @@ PLATFORM_EVENTS = frozenset(
 # what is stored. Closed, the boundary computes it for the first time and
 # whether the counters were reset first becomes observable.
 #
-# signal_game is left out: `run_rounds` drives agents by chatting on a primary
-# channel, and signal_game has no channel under any preset. Its round loop is
-# held by the scripted-move tests in tests/scenarios/signal_game.
-NO_CHANNEL_SCENARIOS = frozenset({"signal_game"})
+# A scenario with no primary channel under its shipped preset is left out:
+# `run_rounds` drives agents by chatting on one. Such a scenario holds its round
+# loop with scripted tests of its own.
+
+
+def drives_by_chat(scenario_name: str) -> bool:
+    """Whether the scenario's shipped preset gives `run_rounds` a channel to chat on."""
+    scenario = build_scenario(
+        scenario_name=scenario_name, preset_name="knobs_default", overrides={}
+    )
+    return bool(scenario.get_primary_channels())
+
+
 CONFIGURATIONS: dict[str, tuple[str, dict[str, Any]]] = {
-    name: (name, {}) for name in sorted(SCENARIO_REGISTRY) if name not in NO_CHANNEL_SCENARIOS
+    name: (name, {}) for name in sorted(SCENARIO_REGISTRY) if drives_by_chat(scenario_name=name)
 }
 CONFIGURATIONS["veyru_debrief_closed"] = (
     "veyru",

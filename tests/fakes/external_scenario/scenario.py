@@ -19,9 +19,12 @@ from glossogen.models.agent_config import AgentConfig, AgentRole
 from glossogen.models.channel import Channel, ChannelTemplateEntry
 from glossogen.runtime.scenario_tool import ScenarioTool
 from glossogen.runtime.scenario_world import ScenarioWorld
-from glossogen.scenario_protocol import PrimaryChannel, RoundResult, SimulationScenario
+from glossogen.scenario_base import PrimaryChannel, RoundResult
+from glossogen.scenario_protocol import SimulationScenario
+from glossogen.scenario_run_detail_extension import ScenarioRunDetailExtension
 from glossogen.scenarios.base_knobs import BaseKnobs
 from glossogen.template_renderer import TemplateRenderer
+from tests.fakes.external_scenario.run_detail_extension import ExternalScenarioRunDetailExtension
 
 PROBE_AGENT_ID = "prober"
 LINK_ID = "link"
@@ -54,6 +57,11 @@ class ExternalScenario(SimulationScenario):
             postmortem_channel_ids=frozenset(),
             postmortem_globally_disabled=False,
         )
+
+    @classmethod
+    def run_detail_extension(cls) -> ScenarioRunDetailExtension:
+        """A message count, so an external package is shown declaring one."""
+        return ExternalScenarioRunDetailExtension()
 
     @classmethod
     def knobs_model(cls) -> type[ExternalScenarioKnobs]:

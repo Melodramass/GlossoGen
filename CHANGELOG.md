@@ -10,6 +10,19 @@ the commit log.
 ## Unreleased
 
 ### Changed
+- **A scenario declares its own metrics and run-detail extension from its class.**
+  `scenario_metrics()` returns its metric classes and `run_detail_extension()` its
+  extension. `get_available_metric_names` is gone, as are `_SCENARIO_METRICS` and
+  `SCENARIO_METRIC_REGISTRY`, and a `run_detail_extension.py` is no longer found by
+  file name, so no platform module names a scenario's parts. A scenario's own metric
+  is now unknown to `evaluate` on another scenario's run rather than reporting
+  nothing. For a scenario in another package: import `RoundResult` and
+  `PrimaryChannel` from `glossogen.scenario_base`, return any extension from
+  `run_detail_extension()` and drop its `scenario_name` class variable, and import
+  the extension contract from `glossogen.scenario_run_detail_extension`.
+- `Metric.compute` takes `scenario: ScenarioBase`, the part of the scenario contract
+  metrics read. A metric in another package annotates its override the same way.
+  `available_metrics` takes the scenario class.
 - `mean_chars_per_round` now includes silent rounds represented in the event log
   as zero-valued rounds. Re-evaluating an existing run can therefore lower this
   score compared with reports that averaged only rounds containing messages.

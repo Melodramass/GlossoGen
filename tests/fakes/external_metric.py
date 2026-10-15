@@ -13,7 +13,7 @@ from glossogen.evaluation.metric_core.metric_run_options import MetricRunOptions
 from glossogen.llm.provider import LLMProvider
 from glossogen.models.agent_config import AgentConfig
 from glossogen.models.event import MessageSent, SimulationEvent
-from glossogen.scenario_protocol import SimulationScenario
+from glossogen.scenario_base import ScenarioBase
 
 
 class ExternalWordCountMetric(Metric):
@@ -25,7 +25,7 @@ class ExternalWordCountMetric(Metric):
         self,
         events: list[SimulationEvent],
         agent_configs: list[AgentConfig],
-        scenario: SimulationScenario,
+        scenario: ScenarioBase,
         llm_provider: LLMProvider,
         run_dir: Path,
         options: MetricRunOptions,
@@ -62,7 +62,7 @@ class MisnamedMetric(Metric):
         self,
         events: list[SimulationEvent],
         agent_configs: list[AgentConfig],
-        scenario: SimulationScenario,
+        scenario: ScenarioBase,
         llm_provider: LLMProvider,
         run_dir: Path,
         options: MetricRunOptions,

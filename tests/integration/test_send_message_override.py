@@ -26,7 +26,8 @@ from glossogen.models.event import (
     ToolResultReceived,
 )
 from glossogen.models.mcp_responses import SendMessageResult
-from glossogen.scenario_protocol import PrimaryChannel, SendMessageExecutor, SimulationScenario
+from glossogen.scenario_base import PrimaryChannel, SendMessageExecutor
+from glossogen.scenario_protocol import SimulationScenario
 from glossogen.testing.scripted_agent import SayTurn, ToolTurn
 from glossogen.testing.simulation_harness import SimulationResult, never_times_out, run_simulation
 from glossogen.testing.smoke_scenario import (

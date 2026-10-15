@@ -1,9 +1,8 @@
 """Run-detail extension for the fake external scenario.
 
-The second submodule ``import_scenario_submodules`` is called with, and the one
-that feeds the ``scenario_extras`` discriminated union on the run-detail
-response. Present so discovery of it can be tested for a package outside
-glossogen, which the guide promises works the same way as ``events``.
+Returned by the fake scenario's ``run_detail_extension`` hook, so a package
+outside glossogen can be shown to feed the ``scenario_extras`` discriminated
+union on the run-detail response the same way a built-in does.
 """
 
 from typing import ClassVar, Literal
@@ -11,8 +10,8 @@ from typing import ClassVar, Literal
 from pydantic import BaseModel
 
 from glossogen.models.event import SimulationEvent
-from glossogen.server.runs.run_detail_types import AgentDetail, ChannelMessage
-from glossogen.server.runs.scenario_extension import (
+from glossogen.run_detail_types import AgentDetail, ChannelMessage
+from glossogen.scenario_run_detail_extension import (
     ScenarioRunDetailExtension,
     ScenarioRunExtrasBase,
 )
@@ -28,7 +27,6 @@ class ExternalScenarioRunExtras(ScenarioRunExtrasBase):
 class ExternalScenarioRunDetailExtension(ScenarioRunDetailExtension):
     """Reports how many messages the run recorded, and nothing else."""
 
-    scenario_name: ClassVar[str] = "external_scenario"
     extras_model_cls: ClassVar[type[ScenarioRunExtrasBase]] = ExternalScenarioRunExtras
     sse_event_classes: ClassVar[tuple[type[BaseModel], ...]] = ()
 

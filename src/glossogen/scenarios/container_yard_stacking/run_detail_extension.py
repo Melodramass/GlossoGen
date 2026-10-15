@@ -12,6 +12,11 @@ from typing import ClassVar, Literal
 from pydantic import BaseModel
 
 from glossogen.models.event import SimulationEvent, ToolResultReceived
+from glossogen.run_detail_types import AgentDetail, ChannelMessage
+from glossogen.scenario_run_detail_extension import (
+    ScenarioRunDetailExtension,
+    ScenarioRunExtrasBase,
+)
 from glossogen.scenarios.container_yard_stacking.events import (
     ContainerYardBatchItem,
     ContainerYardCaseStarted,
@@ -20,11 +25,6 @@ from glossogen.scenarios.container_yard_stacking.events import (
     ContainerYardSlot,
 )
 from glossogen.scenarios.container_yard_stacking.ids import MOVE_CONTAINER_TOOL
-from glossogen.server.runs.run_detail_types import AgentDetail, ChannelMessage
-from glossogen.server.runs.scenario_extension import (
-    ScenarioRunDetailExtension,
-    ScenarioRunExtrasBase,
-)
 
 
 class ContainerYardCaseSummary(BaseModel):
@@ -142,7 +142,6 @@ def _build_call_id_map(
 class ContainerYardRunDetailExtension(ScenarioRunDetailExtension):
     """Container-yard hook into :class:`RunDetailResponse.scenario_extras`."""
 
-    scenario_name: ClassVar[str] = "container_yard_stacking"
     extras_model_cls: ClassVar[type[ScenarioRunExtrasBase]] = ContainerYardRunExtras
     sse_event_classes: ClassVar[tuple[type[BaseModel], ...]] = ()
 

@@ -18,7 +18,8 @@ from glossogen.models.agent_config import AgentConfig, AgentRole
 from glossogen.models.channel import Channel
 from glossogen.runtime.scenario_tool import ScenarioTool
 from glossogen.runtime.scenario_world import ScenarioWorld
-from glossogen.scenario_protocol import PrimaryChannel, RoundResult, SimulationScenario
+from glossogen.scenario_base import PrimaryChannel, RoundResult
+from glossogen.scenario_protocol import SimulationScenario
 from glossogen.scenarios.prisoners_dilemma.events import RoundPayoffComputed
 from glossogen.scenarios.prisoners_dilemma.ids import (
     LINK_CHANNEL_ID,

@@ -1,7 +1,7 @@
 """Generic metric counting rounds the scenario judged as successful.
 
 Reads ``RoundResultRecorded`` events written by the game clock from
-:meth:`SimulationScenario.judge_round_result`. Scenario-agnostic: any
+:meth:`ScenarioBase.judge_round_result`. Scenario-agnostic: any
 scenario that overrides ``judge_round_result`` automatically gets a
 ``round_success`` measurement. Multi-team scenarios emit one event per
 team per round (each with a populated ``team_id``); this metric emits
@@ -17,7 +17,7 @@ from glossogen.evaluation.metric_core.metric_run_options import MetricRunOptions
 from glossogen.llm.provider import LLMProvider
 from glossogen.models.agent_config import AgentConfig
 from glossogen.models.event import RoundResultRecorded, SimulationEvent
-from glossogen.scenario_protocol import SimulationScenario
+from glossogen.scenario_base import ScenarioBase
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ class RoundSuccessMetric(Metric):
         self,
         events: list[SimulationEvent],
         agent_configs: list[AgentConfig],
-        scenario: SimulationScenario,
+        scenario: ScenarioBase,
         llm_provider: LLMProvider,
         run_dir: Path,
         options: MetricRunOptions,

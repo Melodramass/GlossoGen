@@ -9,11 +9,11 @@ from collections.abc import Sequence
 
 from glossogen.models.channel import DIRECT_CHANNEL_PREFIX
 from glossogen.models.event import ChannelCreated, SimulationEvent
-from glossogen.scenario_protocol import PrimaryChannel, SimulationScenario
+from glossogen.scenario_base import PrimaryChannel, ScenarioBase
 
 
 def scored_channel_ids(
-    primary: PrimaryChannel, scenario: SimulationScenario, events: Sequence[SimulationEvent]
+    primary: PrimaryChannel, scenario: ScenarioBase, events: Sequence[SimulationEvent]
 ) -> frozenset[str]:
     """``primary``'s channel id, plus the direct channels it includes."""
     channel_ids = {primary.channel_id}

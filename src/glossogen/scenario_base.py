@@ -1,0 +1,947 @@
+"""The part of the scenario contract that running and scoring a simulation read.
+
+``ScenarioBase`` holds every hook the runtime calls and every hook a metric reads:
+agents, channels, injections, timing, round judging and the probe configs. A
+scenario does not subclass it directly; it subclasses
+:class:`glossogen.scenario_protocol.SimulationScenario`, which adds the hooks that
+declare the scenario's own metrics and run-detail extension.
+
+The split exists because a metric's ``compute`` receives the scenario, so the
+metric contract imports this module, while ``SimulationScenario`` returns metric
+classes and so imports the metric contract. Keeping the metric-facing hooks here
+lets both import in one direction.
+"""
+
+import asyncio
+import importlib.resources
+import logging
+import time
+from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable
+from importlib.resources.abc import Traversable
+from pathlib import Path
+from typing import Any, ClassVar, NamedTuple, Protocol, Self
+
+import orjson
+from pydantic_core import PydanticUndefined
+
+from glossogen.evaluation.metric_core.protocol_boundary import ProtocolBoundaryWindow
+from glossogen.evaluation.metric_core.protocol_explanation_config import ProtocolExplanationConfig
+from glossogen.evaluation.metric_core.protocol_probe_config import ProtocolProbeConfig
+from glossogen.evaluation.metrics.communication.round_view import CommunicationRoundView
+from glossogen.event_logger import EventLogger
+from glossogen.model_catalog import Provider
+from glossogen.models.agent_config import AgentConfig, AgentRole
+from glossogen.models.channel import Channel
+from glossogen.models.event import AgentSwappedMidRun, SimulationEvent
+from glossogen.models.mcp_responses import SendMessageResult, SendReceipt
+from glossogen.models.model_consumer import ModelConsumer
+from glossogen.models.runner_prompts import RunnerPrompts
+from glossogen.models.unread_channel_messages import UnreadChannelMessages
+from glossogen.runtime.notification_payload import Wake, render_default_notification
+from glossogen.runtime.read_notifications_schema import READ_NOTIFICATIONS_DESCRIPTION
+from glossogen.runtime.scenario_tool import ScenarioTool
+from glossogen.runtime.scenario_world import ScenarioWorld
+from glossogen.runtime.wait_registry import DEFAULT_ANY_TIMEOUT_SECONDS, ParkedWait
+from glossogen.scenarios.base_knobs import BaseKnobs
+
+logger = logging.getLogger(__name__)
+
+SendMessageExecutor = Callable[..., Awaitable[SendReceipt]]
+"""The function behind the ``send_message`` tool; see ``send_message_executor``."""
+
+SEND_MESSAGE_DESCRIPTION = (
+    "Send a message to a channel. Every member of the channel sees it attributed to you "
+    "by name, so you do not need to sign your messages or state who you are. "
+    "If new messages arrived since your last read_channel call, "
+    "the send is held and the new messages are returned so you can decide what to do. "
+    "Set force=true to send regardless of new messages."
+)
+
+
+class RoundResult(NamedTuple):
+    """One per-team (or single-side) round result verdict.
+
+    ``success`` is True when the round was successfully completed by the
+    scenario's rules for this team. ``team_id`` is None for single-team
+    scenarios; multi-team scenarios set it to the canonical team
+    identifier ("team_a", "team_b", ...) that is rendered into
+    measurement names. ``reason`` is a short human-readable note ("3/3
+    trucks + 3 crane moves accepted within budget", "Veyru collapsed",
+    etc.) shown in per-round observations.
+    """
+
+    success: bool
+    team_id: str | None
+    reason: str
+
+
+class PrimaryChannel(NamedTuple):
+    """A channel evaluators focus on, tagged with the team it belongs to.
+
+    ``team_id`` is ``None`` for single-team scenarios (per-channel metrics emit
+    their base name, e.g. ``perplexity``) and the canonical team identifier for
+    multi-team scenarios (metrics suffix their name, e.g. ``perplexity_team_a``).
+    A scenario with two competing teams returns one entry per team's channel so
+    the char/compression metrics score each team independently.
+
+    ``includes_direct_channels`` makes the metrics also score direct channels
+    created during the run whose every member belongs to ``channel_id``, so a
+    team that addresses teammates individually is scored on all of its traffic.
+    """
+
+    channel_id: str
+    team_id: str | None
+    includes_direct_channels: bool
+
+    def metric_name(self, base: str) -> str:
+        """Return the per-channel metric name (``base`` or ``base_{team_id}``)."""
+        if self.team_id is None:
+            return base
+        return f"{base}_{self.team_id}"
+
+
+class ScenarioRuntimeHandle(Protocol):
+    """The view of the simulation runtime exposed to scenarios.
+
+    Scenarios receive this handle via ``bind_runtime`` and use it to log custom
+    events, read the current round number, and, from a ``send_message`` or
+    ``read_notifications`` override, publish messages and read unread ones.
+    Defined as a Protocol to avoid an import cycle with ``SimulationRuntime``.
+    """
+
+    @property
+    def event_logger(self) -> EventLogger: ...
+
+    @property
+    def current_round(self) -> int: ...
+
+    async def publish_message(
+        self, agent_id: str, channel_id: str, text: str, force: bool
+    ) -> SendMessageResult: ...
+
+    async def direct_channel_for(self, agent_id: str, recipient_agent_ids: list[str]) -> str: ...
+
+    def drain_unread_channel_messages(self, agent_id: str) -> list[UnreadChannelMessages]: ...
+
+    def parked_waits(self) -> dict[str, ParkedWait]: ...
+
+    def running_agent_ids(self) -> frozenset[str]: ...
+
+    def release_wait(self, agent_id: str, detail: str) -> bool: ...
+
+
+class ScenarioBase(ABC):
+    """The hooks the runtime and the metrics call on a scenario.
+
+    Concrete scenarios subclass :class:`glossogen.scenario_protocol.SimulationScenario`
+    rather than this. Code that only runs or scores a simulation types against this
+    class, so the metric contract does not depend on the hooks that return metrics.
+    """
+
+    _runtime: ScenarioRuntimeHandle | None = None
+    # Populated by scenarios that rename agents or channels for display.
+    # Empty here so the default lookups fall through to the raw id.
+    _agent_display_names: dict[str, str] = {}
+    _channel_display_names: dict[str, str] = {}
+    # Channels carrying postmortem traffic, declared once here rather than
+    # written out per scenario. Read by the replaced-agent history filter
+    # below, and by the world it is handed to, which reports it as the
+    # globally-disabled set once the debrief closes. Empty means the scenario
+    # has no postmortem.
+    postmortem_channel_ids: ClassVar[frozenset[str]] = frozenset()
+
+    def __init__(self, knobs: BaseKnobs) -> None:
+        """Construct the scenario from its validated knobs.
+
+        Declared here because ``create_from_config`` builds every scenario this
+        way. Subclasses narrow ``knobs`` to their own model and assign the
+        attributes they need; they do not call up to this.
+        """
+        _ = knobs
+
+    @classmethod
+    @abstractmethod
+    def knobs_model(cls) -> type[BaseKnobs]:
+        """Return this scenario's knobs Pydantic model class.
+
+        The single source of truth for the scenario's configuration: the JSON
+        Schema and per-field defaults both derive from it, so scenarios declare
+        the model here rather than re-implementing schema/default accessors.
+        """
+        ...
+
+    @classmethod
+    @abstractmethod
+    def get_agent_roles(cls, knobs: dict[str, Any] | None) -> list[AgentRole]:
+        """Return agent IDs and display names for the given knobs configuration.
+
+        Must not require a scenario instance. Run preflight calls it with the
+        prepared config of the run being launched, to check per-agent model
+        overrides against the roster, and discovery code calls it with
+        ``None``, where the answer is the scenario's baseline roster.
+
+        An override that reads knob values validates the dict through
+        ``knobs_model()`` and reads attributes off the result, rather than
+        reading keys off the dict; an invalid config then raises, which
+        preflight reports as an invalid run configuration.
+        ``resolve_bool_knob`` reads a single boolean flag with the model's
+        declared default when the dict leaves it out.
+        """
+        ...
+
+    @classmethod
+    def knobs_json_schema(cls) -> dict[str, Any]:
+        """Return the JSON Schema for this scenario's knobs model.
+
+        Used by the MCP server to expose available configuration fields, their
+        types, enum values, and descriptions to LLM clients.
+        """
+        return cls.knobs_model().model_json_schema()
+
+    @classmethod
+    def scenario_package_files(cls) -> Traversable:
+        """Return the package directory this scenario class lives in.
+
+        Resolved from the class's own module rather than from a path computed
+        under ``glossogen/scenarios``, so a scenario shipped in another
+        distribution finds its own files.
+
+        ``files`` takes the module as an anchor and answers with the directory
+        holding it, so this works for a class in a ``scenario`` submodule without
+        the caller counting dots. External scenarios cannot put the class in the
+        package's own ``__init__``; the loader refuses that layout, because
+        discovery has to find the package from the entry-point string without
+        importing anything.
+        """
+        return importlib.resources.files(cls.__module__)
+
+    @classmethod
+    def knobs_preset_names(cls) -> list[str]:
+        """Return the names of the knobs presets this scenario ships, without ``.json``.
+
+        These are what the docs tell people to pass to ``--config``, what the
+        frontend offers in its preset picker, and what the MCP ``list_scenarios``
+        tool reports. The default reads ``knobs_*.json`` from the scenario's own
+        package; a scenario that keeps presets elsewhere overrides this and
+        ``load_knobs_preset`` together.
+        """
+        return sorted(
+            entry.name.removesuffix(".json")
+            for entry in cls.scenario_package_files().iterdir()
+            if entry.name.startswith("knobs_") and entry.name.endswith(".json")
+        )
+
+    @classmethod
+    def load_knobs_preset(cls, preset_name: str) -> dict[str, Any]:
+        """Return the parsed contents of one knobs preset.
+
+        Raises ``ValueError`` when the scenario ships no preset under that name,
+        so a caller reporting a 404 does not have to know how presets are stored.
+
+        The name is checked against the presets this scenario actually ships
+        rather than being joined onto the package directory and tried. Callers
+        pass it through from a request: the MCP ``get_knobs_preset`` tool takes an
+        arbitrary string, and ``../<other scenario>/knobs_default`` would
+        otherwise resolve and be read.
+        """
+        if preset_name not in cls.knobs_preset_names():
+            raise ValueError(f"Knobs preset not found for {cls.__name__}: {preset_name!r}")
+        return orjson.loads((cls.scenario_package_files() / f"{preset_name}.json").read_bytes())
+
+    @classmethod
+    def resolve_bool_knob(cls, knobs: dict[str, Any] | None, field_name: str) -> bool:
+        """Resolve a boolean knob from a partial config dict.
+
+        Reads ``field_name`` from ``knobs`` when present, otherwise falls back
+        to the knobs model's declared default. When the field is required (no
+        declared default), falls back to ``False``, the baseline layout shown
+        before a run is configured. Lets ``get_agent_roles`` branch on
+        role-determining flags without hardcoding a default that could drift
+        from the model.
+        """
+        if knobs is not None and field_name in knobs:
+            return bool(knobs[field_name])
+        default = cls.knobs_model().model_fields[field_name].get_default()
+        if default is PydanticUndefined:
+            return False
+        return bool(default)
+
+    @classmethod
+    def resolve_str_knob(cls, knobs: dict[str, Any] | None, field_name: str) -> str:
+        """Resolve a string knob from a partial config dict.
+
+        Same fallback order as :meth:`resolve_bool_knob`: the configured value,
+        then the knobs model's declared default, then the empty string, which
+        every caller reads as the knob not being configured.
+        """
+        if knobs is not None and field_name in knobs:
+            return str(knobs[field_name])
+        default = cls.knobs_model().model_fields[field_name].get_default()
+        if default is PydanticUndefined:
+            return ""
+        return str(default)
+
+    @classmethod
+    def get_judge_models(cls, knobs: dict[str, Any] | None) -> tuple[ModelConsumer, ...]:
+        """Return the models this scenario calls itself, beyond what its agents call.
+
+        A scenario that resolves its rounds with an LLM names that model in its
+        own knobs, under a provider that need not be the one its agents run.
+        Declaring it here is what lets a launch check whether the environment can
+        reach it, rather than the scenario finding out mid-run: the judge is
+        built on first use, so a run whose agents authenticate starts and spends
+        before the missing credential is reached.
+
+        The launch check also refuses a model here whose provider is not in
+        ``JUDGE_PROVIDERS``, since a judge is built through ``create_provider``.
+
+        The default reads the ``judge_model`` / ``judge_provider`` pair, the
+        convention every scenario here follows. A scenario calling more than one
+        model of its own, or naming the knobs differently, overrides this. One
+        that resolves its rounds without an LLM declares no such knobs and
+        inherits the empty answer.
+        """
+        fields = cls.knobs_model().model_fields
+        if "judge_model" not in fields or "judge_provider" not in fields:
+            return ()
+        model = cls.resolve_str_knob(knobs=knobs, field_name="judge_model")
+        provider = cls.resolve_str_knob(knobs=knobs, field_name="judge_provider")
+        if model == "" or provider == "":
+            return ()
+        return (ModelConsumer(name="round judge", model=model, provider=Provider(provider)),)
+
+    @classmethod
+    def prepare_config(cls, config: dict[str, Any]) -> dict[str, Any]:
+        """Transform raw CLI config before passing to ``create_from_config``.
+
+        Scenarios override this to resolve file-path references into
+        loaded data. For example, a scenario that needs a data file can
+        accept a file path string in the config and load it here.
+
+        The default is a no-op pass-through.
+        """
+        return config
+
+    @classmethod
+    def create_from_config(cls, config: dict[str, Any]) -> Self:
+        """Reconstruct a scenario from its serialized config dict.
+
+        Callers use this for both validation and reconstruction:
+        - ``run`` preflight (CLI and API) to validate prepared config payloads
+        - ``evaluate`` to rebuild the scenario from JSONL-stored config
+        - fork/resume flows to reconstruct scenarios from persisted state
+
+        Validates through ``knobs_model``, so a scenario only declares its knobs
+        class once; a key the model does not declare is an error. Override if
+        construction needs more than the knobs.
+        """
+        return cls(knobs=cls.knobs_model().model_validate(config))
+
+    @classmethod
+    def strip_unknown_knobs(cls, config: dict[str, Any]) -> dict[str, Any]:
+        """``config`` without the top-level keys ``knobs_model`` does not declare.
+
+        For a config a run recorded: a knob the scenario has since dropped is
+        still in the log, and is no reason to refuse the run. Each dropped key is
+        logged. A config a user wrote goes through ``create_from_config``
+        unstripped, so a misspelled knob there is an error.
+        """
+        known = cls.knobs_model().model_fields
+        unknown = sorted(key for key in config if key not in known)
+        if unknown:
+            logger.warning(
+                "Recorded %s config carries knobs the scenario no longer declares; ignoring %s",
+                cls.name(),
+                unknown,
+            )
+        return {key: value for key, value in config.items() if key in known}
+
+    @classmethod
+    def create_from_recorded_config(cls, config: dict[str, Any]) -> Self:
+        """``create_from_config`` over a config a run recorded, unknown knobs dropped."""
+        return cls.create_from_config(config=cls.strip_unknown_knobs(config=config))
+
+    @classmethod
+    def name(cls) -> str:
+        """Return the unique identifier for this scenario.
+
+        Derived from the package directory, which the registry already keys on,
+        so the two cannot disagree. Override only if a scenario needs an
+        identifier that differs from its folder.
+
+        A classmethod because this is what a run directory is named after, and
+        the loader has to check it against the name a scenario was registered
+        under before anything is constructed. Callers may still reach it through
+        an instance.
+
+        Read off the same directory :meth:`scenario_package_files` resolves, so the
+        two cannot disagree about which package a scenario lives in. Counting dots
+        in the module path instead would make that a second implementation to keep
+        in step.
+        """
+        return cls.scenario_package_files().name
+
+    @abstractmethod
+    def scenario_description(self) -> str:
+        """Return a markdown description of what this scenario simulates."""
+        ...
+
+    @abstractmethod
+    def get_agents(self, default_model: str, default_provider: str) -> list[AgentConfig]:
+        """Return the list of agent configurations participating in this scenario."""
+        ...
+
+    @abstractmethod
+    def get_channels(self) -> list[Channel]:
+        """Return the communication channels available in this scenario."""
+        ...
+
+    def get_channel_display_name(self, channel_id: str, agent_id: str) -> str:
+        """Return the display name of a channel as seen by a specific agent.
+
+        Looks the id up in ``_channel_display_names``, falling back to the id
+        itself. Override when the name depends on which agent is asking.
+        """
+        _ = agent_id
+        return self._channel_display_names.get(channel_id, channel_id)
+
+    def get_agent_display_name(self, agent_id: str) -> str:
+        """Return the human-readable display name for an agent.
+
+        Looks the id up in ``_agent_display_names``, falling back to the id.
+        """
+        return self._agent_display_names.get(agent_id, agent_id)
+
+    def get_agent_display_name_at_round(self, agent_id: str, round_number: int) -> str:
+        """Return the display name for an agent at a specific round.
+
+        Most scenarios assign a fixed name per agent ID; the default
+        delegates to ``get_agent_display_name`` and ignores ``round_number``.
+        Scenarios that rotate the identity behind a single ``agent_id`` slot
+        across rounds (e.g. a guest-of-the-week pattern) override this so
+        that historical messages render under the name the slot held when
+        they were sent.
+        """
+        _ = round_number
+        return self.get_agent_display_name(agent_id=agent_id)
+
+    @abstractmethod
+    def get_knobs(self) -> BaseKnobs:
+        """Return this scenario's validated knobs instance.
+
+        The single source of truth for runtime configuration values: the
+        platform reads timing and config off this, so scenarios expose their
+        stored knobs here rather than re-implementing each getter. Overrides
+        may narrow the return type to their concrete knobs model.
+        """
+        ...
+
+    def get_scenario_config(self) -> dict[str, object]:
+        """Return scenario configuration as a JSON-serializable dict for logging and display."""
+        return self.get_knobs().model_dump()
+
+    @abstractmethod
+    def get_injection(self, round_number: int, agent_id: str) -> str | None:
+        """Return an injected prompt message for an agent at a given round.
+
+        Returns None when no injection is scheduled for this round and agent.
+        """
+        ...
+
+    # --- Autonomous agent timing configuration ---
+
+    def get_round_count(self) -> int:
+        """Return the total number of rounds in this scenario."""
+        return self.get_knobs().round_count
+
+    def get_max_round_duration_seconds(self) -> float:
+        """Return the maximum wall-clock seconds a round may last before force-advancing."""
+        return self.get_knobs().max_round_duration_seconds
+
+    @abstractmethod
+    def get_world(self) -> ScenarioWorld:
+        """Return a living world simulation to run alongside agents.
+
+        The world runs as its own asyncio task and receives message events
+        and round advance signals. It can push notifications to agents
+        via the world context.
+        """
+        ...
+
+    @abstractmethod
+    def get_tools(self) -> list[ScenarioTool]:
+        """Return the scenario-specific tools agents can call.
+
+        Each is offered, beside the base communication tools, to the agents
+        whose ``tool_names`` list it. Return an empty list if the scenario has
+        no tools of its own.
+        """
+        ...
+
+    def set_run_dir(self, run_dir: Path) -> None:
+        """Called after the run directory is computed but before the simulation starts.
+
+        Scenarios that need filesystem access (e.g. code workspaces) override
+        this to store the path and create subdirectories. The default is a no-op.
+        """
+        _ = run_dir
+
+    def bind_runtime(self, runtime: ScenarioRuntimeHandle) -> None:
+        """Store the runtime handle. Called once before the simulation starts.
+
+        Scenarios read the bound handle via the ``runtime`` property to emit
+        custom events (judge verdicts, world-state transitions) from inside
+        their tool executors or to read the active round number.
+        """
+        self._runtime = runtime
+
+    @property
+    def runtime(self) -> ScenarioRuntimeHandle:
+        """Return the bound runtime handle.
+
+        Raises ``RuntimeError`` if accessed before ``bind_runtime``. The
+        supervisor binds it before the simulation starts, so tool executors
+        and round hooks can rely on it being present.
+        """
+        if self._runtime is None:
+            raise RuntimeError(f"{type(self).__name__}: runtime accessed before bind_runtime")
+        return self._runtime
+
+    def is_finished_early(self) -> bool:
+        """Return True if the scenario has reached a natural conclusion before max rounds.
+
+        The game clock checks this each iteration and terminates the simulation
+        early when it returns True. The default returns False.
+        """
+        return False
+
+    def get_early_round_end_trigger(self) -> str | None:
+        """Return a trigger string when the round has decisively ended, else None.
+
+        A trigger ends the round; None lets it continue.
+
+        The game clock checks this each iteration (outside the postmortem phase)
+        and, when a non-None value is returned, immediately emits a
+        ``RoundEnded`` event with that trigger and advances (entering a
+        postmortem phase if one is defined for the round). This lets a
+        scenario end a round as soon as the world reaches a terminal outcome,
+        instead of waiting for ``all_agents_idle`` or ``round_timeout``.
+
+        The value is the scenario's own (``"veyru_stabilized"``,
+        ``"veyru_collapsed"``) and must not spell a ``RoundEndTrigger``: the
+        clock raises on one, because the round-ended metrics would otherwise
+        count the round as ended by the platform. The default returns None so
+        rounds only end via the generic idle / timeout mechanisms.
+        """
+        return None
+
+    def send_message_executor(self) -> SendMessageExecutor:
+        """The function behind the ``send_message`` tool.
+
+        Its parameters other than ``agent_id`` become the tool's input schema, so
+        returning a function with other parameters changes what agents are
+        offered; each must carry a type annotation. The platform supplies
+        ``agent_id`` from the calling connection, and the function returns the
+        model the agent reads, a ``SendReceipt`` subclass so the recorded result
+        carries ``status`` and ``message_id``. The default is
+        ``default_send_message``. A replacement posts through
+        ``self.runtime.publish_message`` and can address named teammates with
+        ``self.runtime.direct_channel_for``.
+        """
+        return self.default_send_message
+
+    async def default_send_message(
+        self, agent_id: str, channel_id: str, text: str, force: bool
+    ) -> SendMessageResult:
+        """Post to ``channel_id`` with optimistic concurrency, which ``force`` overrides."""
+        return await self.runtime.publish_message(
+            agent_id=agent_id, channel_id=channel_id, text=text, force=force
+        )
+
+    def hidden_base_tools(self, agent_id: str) -> frozenset[str]:
+        """Base communication tools ``agent_id`` is not offered. Default: none.
+
+        A hidden tool is left out of the agent's tool list and refused if called.
+        ``read_notifications`` is executed by the runner and cannot be hidden.
+        """
+        _ = agent_id
+        return frozenset()
+
+    def send_message_description(self) -> str:
+        """The ``send_message`` tool description agents read; replace it with the executor."""
+        return SEND_MESSAGE_DESCRIPTION
+
+    def runner_prompts(self, agent_id: str) -> RunnerPrompts | None:
+        """The runner prompts for ``agent_id``, or None for the platform's.
+
+        Return a replacement to change how agents are told to use their tools:
+        the suffix appended to the system prompt and the user prompts that open
+        each cycle. The registration records it, so reconstructions and exports
+        render what the run used. Default: None.
+        """
+        _ = agent_id
+        return None
+
+    def ends_round_when_all_agents_waiting(self) -> bool:
+        """Whether a round ends the moment every agent is parked with no deadline.
+
+        A parked agent resumes only when a notification arrives or its deadline
+        fires. With every agent parked and none holding a deadline, nothing can
+        happen before the round timeout, so the round can end at once with
+        ``all_agents_finished`` (every agent waits for the next round) or
+        ``all_agents_waiting``. The default is False: the round ends through the
+        idle check and its quiet period, or the timeout.
+        """
+        return False
+
+    def allows_parallel_tool_calls(self) -> bool:
+        """Whether an agent may issue several tool calls in one model response.
+
+        The default is True. Return False when each action should be decided
+        after seeing the result of the one before it: the runner then asks the
+        provider for at most one tool call per response (``parallel_tool_calls``
+        in the model settings, which Anthropic and OpenAI honour).
+        """
+        return True
+
+    async def read_notifications(self, agent_id: str, wake: Wake) -> str:
+        """Render the result of ``agent_id``'s ``read_notifications`` call after it resumed.
+
+        The default takes the oldest queued notification and renders it as JSON
+        with ``pending_count`` and ``current_round``. A scenario overrides this to
+        deliver its own view, for example message bodies or a world observation,
+        so the agent needs no further call to learn what changed. When
+        ``wake.terminated`` is true the runner stops the agent after this result.
+        """
+        _ = agent_id
+        return render_default_notification(wake=wake, current_round=self.runtime.current_round)
+
+    def on_model_request_started(self, agent_id: str) -> None:
+        """The runner is about to issue a model request for ``agent_id``. Default: nothing."""
+        _ = agent_id
+
+    async def gate_model_response(
+        self, agent_id: str, input_tokens: int, output_tokens: int
+    ) -> None:
+        """Awaited after a response arrives and before any of its tool calls run.
+
+        A scenario that orders agents by simulated latency holds the response
+        here until its turn. It must release every held response in
+        ``on_simulation_stopping``. Default: returns at once.
+        """
+        _ = agent_id, input_tokens, output_tokens
+
+    def schedule_wait_timeout(
+        self, agent_id: str, timeout_s: float, fire: Callable[[], None]
+    ) -> Callable[[], None]:
+        """Arm the timer that resumes a parked ``agent_id`` after ``timeout_s``; return a cancel.
+
+        The default counts wall-clock seconds on the running event loop. A
+        scenario that simulates time counts its own.
+        """
+        _ = agent_id
+        handle = asyncio.get_running_loop().call_later(timeout_s, fire)
+        return handle.cancel
+
+    def read_notifications_description(self) -> str:
+        """The ``read_notifications`` description agents read.
+
+        Override when ``read_notifications`` and ``default_any_wait_timeout_s``
+        change what the call returns, so agents are told what they get.
+        """
+        return READ_NOTIFICATIONS_DESCRIPTION
+
+    def default_any_wait_timeout_s(self) -> float | None:
+        """How long a ``read_notifications()`` call with no ``timeout_s`` waits, or None.
+
+        The default answers ``no_activity`` after a while, so a polling agent
+        returns to the model. None makes such a wait end only on a notification,
+        so a team parked on plain calls can end its round with
+        ``ends_round_when_all_agents_waiting``.
+        """
+        return DEFAULT_ANY_TIMEOUT_SECONDS
+
+    def clock_now_s(self) -> float:
+        """Seconds on the scenario's clock, from which waits measure how long they lasted.
+
+        The default reads the wall clock. A scenario that simulates time reads its own.
+        """
+        return time.monotonic()
+
+    def on_agent_parked(self, agent_id: str) -> None:
+        """``agent_id`` is parked in ``read_notifications``. Default: nothing.
+
+        Runs inside the parking call, before anything else can resume the
+        agent. A scenario that treats a fully parked team as a deadlock reads
+        ``self.runtime.parked_waits()`` here and resumes an agent with
+        ``self.runtime.release_wait(agent_id, detail)``; the agent's call
+        returns with ``released`` among its reasons and ``detail`` as the text.
+        """
+        _ = agent_id
+
+    def on_agent_resumed(self, agent_id: str) -> None:
+        """``agent_id`` resumed from ``read_notifications``. Default: nothing."""
+        _ = agent_id
+
+    def on_agent_retired(self, agent_id: str) -> None:
+        """``agent_id``'s runner returned, or the agent was swapped out. Default: nothing."""
+        _ = agent_id
+
+    def on_agent_enlisted(self, agent_id: str) -> None:
+        """A new runner for ``agent_id`` started after an in-run swap. Default: nothing."""
+        _ = agent_id
+
+    def on_simulation_stopping(self) -> None:
+        """The run is ending; release anything ``gate_model_response`` still holds.
+
+        Called before agents are told the run is over. Default: nothing.
+        """
+
+    def validate_outgoing_message(self, agent_id: str, channel_id: str) -> str | None:
+        """Validate whether an agent is allowed to send to a channel right now.
+
+        Called by ``publish_message`` before storing the message.
+        Returns an error string if the message should be rejected, or None
+        to allow it. The default allows all messages.
+        """
+        _ = agent_id, channel_id
+        return None
+
+    def validate_direct_channel(self, agent_id: str, recipient_agent_ids: list[str]) -> str | None:
+        """Whether ``agent_id`` may address ``recipient_agent_ids`` on a direct channel.
+
+        Called by ``self.runtime.direct_channel_for`` once it has checked that
+        every recipient is another agent in the simulation. Returns the reason
+        the agent reads when the request is refused, or None to allow it. The
+        default refuses every request: a scenario opts into direct channels by
+        overriding this, and restricts them by returning a reason for the
+        requests it does not allow.
+        """
+        _ = agent_id, recipient_agent_ids
+        return "This scenario has no direct channels."
+
+    async def inject_case_payload(self, round_number: int, payload: dict[str, Any]) -> None:
+        """Override the round-``round_number`` case with a scenario-decoded payload.
+
+        Called by the supervisor when an ``InjectCase`` scheduled event fires.
+        Scenarios that support case injection decode ``payload`` into their
+        case-data shape, store the override on the world so the next
+        round's injection-rendering picks it up, and (optionally) log a
+        scenario-specific event for traceability. The default raises
+        ``NotImplementedError`` so scenarios that don't support injection
+        surface a clear error if an ``InjectCase`` is scheduled against them.
+        """
+        _ = round_number, payload
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement inject_case_payload; "
+            "remove the InjectCase entry from scheduled_events or implement the hook."
+        )
+
+    @abstractmethod
+    def get_primary_channels(self) -> list[PrimaryChannel]:
+        """Return the channels that evaluators should focus on.
+
+        The primary channels are where the core task happens under constraints.
+        Char/compression metrics score each returned channel and emit one
+        Measurement per channel (suffixed by ``team_id`` for multi-team
+        scenarios); the language-emergence judges treat every returned channel
+        as primary. Return an empty list only when the scenario genuinely has
+        no channel evaluators should score. That silently skips every
+        primary-channel metric.
+        """
+        ...
+
+    def build_communication_rounds(
+        self, events: list[SimulationEvent]
+    ) -> list[CommunicationRoundView]:
+        """Build per-round views for the communication-feature analysis pipeline.
+
+        Each returned ``CommunicationRoundView`` joins the round's
+        primary-channel messages with a scenario-rendered ground-truth
+        block describing the round's case and agent information
+        asymmetry. The open-coding and feature-presence metrics consume
+        these views directly, so the metric code never branches on
+        scenario.
+
+        The default returns ``[]``, which causes both metrics to skip
+        with no Measurement emitted. Override to opt the scenario into
+        the communication pipeline.
+        """
+        _ = events
+        return []
+
+    def transform_outgoing_message(self, agent_id: str, channel_id: str, text: str) -> str:
+        """Transform a message before it is stored and delivered to the channel.
+
+        Called by ``publish_message`` after validation but before
+        the message is appended. The agent sees the transformed text in
+        subsequent ``read_channel`` calls, not the original.
+
+        The default returns the text unchanged.
+        """
+        _ = agent_id, channel_id
+        return text
+
+    def get_postmortem_injection(self, round_number: int, agent_id: str) -> str | None:
+        """Return postmortem text for an agent after the given round completes.
+
+        The game clock calls this after agents go idle in a round. If any agent
+        returns a non-None value, the game clock enters a postmortem phase
+        before advancing to the next round. The default returns None (no postmortem).
+        """
+        _ = round_number, agent_id
+        return None
+
+    def get_max_postmortem_duration_seconds(self) -> float:
+        """Return the maximum wall-clock seconds a postmortem phase may last.
+
+        Zero when the scenario has postmortem switched off, or when the world
+        has closed it for the rest of the run. The game clock reads this once,
+        at construction, so it reflects the configuration the run starts with.
+        """
+        knobs = self.get_knobs()
+        if not knobs.postmortem_enabled:
+            return 0.0
+        if self.get_world().is_postmortem_disabled:
+            return 0.0
+        return knobs.postmortem_duration_seconds
+
+    def on_postmortem_started(self, round_number: int) -> None:
+        """Called by the game clock when a postmortem phase begins after a round.
+
+        Opens the world's postmortem phase, which is what the scenario's
+        message validation checks to decide whether the discussion channel
+        accepts traffic yet.
+        """
+        _ = round_number
+        self.get_world().enter_postmortem()
+
+    async def on_round_advanced(self, round_number: int) -> None:
+        """Called by the game clock after advancing to a new round.
+
+        Scenarios with mutable world state override this to resolve pending
+        actions (effort allocations, status updates) and advance the simulation.
+        The default is a no-op for scenarios without world state.
+        """
+        _ = round_number
+
+    async def on_round_ended(self, round_number: int, trigger: str) -> None:
+        """Called by the game clock after a round's game phase ends.
+
+        Fires after the ``RoundEnded`` event is logged but before any
+        postmortem injections or the next round's advance. ``trigger`` is the
+        same string written to the ``RoundEnded`` event: a ``RoundEndTrigger``
+        value when the clock ended the round, or the string the scenario's
+        ``get_early_round_end_trigger`` returned. Compare against the enum's
+        members rather than retyping their values. The scenario
+        runtime's notion of "current round" is still ``round_number`` here, so
+        scenarios can emit per-round world events that attribute correctly.
+        The default is a no-op.
+        """
+        _ = round_number, trigger
+
+    def restore_state_from_events(self, events: list[Any]) -> None:
+        """Reconstruct world state from a JSONL event list before resume.
+
+        Called once after a rewind state is built and before the runtime
+        starts. Scenarios with mutable world state override this to seed
+        per-round outcomes for completed rounds in the source run, so that
+        round-N injections rendered after resume reflect the source's
+        actual round N-1 outcome rather than zero-valued defaults. The
+        default is a no-op for scenarios without world state.
+        """
+        _ = events
+
+    @abstractmethod
+    def judge_round_result(self, round_number: int, trigger: str) -> list[RoundResult]:
+        """Return per-team (or single-side) result verdicts for the round.
+
+        Called by the game clock after ``on_round_ended`` (so scenarios
+        that finalize per-round state in ``on_round_ended`` can rely on
+        that state being settled before judging). Each returned
+        ``RoundResult`` is logged as a ``RoundResultRecorded`` event
+        and read by the platform's generic ``round_success`` and
+        ``round_success_after_resume`` metrics.
+
+        Single-team scenarios return a one-element list with
+        ``team_id=None``. Multi-team scenarios return one result per
+        team. Return an empty list only when the scenario genuinely has
+        no per-round success criterion, which emits no
+        ``RoundResultRecorded`` events and the generic metrics produce no
+        Measurement for the run.
+        """
+        ...
+
+    def detect_protocol_boundary_window(
+        self,
+        events: list[SimulationEvent],
+        agent_configs: list[AgentConfig],
+    ) -> ProtocolBoundaryWindow | None:
+        """Detect the first personnel-change boundary the protocol metric should evaluate.
+
+        Returns the boundary split where a newcomer takes over from an
+        existing agent. The default checks for the first
+        ``AgentSwappedMidRun`` event in the log (scheduled in-run swap).
+        Scenarios with additional knob-driven boundary modes (e.g. an
+        intern takeover round or a two-team observer swap) override to
+        detect those first and fall back to the scheduled-swap default.
+
+        Returns ``None`` when no boundary exists, in which case the
+        ``protocol_learned_after_swap`` metric skips with no Measurement.
+        Only the FIRST boundary in the run is reported. Multi-swap
+        runs surface later boundaries via the JSONL directly.
+        """
+        _ = agent_configs
+        first_swap = next(
+            (event for event in events if isinstance(event, AgentSwappedMidRun)),
+            None,
+        )
+        if first_swap is None:
+            return None
+        return ProtocolBoundaryWindow(
+            mode_label="scheduled_swap",
+            boundary_round=first_swap.round_number,
+            pre_boundary_last_round=first_swap.round_number - 1,
+            post_boundary_first_round=first_swap.round_number,
+            newcomer_label=f"swapped-in {first_swap.agent_id}",
+            boundary_includes_round=True,
+        )
+
+    def get_protocol_probe_config(self) -> ProtocolProbeConfig | None:
+        """Return this scenario's protocol-probe configuration, or ``None`` to opt out.
+
+        Used by the platform's ``protocol_probe`` metric family. Scenarios
+        that want post-simulation probing implement this hook to point at
+        their question bank, probe prompts directory, and the mapping
+        from question ``agent_role_filter`` strings to scenario role
+        names. Returning ``None`` causes every probe metric to skip
+        with no Measurement.
+        """
+        return None
+
+    def get_protocol_explanation_config(self) -> ProtocolExplanationConfig | None:
+        """Return this scenario's protocol-explanation configuration, or ``None``.
+
+        Used by the ``protocol_explanation`` metric. When a config is
+        returned, the metric renders the scenario's per-role prose template
+        (grounded in the scenario's communication setup) instead of its
+        generic prompt. Returning ``None`` keeps the generic prompt, so the
+        metric still runs on every scenario.
+        """
+        return None
+
+    @classmethod
+    def get_replace_agent_blocked_tool_call_channels(cls) -> frozenset[str]:
+        """Return channel IDs to strip from a replaced agent's tool history.
+
+        Their ``send_message`` and ``read_channel`` traffic is removed from the
+        reconstructed history.
+
+        Used by the replace-agent flow to hide scenario-private channels
+        from the new agent so it cannot read protocol-defining content from
+        the prior agent's tool returns. Defaults to the scenario's
+        ``postmortem_channel_ids``, which is where agents discuss the
+        protocol out of band; a scenario that declares none blocks nothing.
+        """
+        return cls.postmortem_channel_ids

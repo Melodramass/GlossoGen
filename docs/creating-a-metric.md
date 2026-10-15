@@ -42,7 +42,7 @@ class Metric(ABC):
         self,
         events: list[SimulationEvent],
         agent_configs: list[AgentConfig],
-        scenario: SimulationScenario,
+        scenario: ScenarioBase,
         llm_provider: LLMProvider,
         run_dir: Path,
         options: MetricRunOptions,
@@ -53,7 +53,7 @@ class Metric(ABC):
 |---|---|
 | `name` | What callers pass to `--metrics`, and the key the report is written under. Must be unique |
 | `events` | The full ordered event log, already parsed |
-| `scenario` | The built scenario: ask it which channels it scores (`get_primary_channels()`), how it renders a round (`build_communication_rounds`), anything on its contract |
+| `scenario` | The built scenario: ask it which channels it scores (`get_primary_channels()`), how it renders a round (`build_communication_rounds`), anything on its contract. Typed `ScenarioBase` ([scenario_base.py](../src/glossogen/scenario_base.py)), the part of the contract a metric reads; annotate your override the same way |
 | `llm_provider` | The judge selected by `evaluate --model/--provider`; deterministic metrics ignore it |
 | `run_dir` | The run directory, for writing a sidecar next to the report |
 | `options` | Per-invocation flags the CLI passes through; most metrics ignore it |
@@ -117,7 +117,7 @@ above charts as `key.category_id`.
 ## Scenario hooks
 
 A metric stays scenario-agnostic by asking the scenario, rather than the event
-log, for anything scenario-specific. The hooks live on `SimulationScenario`:
+log, for anything scenario-specific. The hooks live on `ScenarioBase`:
 `judge_round_result` and `get_primary_channels` are abstract, so every scenario
 has them. The rest are optional, and a metric whose hook is absent returns
 nothing.
@@ -194,22 +194,26 @@ Two edits, both in
 2. Add the name to `GENERIC_METRIC_NAMES` in
    [generic_metric_names.py](../src/glossogen/evaluation/metric_core/generic_metric_names.py).
 
-The second list exists because `SimulationScenario.get_available_metric_names`
-needs the names and cannot import the registry: a metric module imports the
-scenario contract, so importing metric classes back into it would close a cycle.
-A test asserts the two lists match, so forgetting either edit fails there. At
-launch the symptom would have been a metric the CLI runs and the API rejects.
+The second list exists so that listing the metrics a scenario offers does not
+import every metric class. A test asserts the two lists match, so forgetting
+either edit fails there. At launch the symptom would have been a metric the CLI
+runs and the API rejects.
 
-If the metric only makes sense for one scenario, put the class under that
-scenario's `evaluation/` directory and add it to `_SCENARIO_METRICS` in
-[metric_registry.py](../src/glossogen/evaluation/metric_core/metric_registry.py)
-instead of `_GENERIC_METRICS`, leaving `GENERIC_METRIC_NAMES` alone. That makes it
-runnable without offering it for every scenario's runs. Then have the scenario
-override `get_available_metric_names`, calling `super()` and adding the metric's
-name to what it returns; signal_game does this for `excess_moves`. Replacing the
-list wholesale drops every generic and externally-installed metric for that
-scenario. Prefer a generic metric that reads a scenario hook: every scoring concept
-the platform has ended up expressible that way.
+If the metric only makes sense for one scenario, neither list is touched. The
+scenario returns the class from `scenario_metrics()`, and the module defining it
+can live anywhere, usually that scenario's `evaluation/` directory:
+
+```python
+@classmethod
+def scenario_metrics(cls) -> Sequence[type[Metric]]:
+    return (ExcessMovesMetric, LongestStreakMetric)
+```
+
+That makes it offered and runnable for that scenario's runs and for no other's:
+`evaluate` on another scenario's run treats the name as unknown. Its name must not
+repeat a generic metric's, which `validate` checks. signal_game does this for
+`excess_moves` and `longest_streak`. Prefer a generic metric that reads a scenario
+hook: every scoring concept the platform has ended up expressible that way.
 
 ### In your own package
 
@@ -288,8 +292,8 @@ across invocations when the judge is unchanged.
 Other ways to reach the same runner:
 
 - **REST**: `POST /api/g/<slug>/runs/<scenario>/<run_dir_name>/evaluate` with a
-  metric list. Validated against `get_available_metric_names()`, so an external
-  metric works once installed. Gated by `ENABLE_EVALUATIONS`.
+  metric list. Validated against `available_metric_names(scenario_cls)`, so an
+  external metric works once installed. Gated by `ENABLE_EVALUATIONS`.
 - **The frontend's "Run Eval" button**, which calls that endpoint.
 
 A metric that raises is logged with its traceback and recorded as failed. The

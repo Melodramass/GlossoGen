@@ -26,7 +26,8 @@ from glossogen.models.channel import Channel, ChannelTemplateEntry
 from glossogen.runtime.round_end_trigger import RoundEndTrigger
 from glossogen.runtime.scenario_tool import ScenarioTool
 from glossogen.runtime.scenario_world import ScenarioWorld
-from glossogen.scenario_protocol import PrimaryChannel, RoundResult, SimulationScenario
+from glossogen.scenario_base import PrimaryChannel, RoundResult
+from glossogen.scenario_protocol import SimulationScenario
 from glossogen.scenarios.channel_noise import apply_character_noise
 from glossogen.scenarios.satellite_contact_window.cases import CommandStep, SatelliteCase, get_cases
 from glossogen.scenarios.satellite_contact_window.command_judge import judge_command_sequence
