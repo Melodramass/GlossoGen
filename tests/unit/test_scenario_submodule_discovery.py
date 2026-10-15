@@ -20,6 +20,7 @@ import pytest
 from glossogen import scenario_entry_points
 from glossogen import scenario_submodule_discovery as discovery
 from glossogen.models.event_base import EventBase
+from glossogen.scenario_loader import iter_scenario_classes
 from glossogen.scenario_submodule_discovery import (
     ScenarioPackage,
     concrete_subclasses,
@@ -107,6 +108,32 @@ def test_an_external_events_module_is_imported_and_its_types_registered(
     assert f"{FAKE_PACKAGE}.scenario" not in sys.modules, "discovery imported the scenario module"
     discovered = {cls.__name__ for cls in concrete_subclasses(base=EventBase)}
     assert "ExternalScenarioProbed" in discovered
+
+
+def test_each_built_in_extension_is_collected_under_its_own_scenario(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keyed by the scenario that declared it, and only scenarios that declare one.
+
+    The key and the payload's ``scenario_name`` discriminator must agree, or the
+    detail reader would build one scenario's extras and the union would validate
+    them as another's.
+    """
+    declare(monkeypatch)
+
+    extensions = collect_scenario_extensions()
+
+    declaring = {
+        name
+        for name, scenario_cls in iter_scenario_classes()
+        if scenario_cls.run_detail_extension() is not None
+    }
+    assert set(extensions) == declaring
+    assert {"veyru", "spot_the_difference"} <= declaring, "a shipped extension went missing"
+    assert "signal_game" not in extensions
+    for name, extension in extensions.items():
+        field = extension.extras_model_cls.model_fields["scenario_name"]
+        assert field.default == name
 
 
 def test_an_external_scenario_contributes_its_run_detail_extension(

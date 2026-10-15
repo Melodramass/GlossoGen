@@ -185,6 +185,32 @@ async def test_an_unknown_metric_name_is_rejected_before_anything_runs(
     assert "round_success" in str(raised.value)
 
 
+async def test_another_scenarios_metric_is_rejected_before_anything_runs(
+    metric_run: MetricRun, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """signal_game's metrics read signal_game's events, and resolve on no other log.
+
+    Accepting one here would score a run it cannot read, which a metric reports as
+    having nothing to measure: indistinguishable from a real empty result. No report
+    is written, so the cheap metric asked for beside it does not land either.
+    """
+    report_path = tmp_path / "report.json"
+    with pytest.raises(ValueError) as raised:
+        await score_metrics(
+            run=metric_run,
+            metric_names=["mean_chars_per_round", "excess_moves"],
+            judge_responses=[],
+            options=NO_OPTIONS,
+            report_path=report_path,
+            monkeypatch=monkeypatch,
+        )
+
+    message = str(raised.value)
+    assert "Unknown metric: 'excess_moves'" in message
+    assert "longest_streak" not in message, "the available list offers signal_game's metrics"
+    assert not report_path.exists()
+
+
 async def test_a_failing_metric_does_not_lose_the_ones_that_worked(
     metric_run: MetricRun, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -8,6 +8,7 @@ and metrics other distributions declare, and the tests here hold them in
 agreement.
 """
 
+import logging
 from datetime import UTC, datetime
 from importlib.metadata import EntryPoint
 from pathlib import Path
@@ -151,6 +152,25 @@ def test_a_scenario_metric_cannot_take_a_generic_name(monkeypatch: pytest.Monkey
     assert registry["round_success"] is GENERIC_METRIC_REGISTRY["round_success"]
 
 
+def test_a_scenario_metric_taking_a_generic_name_is_logged(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Ignoring it silently would leave the scenario's author looking for a missing number."""
+    declare(monkeypatch)
+
+    with caplog.at_level(logging.ERROR):
+        available_metrics(scenario_cls=ShadowingScenario)
+
+    shadowing = [
+        record
+        for record in caplog.records
+        if record.levelno == logging.ERROR and "repeats a generic metric's name" in record.message
+    ]
+    assert len(shadowing) == 1
+    assert repr(ShadowingScenario.name()) in shadowing[0].message
+    assert "round_success" in shadowing[0].message
+
+
 def test_a_run_whose_scenario_is_gone_still_has_the_generic_metrics(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -158,6 +178,19 @@ def test_a_run_whose_scenario_is_gone_still_has_the_generic_metrics(
     declare(monkeypatch)
 
     assert available_metrics(scenario_cls=None) == GENERIC_METRIC_REGISTRY
+
+
+def test_a_run_whose_scenario_is_gone_still_has_installed_metrics_and_no_scenarios(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With no scenario to ask, nobody's scenario metrics are offered."""
+    declare(monkeypatch, entry_point(name=EXTERNAL_NAME, attribute="ExternalWordCountMetric"))
+
+    registry = available_metrics(scenario_cls=None)
+
+    assert set(registry) == set(GENERIC_METRIC_REGISTRY) | {EXTERNAL_NAME}
+    for scenario_metric in SignalGameScenario.scenario_metrics():
+        assert scenario_metric.name not in registry
 
 
 def test_an_external_metric_becomes_runnable(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -189,6 +222,18 @@ def test_advertised_and_runnable_stay_in_agreement(monkeypatch: pytest.MonkeyPat
     runnable but not advertised cannot be asked for through the API at all.
     """
     declare(monkeypatch, entry_point(name=EXTERNAL_NAME, attribute="ExternalWordCountMetric"))
+
+    for scenario_cls in SCENARIO_REGISTRY.values():
+        advertised = set(available_metric_names(scenario_cls=scenario_cls))
+        runnable = set(available_metrics(scenario_cls=scenario_cls))
+        assert advertised == runnable, scenario_cls.name()
+
+
+def test_advertised_and_runnable_agree_with_nothing_installed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The same agreement when only generic and scenario metrics are in play."""
+    declare(monkeypatch)
 
     for scenario_cls in SCENARIO_REGISTRY.values():
         advertised = set(available_metric_names(scenario_cls=scenario_cls))
