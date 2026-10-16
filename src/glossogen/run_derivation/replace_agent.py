@@ -28,10 +28,6 @@ from typing import Any, NamedTuple, cast
 import orjson
 
 from glossogen.config_overrides import ResolvedAgentModel, model_overrides_config_value
-from glossogen.cross_run_replace_manifest import (
-    CROSS_RUN_REPLACE_MANIFEST_FILENAME,
-    read_cross_run_replace_manifest,
-)
 from glossogen.evaluation.log_reader import load_events
 from glossogen.message_rewind import build_rewind_state_at_event
 from glossogen.model_catalog import SIMULATION_PROVIDERS, Provider
@@ -46,13 +42,18 @@ from glossogen.models.event import (
     SimulationStarted,
 )
 from glossogen.provider_credentials import require_reachable_models
-from glossogen.replace_manifest import (
+from glossogen.run_archive import claim_run_dir, copy_run_at_event, find_event_offset
+from glossogen.run_config_validation import validate_run_config
+from glossogen.run_derivation.cross_run_replace_manifest import (
+    CROSS_RUN_REPLACE_MANIFEST_FILENAME,
+    read_cross_run_replace_manifest,
+)
+from glossogen.run_derivation.replace_manifest import (
     REPLACE_MANIFEST_FILENAME,
     ReplaceManifest,
     read_replace_manifest,
 )
-from glossogen.run_archive import claim_run_dir, copy_run_at_event, find_event_offset
-from glossogen.run_config_validation import validate_run_config
+from glossogen.run_derivation.run_launching import PreparedForkRun, launch_prepared_run
 from glossogen.run_file_paths import event_log_path, stdout_log_path
 from glossogen.run_identity import compose_run_id
 from glossogen.run_jsonl_rewriter import (
@@ -60,7 +61,6 @@ from glossogen.run_jsonl_rewriter import (
     patch_simulation_started_scenario_config,
     rewrite_run_jsonl,
 )
-from glossogen.run_launching import PreparedForkRun, launch_prepared_run
 from glossogen.scenario_loader import get_scenario_class
 from glossogen.scenarios.base_knobs import AgentModelOverride
 

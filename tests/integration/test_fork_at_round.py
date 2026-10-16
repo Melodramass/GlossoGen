@@ -31,9 +31,9 @@ from glossogen.models.event import (
     RunStatus,
     SimulationEnded,
 )
-from glossogen.replace_agent import ReplaceAgentRequest, prepare_replace_agent_run
 from glossogen.resume_state_loader import load_resume_state
-from glossogen.run_launching import PreparedForkRun
+from glossogen.run_derivation.replace_agent import ReplaceAgentRequest, prepare_replace_agent_run
+from glossogen.run_derivation.run_launching import PreparedForkRun
 from glossogen.testing.scripted_agent import SayTurn, ScriptedTurn, ToolTurn
 from glossogen.testing.simulation_harness import (
     SimulationResult,
@@ -118,7 +118,7 @@ async def prepare_fork(
         assert name == "smoke"
         return SmokeScenario
 
-    monkeypatch.setattr("glossogen.replace_agent.get_scenario_class", smoke_class)
+    monkeypatch.setattr("glossogen.run_derivation.replace_agent.get_scenario_class", smoke_class)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     return await prepare_replace_agent_run(
         request=ReplaceAgentRequest(

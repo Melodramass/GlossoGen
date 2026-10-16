@@ -136,11 +136,19 @@ the commit log.
   one model whose old entry disagreed: it is now $1.75 / $14 per million input /
   output tokens, double the old figure. The models the pickers offer moved to
   `model_catalog.py`, without prices.
-- The Langfuse telemetry modules moved into a `glossogen.telemetry` package:
-  import `glossogen.telemetry.telemetry_settings`,
-  `glossogen.telemetry.telemetry_bootstrap` and
-  `glossogen.telemetry.telemetry_round_processor` instead of the same names at
-  the package root.
+- Four groups of root modules moved into packages. Each module keeps its name,
+  so an import gains the package segment:
+  - `glossogen.telemetry`: `telemetry_settings`, `telemetry_bootstrap`,
+    `telemetry_round_processor`
+  - `glossogen.prod_sync`: `prod_push`, `prod_metadata_sync`, `remote_run_listing`
+  - `glossogen.run_derivation`: `replace_agent`, `cross_run_replace_agent`,
+    `replace_manifest`, `cross_run_replace_manifest`, `run_launching`
+  - `glossogen.scenario_authoring`: `scenario_scaffold`, `scenario_conformance`,
+    `scenario_package_checks`, `scenario_target`, and the `scaffold_templates`
+    directory
+
+  The scenario contract (`scenario_protocol`, `scenario_base`, `scenario_loader`
+  and the rest) stays where it was.
 
 ### Fixed
 - A scenario judge under a provider outside `JUDGE_PROVIDERS` (`judge_provider`,

@@ -14,7 +14,6 @@ from typing import Any, NamedTuple, cast
 import orjson
 from pydantic import BaseModel, ValidationError, model_validator
 
-from glossogen.cross_run_replace_manifest import CROSS_RUN_REPLACE_MANIFEST_FILENAME
 from glossogen.eval_manifest import read_eval_manifest
 from glossogen.event_parsing import parse_event
 from glossogen.jsonl_lines import JsonObjectLines
@@ -28,7 +27,12 @@ from glossogen.models.event import (
     SimulationEvent,
     SimulationStarted,
 )
-from glossogen.replace_manifest import REPLACE_MANIFEST_FILENAME, boundary_round_of, rounds_after_of
+from glossogen.run_derivation.cross_run_replace_manifest import CROSS_RUN_REPLACE_MANIFEST_FILENAME
+from glossogen.run_derivation.replace_manifest import (
+    REPLACE_MANIFEST_FILENAME,
+    boundary_round_of,
+    rounds_after_of,
+)
 from glossogen.run_file_paths import evaluation_report_path, event_log_path
 from glossogen.run_identity import compose_run_id
 from glossogen.run_labels_file import read_run_labels

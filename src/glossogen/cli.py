@@ -38,8 +38,6 @@ from glossogen.config_overrides import (
     split_agent_overrides,
     validate_agent_override_ids,
 )
-from glossogen.cross_run_replace_agent import CrossRunReplaceAgentRequest as CrossRunCoreRequest
-from glossogen.cross_run_replace_agent import cross_run_replace_agent_in_run
 from glossogen.db.local_tenant import LOCAL_GROUP_ID, LOCAL_GROUP_SLUG
 from glossogen.db.run_registry import register_run_standalone
 from glossogen.dotenv_loader import load_env_from_working_directory
@@ -73,11 +71,9 @@ from glossogen.models.event import (
     SimulationStarted,
 )
 from glossogen.oauth_client import CREDENTIALS_PATH, run_login
-from glossogen.prod_metadata_sync import MetadataSyncSpec, run_metadata_sync
-from glossogen.prod_push import PushSpec, run_push_to_prod
+from glossogen.prod_sync.prod_metadata_sync import MetadataSyncSpec, run_metadata_sync
+from glossogen.prod_sync.prod_push import PushSpec, run_push_to_prod
 from glossogen.provider_credentials import require_reachable_models
-from glossogen.replace_agent import ReplaceAgentRequest as ReplaceAgentCoreRequest
-from glossogen.replace_agent import replace_agent_in_run
 from glossogen.resume_context_writer import write_resume_context_files
 from glossogen.resume_state_loader import load_resume_state, resume_first_round
 from glossogen.run_analysis.analysis_field_catalog import build_field_catalog
@@ -95,6 +91,12 @@ from glossogen.run_analysis.analysis_spec_parsing import (
 from glossogen.run_analysis.analysis_text_table import render_field_catalog, render_text_table
 from glossogen.run_archive import claim_run_dir
 from glossogen.run_config_validation import validate_run_config
+from glossogen.run_derivation.cross_run_replace_agent import (
+    CrossRunReplaceAgentRequest as CrossRunCoreRequest,
+)
+from glossogen.run_derivation.cross_run_replace_agent import cross_run_replace_agent_in_run
+from glossogen.run_derivation.replace_agent import ReplaceAgentRequest as ReplaceAgentCoreRequest
+from glossogen.run_derivation.replace_agent import replace_agent_in_run
 from glossogen.run_export.csv_export_archive import (
     build_export_frames,
     build_legend_frame,
@@ -115,17 +117,17 @@ from glossogen.run_export.runs_zip_archive import write_runs_zip
 from glossogen.run_file_paths import debug_log_path, evaluation_report_path, event_log_path
 from glossogen.runners.pydantic_ai_runner import PydanticAIRunner
 from glossogen.runtime.game_clock import minimum_duration_elapsed, wall_clock_phase_timeout
-from glossogen.scenario_conformance import CheckOutcome, check_scenario, failures
-from glossogen.scenario_loader import available_scenario_names, get_scenario_class
-from glossogen.scenario_package_checks import check_scenario_package
-from glossogen.scenario_path_loader import registered_for_checks
-from glossogen.scenario_protocol import SimulationScenario
-from glossogen.scenario_scaffold import (
+from glossogen.scenario_authoring.scenario_conformance import CheckOutcome, check_scenario, failures
+from glossogen.scenario_authoring.scenario_package_checks import check_scenario_package
+from glossogen.scenario_authoring.scenario_scaffold import (
     ScaffoldError,
     default_glossogen_ref,
     write_scenario_package,
 )
-from glossogen.scenario_target import ScenarioPathError, resolve_check_target
+from glossogen.scenario_authoring.scenario_target import ScenarioPathError, resolve_check_target
+from glossogen.scenario_loader import available_scenario_names, get_scenario_class
+from glossogen.scenario_path_loader import registered_for_checks
+from glossogen.scenario_protocol import SimulationScenario
 from glossogen.server.runs.discovery import discover_runs
 from glossogen.server.runs.models import RunSummary
 from glossogen.simulation_server import start_simulation_server, stop_simulation_server

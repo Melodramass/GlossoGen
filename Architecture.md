@@ -370,8 +370,8 @@ Setting `postmortem_disabled_at_start: true` in the merged `knobs` payload makes
 
 ### Key Modules
 
-- `replace_agent.py` — `ReplaceAgentRequest`/`ReplaceAgentResult`/`ForkBoundary` named tuples, `resolve_fork_boundary`, `resolve_rounds_after`, `prepare_replace_agent_run`, and `replace_agent_in_run` (shared core called by the CLI)
-- `run_launching.py` — `PreparedForkRun` + `launch_prepared_run`, the seam between preparing a fork on disk and spawning its subprocess
+- `run_derivation/replace_agent.py` — `ReplaceAgentRequest`/`ReplaceAgentResult`/`ForkBoundary` named tuples, `resolve_fork_boundary`, `resolve_rounds_after`, `prepare_replace_agent_run`, and `replace_agent_in_run` (shared core called by the CLI)
+- `run_derivation/run_launching.py` — `PreparedForkRun` + `launch_prepared_run`, the seam between preparing a fork on disk and spawning its subprocess
 - `run_jsonl_rewriter.py` — `rewrite_run_jsonl` (run-id rewrite)
 - `cli.py` `_run_replace_agent` — CLI subcommand implementation
 
@@ -420,8 +420,8 @@ Same as replace-agent, the supervisor calls `write_resume_context_files` at resu
 
 ### Key Modules
 
-- `cross_run_replace_agent.py` — `CrossRunReplaceAgentRequest`/`CrossRunReplaceAgentResult` named tuples, `_resolve_source_b_cutoff_event_id`, `_compute_blocked_tool_call_channels`, `prepare_cross_run_replace_agent_run`, and `cross_run_replace_agent_in_run` (shared core called by the CLI)
-- `cross_run_replace_manifest.py` — `CrossRunReplaceManifest` Pydantic model + `read_cross_run_replace_manifest` reader (kept separate from `replace_manifest.py` so metrics / discovery can dispatch on file presence)
+- `run_derivation/cross_run_replace_agent.py` — `CrossRunReplaceAgentRequest`/`CrossRunReplaceAgentResult` named tuples, `_resolve_source_b_cutoff_event_id`, `_compute_blocked_tool_call_channels`, `prepare_cross_run_replace_agent_run`, and `cross_run_replace_agent_in_run` (shared core called by the CLI)
+- `run_derivation/cross_run_replace_manifest.py` — `CrossRunReplaceManifest` Pydantic model + `read_cross_run_replace_manifest` reader (kept separate from `run_derivation/replace_manifest.py` so metrics / discovery can dispatch on file presence)
 - `message_rewind.py` — `AgentHistoryFilter` extended with `imported: ImportedHistory | None`; `_find_imported_registration` looks up the imported agent's `AgentRegistered` in the imported event stream
 - `cli.py` `_run_cross_run_replace_agent` + `_resolve_source_b_max_round` + `_resolve_imported_model_from_source_b` — CLI subcommand implementation
 - `evaluation/metrics/round_success_after_resume_metric.py` — reads either `replace_manifest.json` or `cross_run_replace_manifest.json` and projects to a common `_ResumeAnchor` (so the same metric works for both flows)
@@ -472,8 +472,8 @@ When the scenario's knobs schema gained a required field after the source was cr
 
 ### Key Modules
 
-- `replace_agent.py` — shared core with `replaced_agent_id: str | None`; `_validate_replacement_payload`, `_pick_subprocess_default_model`, `collect_source_agents` (boundary-timestamp filtered), `find_boundary_timestamp`
-- `replace_manifest.py` — `ReplaceManifest` Pydantic model with nullable `replaced_agent_id` / `replacement_model` / `replacement_provider`
+- `run_derivation/replace_agent.py` — shared core with `replaced_agent_id: str | None`; `_validate_replacement_payload`, `_pick_subprocess_default_model`, `collect_source_agents` (boundary-timestamp filtered), `find_boundary_timestamp`
+- `run_derivation/replace_manifest.py` — `ReplaceManifest` Pydantic model with nullable `replaced_agent_id` / `replacement_model` / `replacement_provider`
 - `resume_state_loader.py` — `load_resume_state` (dispatches on the manifests present), `read_replace_manifest_info` / `read_cross_run_manifest_info` (projections carrying `entry_round`), `apply_fork_boundary` (advance derivation + snapshot synthesis)
 - `runtime/game_clock.py` — `dispatch_resume_boundary_events()` + `deliver_initial_round_injections()`; `start_initial_round`'s resume branch delivers no injections inline, and records the fresh `RoundAdvanced` when `advance_on_resume` is set
 - `runtime/scheduler.py` — `RoundBoundaryScheduler(events, completed_event_count_by_round)` resumes each round after its recorded completed-event count
@@ -691,7 +691,7 @@ Keeping `groups` in step with an external directory is the provider's job: it co
 
 - `glossogen run` accepts `--group-slug` (default `local`); the launcher inserts a `runs` row with that ownership after `claim_run_dir`.
 - `glossogen login --url <remote>` ([`oauth_client.py`](src/glossogen/oauth_client.py)) walks the OAuth flow against a remote backend, opening the user's browser to the consent page; the loopback HTTP server collects the authorization code, exchanges it for tokens, calls `/mcp/whoami` to discover the bound group, and writes `~/.glossogen/credentials.json` (mode 0600).
-- `glossogen push-to-prod` ([`prod_push.py`](src/glossogen/prod_push.py)) bulk-uploads matching local runs to the configured remote via `/api/g/<slug>/runs/import`. Supports `--label` (AND), `--scenario`, `--include-incomplete`, `--dry-run`, `--concurrency` (default 1; the import endpoint is idempotent on `run_id` so re-running is safe).
+- `glossogen push-to-prod` ([`prod_push.py`](src/glossogen/prod_sync/prod_push.py)) bulk-uploads matching local runs to the configured remote via `/api/g/<slug>/runs/import`. Supports `--label` (AND), `--scenario`, `--include-incomplete`, `--dry-run`, `--concurrency` (default 1; the import endpoint is idempotent on `run_id` so re-running is safe).
 
 ### MCP Runs Browser
 
@@ -743,7 +743,7 @@ Implementation:
 - [`server/mcp/oauth_storage.py`](src/glossogen/server/mcp/oauth_storage.py) — psycopg3 async Postgres storage for clients, codes, tokens, and pending consents.
 - [`server/mcp/asgi_context.py`](src/glossogen/server/mcp/asgi_context.py) — primes `RunContext`.
 - [`frontend/src/app/mcp-consent/`](frontend/src/app/mcp-consent/) — the consent page. A shell: the auth adapter's `ConsentGate` settles which group is being authorized, and [`features/mcp-consent/consent-panel.tsx`](frontend/src/features/mcp-consent/consent-panel.tsx) carries the copy and the Approve button.
-- CLI surface ([`src/glossogen/oauth_client.py`](src/glossogen/oauth_client.py) + [`src/glossogen/prod_push.py`](src/glossogen/prod_push.py)): `glossogen login` walks the OAuth flow against a remote and stores `{access_token, refresh_token, group_slug}` in `~/.glossogen/credentials.json`; `glossogen whoami` round-trips through `/mcp/whoami`; `glossogen push-to-prod` bulk-uploads local runs to `/api/g/<slug>/runs/import` using the stored token.
+- CLI surface ([`src/glossogen/oauth_client.py`](src/glossogen/oauth_client.py) + [`src/glossogen/prod_sync/prod_push.py`](src/glossogen/prod_sync/prod_push.py)): `glossogen login` walks the OAuth flow against a remote and stores `{access_token, refresh_token, group_slug}` in `~/.glossogen/credentials.json`; `glossogen whoami` round-trips through `/mcp/whoami`; `glossogen push-to-prod` bulk-uploads local runs to `/api/g/<slug>/runs/import` using the stored token.
 
 The frontend includes an MCP integration modal (accessible via the **MCP** button on the runs page) that shows connection instructions for Claude Code and Cursor.
 

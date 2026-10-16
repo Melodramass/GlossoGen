@@ -33,7 +33,6 @@ from enum import Enum
 from pathlib import Path
 from typing import NamedTuple
 
-from glossogen.cross_run_replace_manifest import read_cross_run_replace_manifest
 from glossogen.evaluation.log_reader import load_events
 from glossogen.message_rewind import (
     AgentHistoryFilter,
@@ -54,8 +53,9 @@ from glossogen.models.event import (
     ToolCallInvoked,
     ToolResultReceived,
 )
-from glossogen.replace_manifest import read_replace_manifest
 from glossogen.run_archive import resume_round_from_log
+from glossogen.run_derivation.cross_run_replace_manifest import read_cross_run_replace_manifest
+from glossogen.run_derivation.replace_manifest import read_replace_manifest
 from glossogen.run_file_paths import event_log_path
 from glossogen.runtime.scheduled_events import (
     ChannelVisibility,

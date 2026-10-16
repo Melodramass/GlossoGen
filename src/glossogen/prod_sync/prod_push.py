@@ -19,7 +19,7 @@ from pathlib import Path
 import httpx
 
 from glossogen.oauth_client import Credentials, load_or_refresh_credentials
-from glossogen.remote_run_listing import fetch_remote_runs
+from glossogen.prod_sync.remote_run_listing import fetch_remote_runs
 from glossogen.run_file_paths import evaluation_report_path
 from glossogen.run_labels_file import load_run_labels
 from glossogen.server.runs.bundle_router import build_bundle_bytes

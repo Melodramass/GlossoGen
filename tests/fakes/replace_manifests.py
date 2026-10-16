@@ -9,7 +9,7 @@ from pathlib import Path
 
 import orjson
 
-from glossogen.replace_manifest import REPLACE_MANIFEST_FILENAME, ReplaceManifest
+from glossogen.run_derivation.replace_manifest import REPLACE_MANIFEST_FILENAME, ReplaceManifest
 
 
 def write_replace_manifest(

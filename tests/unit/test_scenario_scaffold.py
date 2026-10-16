@@ -12,14 +12,14 @@ from typing import Any
 
 import pytest
 
-from glossogen.scenario_entry_points import SCENARIO_ENTRY_POINT_GROUP
-from glossogen.scenario_scaffold import (
+from glossogen.scenario_authoring.scenario_scaffold import (
     ScaffoldError,
     default_glossogen_ref,
     distribution_name,
     scenario_class_prefix,
     write_scenario_package,
 )
+from glossogen.scenario_entry_points import SCENARIO_ENTRY_POINT_GROUP
 
 REF = "v9.9.9"
 

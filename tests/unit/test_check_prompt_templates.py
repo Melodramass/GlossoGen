@@ -187,7 +187,7 @@ def test_a_literal_that_is_not_a_lookup_is_not_reported(tmp_path: Path) -> None:
     """
     root = tree(tmp_path)
     write(
-        root / "src" / "glossogen" / "scenario_scaffold.py",
+        root / "src" / "glossogen" / "scenario_authoring" / "scenario_scaffold.py",
         'DESTINATIONS = {"scenario.py.jinja": "prompts/briefer_system.jinja"}\n',
     )
 
@@ -237,7 +237,7 @@ def test_the_scaffold_dialect_is_parsed_as_itself(tmp_path: Path) -> None:
     Parsing them with default delimiters would read the placeholders they are
     meant to emit as placeholders of their own.
     """
-    scaffold = tmp_path / "src" / "glossogen" / "scaffold_templates"
+    scaffold = tmp_path / "src" / "glossogen" / "scenario_authoring" / "scaffold_templates"
     write(scaffold / "scenario.py.jinja", "<% if class_prefix %><<class_prefix>><% endif %>\n")
     write(scaffold / "prompts" / "system.jinja.jinja", "{% raw_looking %}{{ not_closed \n")
 
