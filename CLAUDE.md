@@ -313,6 +313,8 @@ rewrite it.
 
 Stack: Next.js 16, React 19, TypeScript (strict), Tailwind CSS v4, TanStack React Query, openapi-fetch.
 
+The installed Next.js is newer than most models' training data, and its APIs, conventions and file layout have changed. Before writing Next.js code, read the guide for what you are touching in `frontend/node_modules/next/dist/docs/`, which matches the installed version, and heed its deprecation notices. `next dev` would otherwise write this advice into an untracked `frontend/AGENTS.md`; `agentRules: false` in `next.config.ts` turns that off.
+
 ### API Client & Type Safety
 
 All API calls must use the generated typed client from `@/shared/lib/api-client`. Raw `fetch()` is forbidden, enforced by ESLint.
