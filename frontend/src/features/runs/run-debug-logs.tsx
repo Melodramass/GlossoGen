@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/shared/lib/api-client";
+import { apiError } from "@/shared/lib/api-error";
 import { splitRunId } from "@/shared/lib/run-id";
 import type { components } from "@/types/api.gen";
 import { LogPanel } from "./log-panel";
@@ -23,7 +24,7 @@ export function RunDebugLogs({ runId, liveLogs }: { runId: string; liveLogs: Deb
         }
       );
       if (error) {
-        throw new Error("Failed to fetch debug logs");
+        throw apiError(error, "Failed to fetch debug logs");
       }
       return data;
     },

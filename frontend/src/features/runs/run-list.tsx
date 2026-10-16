@@ -15,6 +15,7 @@ import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { Inbox, Loader2, Package, Search, Tag, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { api } from "@/shared/lib/api-client";
+import { apiError } from "@/shared/lib/api-error";
 import { cn } from "@/shared/lib/cn";
 import { splitRunId } from "@/shared/lib/run-id";
 import { useGroupLabels } from "@/shared/lib/use-group-labels";
@@ -143,7 +144,7 @@ export function RunList() {
         params: { path: splitRunId(runId) },
       });
       if (error) {
-        throw new Error("Failed to delete run");
+        throw apiError(error, "Failed to delete run");
       }
     },
     onSuccess: () => {
@@ -157,7 +158,7 @@ export function RunList() {
         params: { path: splitRunId(runId) },
       });
       if (error) {
-        throw new Error("Failed to stop simulation");
+        throw apiError(error, "Failed to stop simulation");
       }
     },
     onSuccess: () => {
@@ -199,7 +200,7 @@ export function RunList() {
           },
         });
         if (error) {
-          throw new Error("Failed to fetch runs");
+          throw apiError(error, "Failed to fetch runs");
         }
         return data;
       },
@@ -293,7 +294,7 @@ export function RunList() {
         },
       });
       if (error) {
-        throw new Error("Failed to count runs");
+        throw apiError(error, "Failed to count runs");
       }
       return data.total;
     },

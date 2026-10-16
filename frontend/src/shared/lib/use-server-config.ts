@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/shared/lib/api-client";
+import { apiError } from "@/shared/lib/api-error";
 
 /**
  * Fetch public server feature flags from ``GET /api/server-config``.
@@ -13,7 +14,7 @@ export function useServerConfig() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/server-config");
       if (error) {
-        throw new Error("Failed to fetch server config");
+        throw apiError(error, "Failed to fetch server config");
       }
       return data;
     },

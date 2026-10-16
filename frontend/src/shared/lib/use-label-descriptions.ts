@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/shared/lib/api-client";
+import { apiError } from "@/shared/lib/api-error";
 import { useOptionalActiveGroupSlug } from "@/features/auth/group-context";
 
 /**
@@ -20,7 +21,7 @@ export function useLabelDescriptions(): Map<string, string> {
     queryFn: async () => {
       const { data: resp, error } = await api.GET("/api/g/{group_slug}/labels/descriptions");
       if (error) {
-        throw new Error("Failed to fetch label descriptions");
+        throw apiError(error, "Failed to fetch label descriptions");
       }
       return resp;
     },

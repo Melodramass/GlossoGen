@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Loader2, Search, X, XCircle } from "lucide-react";
 import Link from "next/link";
 import { api } from "@/shared/lib/api-client";
+import { apiError } from "@/shared/lib/api-error";
 import { cn } from "@/shared/lib/cn";
 import { splitRunId } from "@/shared/lib/run-id";
 import type { components } from "@/types/api.gen";
@@ -66,7 +67,7 @@ export function BranchesTimeline({ runId }: { runId: string }) {
         params: { path: splitRunId(runId) },
       });
       if (error) {
-        throw new Error("Failed to fetch run detail");
+        throw apiError(error, "Failed to fetch run detail");
       }
       return data;
     },

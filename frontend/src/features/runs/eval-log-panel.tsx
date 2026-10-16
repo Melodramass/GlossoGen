@@ -5,6 +5,7 @@ import { ChevronDown } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/shared/lib/cn";
 import { api } from "@/shared/lib/api-client";
+import { apiError } from "@/shared/lib/api-error";
 import { splitRunId } from "@/shared/lib/run-id";
 
 /** Threshold in pixels for considering the user "at the bottom" of the scroll area. */
@@ -30,7 +31,7 @@ export function EvalLogPanel({ runId, evaluationInProgress }: EvalLogPanelProps)
           params: { path: splitRunId(runId) },
         }
       );
-      if (error) throw new Error("Failed to fetch eval logs");
+      if (error) throw apiError(error, "Failed to fetch eval logs");
       return data;
     },
     refetchInterval: evaluationInProgress ? 3_000 : false,

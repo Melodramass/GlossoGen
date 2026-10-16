@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, SlidersHorizontal, XCircle } from "lucide-react";
 import { api } from "@/shared/lib/api-client";
+import { apiError } from "@/shared/lib/api-error";
 import { cn } from "@/shared/lib/cn";
 import type { components } from "@/types/api.gen";
 import { humanize } from "./format";
@@ -94,7 +95,7 @@ export function KnobFilterBar({
         { params: { path: { scenario_name: scenarioName } } }
       );
       if (error) {
-        throw new Error("Failed to fetch filterable knobs");
+        throw apiError(error, "Failed to fetch filterable knobs");
       }
       return data;
     },

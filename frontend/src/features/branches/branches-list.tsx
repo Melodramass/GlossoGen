@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { GitFork, Inbox, Loader2, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { api } from "@/shared/lib/api-client";
+import { apiError } from "@/shared/lib/api-error";
 import type { components } from "@/types/api.gen";
 import { useGroupPath } from "@/features/auth/group-context";
 import { formatCost, formatDuration, formatTime, humanize } from "../runs/format";
@@ -27,7 +28,7 @@ export function BranchesList() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/g/{group_slug}/branches", {});
       if (error) {
-        throw new Error("Failed to fetch branches");
+        throw apiError(error, "Failed to fetch branches");
       }
       return data;
     },
