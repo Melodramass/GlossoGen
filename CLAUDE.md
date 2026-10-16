@@ -172,12 +172,11 @@ make check-frontend    # frontend CI mode (prettier --check, no auto-fix)
   - `local_tenant.py` — canonical constants `LOCAL_USER_ID = "local-user"`, `LOCAL_GROUP_SLUG = "local"`, `LOCAL_GROUP_NAME = "Local"`
   - `run_registry.py` — standalone (own connection) variants used by the CLI / scripts that run outside the FastAPI lifespan
   - `migrations/` — alembic env + raw-SQL revisions
-  - `runs/scenario_extension.py` — `SCENARIO_RUN_EXTENSIONS`, each loadable scenario's `run_detail_extension()` keyed by name; powers the discriminated-union `scenario_extras` field on `RunDetailResponse`
-  - `mcp/browser.py` — MCP server mounted at `/mcp` for programmatic run browsing and launching (Claude Code, Cursor)
-  - `mcp/oauth_provider.py` — OAuth 2.0 authorization server provider for MCP
-  - `mcp/oauth_storage.py` — Postgres-backed storage for OAuth clients, codes, and tokens
-  - `mcp/oauth_login_page.py` — login form for the MCP OAuth authorization flow
-  - `run_launcher.py` — shared simulation launch helper used by REST and MCP run-start flows
+- `src/glossogen/server/runs/scenario_extension.py` — `SCENARIO_RUN_EXTENSIONS`, each loadable scenario's `run_detail_extension()` keyed by name; powers the discriminated-union `scenario_extras` field on `RunDetailResponse`
+- `src/glossogen/server/mcp/browser.py` — MCP server mounted at `/mcp` for programmatic run browsing and launching (Claude Code, Cursor)
+- `src/glossogen/server/mcp/oauth_provider.py` — OAuth 2.0 authorization server provider for MCP
+- `src/glossogen/server/mcp/oauth_storage.py` — Postgres-backed storage for OAuth clients, codes, and tokens
+- `src/glossogen/server/run_launcher.py` — shared simulation launch helper used by REST and MCP run-start flows
 - `linter/` — custom linting scripts
 - `modal/` — self-hosted LLM endpoint (Modal-hosted Llama 3.3 70B by default)
   - `serve_llama.py` — Modal app launching vLLM's OpenAI-compatible HTTP server on `H100:2`
@@ -444,7 +443,6 @@ OAuth configuration:
 
 CLI surface (uses the same OAuth flow):
 - `glossogen login` — walks the user through the OAuth handshake, stores `{access_token, refresh_token, group_slug}` in `~/.glossogen/credentials.json`. See `src/glossogen/oauth_client.py`.
-- `glossogen whoami` — round-trips through `GET /mcp/whoami` to print the token's bound group.
 - `glossogen push-to-prod` — bulk-uploads local runs to a configured remote via `/api/g/<slug>/runs/import`. Filters by label / scenario / report-present; idempotent on `run_id`. See `src/glossogen/prod_push.py`.
 - `glossogen sync-metadata-to-prod` — for every local-evaluated run that's *already* on prod: PUTs the local labels onto `/api/g/<slug>/runs/{scenario}/{run_dir_name}/labels` when they differ, and PUTs the local evaluation report onto `/api/g/<slug>/runs/{scenario}/{run_dir_name}/evaluation` unconditionally (local is the source of truth — every PUT replaces the on-disk copy). Also syncs the label glossary: PUTs every local label description the remote is missing or records differently onto `/api/g/<slug>/labels/descriptions`; descriptions only the remote has are left alone. Use `push-to-prod` for runs not yet on prod. See `src/glossogen/prod_metadata_sync.py`.
 - `glossogen analyze` — groups and aggregates many runs' metrics into one table. Same selection flags as `glossogen export`, plus `--grain`, `--group-by`, `--measure key:aggregate`, `--filter key:operator:values`, and `--list-fields`. Reads the runs directory directly, so no server and no database, and it is what a chart's numbers are checked against. See [docs/analysis.md](docs/analysis.md).
@@ -574,7 +572,7 @@ A label can optionally carry a description, recorded once per group in the label
 
 Two ways to apply them:
 
-1. **Backend API**: `PUT /api/g/{group_slug}/runs/{scenario}/{run_dir_name}/labels` with body `UpdateLabelsRequest{labels: list[str]}` — see [router.py:409](src/glossogen/server/runs/router.py#L409). The PUT replaces all labels (it does not append), so include any existing labels you want to keep.
+1. **Backend API**: `PUT /api/g/{group_slug}/runs/{scenario}/{run_dir_name}/labels` with body `UpdateLabelsRequest{labels: list[str]}` served by `update_labels` in [router.py](src/glossogen/server/runs/router.py). The PUT replaces all labels (it does not append), so include any existing labels you want to keep.
 2. **Direct file write** (orchestrator scripts): write `labels.json` directly to the run dir as soon as the dir exists. Faster than the API and avoids needing the backend to be running. Example:
    ```bash
    echo '["baseline_oss"]' > "runs/veyru/<timestamp>/labels.json"
@@ -582,29 +580,26 @@ Two ways to apply them:
 
 **Important**: the PUT replaces the whole list, so read the current labels first when adding to them. (`glossogen evaluate` no longer writes `labels.json`; eval-derived `eval:*` labels only exist on runs evaluated before that changed.)
 
-### DO NOT use substring matching to bulk-relabel runs
+### Bulk-relabelling runs: parse labels.json, never substring-match it
 
-I (Claude) once destroyed eval-derived labels on 40 runs by writing this:
+Substring-matching the file contents selects runs you did not mean to touch and overwrites every other label they carry:
 
 ```bash
-# ❌ NEVER do this. Will match runs with ANY of these substrings, including
-#    legitimately-evaluated runs that just happen to have "baseline" + the
-#    budget tier in their labels list.
+# ❌ Wrong: matches any run whose labels contain these substrings, including
+#    runs that carry "baseline" and the budget tier beside other labels.
 for d in ./runs/veyru/*/; do
   content=$(cat "$d/labels.json")
   if [[ "$content" == *'"baseline"'*'"budget=2000"'* ]]; then
-    echo '["baseline_oss", "budget=2000"]' > "$d/labels.json"   # WIPES eval labels
+    echo '["baseline_oss", "budget=2000"]' > "$d/labels.json"   # wipes every other label
   fi
 done
 ```
-
-The pattern matched runs labeled `["baseline", "budget=2000", "eval:content_filter_refusal:0", "eval:round_success:pass", ...]` and overwrote all of those eval-derived labels. They have to be regenerated via `glossogen evaluate`.
 
 **Rules when bulk-modifying labels.json:**
 
 1. **Always parse as JSON, never substring-match the file contents.** Use Python (`json.load`) and compare list membership precisely (`labels == ['baseline_oss', 'budget=2000']` not `'baseline_oss' in content`).
 2. **Scope by run identity, not by label content.** If you're modifying runs you just created in this session, list those run dirs by mtime or by tracking the run IDs at launch. Don't infer them from current label state.
-3. **Never overwrite — append.** If you must modify labels, read existing JSON, append/remove specific entries, write back. Only blow away the whole list if you're certain the run has no eval-derived labels (i.e. you just created it and `glossogen evaluate` has not run on it).
+3. **Read, modify, write back; do not replace the list.** Read the existing JSON, append or remove specific entries, and write it back. Replace the whole list only on a run you just created and nothing else has labelled.
 4. **If unsure, dry-run first.** Print which runs you'd modify and their current labels; ask the user to confirm before writing.
 
 ### JSONL-Backed Run History
@@ -767,7 +762,7 @@ glossogen cross-run-replace-agent veyru \
 
 **Verifying the imported history.** Each resumed run writes `resume_context_{agent_id}.json` to the new run dir capturing the exact reconstructed pydantic-ai messages handed to that agent on its first turn. For cross-run runs, `resume_context_<replaced_agent_id>.json`'s tail should match Sim B's last few `field_observer` (or whichever role) messages verbatim, which confirms the cross-run history is being mounted from Sim B and not contaminated by Sim A.
 
-**Label convention.** Cross-run runs are labelled `cross_team` plus a range tag like `15-25` (rounds played post-swap). That label lets analysis tooling group cross-team runs and compare `round_success_after_resume` per `(imported_model, after_round)` bucket against both Source A and Source B accuracy on the same rounds. Apply labels by writing `labels.json` directly *before* `glossogen evaluate` runs (the eval-derived labels merge into that file).
+**Label convention.** Cross-run runs are labelled `cross_team` plus a range tag like `15-25` (rounds played post-swap). That label lets analysis tooling group cross-team runs and compare `round_success_after_resume` per `(imported_model, after_round)` bucket against both Source A and Source B accuracy on the same rounds. Apply labels by writing `labels.json` directly as soon as the run dir exists.
 
 **`round_success_after_resume` works for both flows.** The metric reads either `replace_manifest.json` or `cross_run_replace_manifest.json` and projects to a common `ResumeAnchor` (`resume_anchors.py`), whose `round_start` / `rounds_after_swap` window uses the manifests' frozen field names. For cross-run runs, the comparison is against Sim A (`source_a_*`): "did the imported agent perform better/worse than what the original agent achieved over the same window?".
 
