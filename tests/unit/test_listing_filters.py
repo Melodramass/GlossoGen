@@ -13,12 +13,13 @@ filesystem walk of the runs directory built here.
 """
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import NamedTuple
 from uuid import uuid4
 
 import orjson
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 from glossogen.knob_filter import KnobFilter, parse_knob_filters
@@ -28,7 +29,12 @@ from glossogen.models.event import (
     SimulationEnded,
     SimulationStarted,
 )
-from glossogen.server.runs.listing import list_runs_matching_filters, list_runs_page
+from glossogen.server.identity.identity_model import Identity
+from glossogen.server.runs.listing import (
+    list_all_labels_for_group,
+    list_runs_matching_filters,
+    list_runs_page,
+)
 from glossogen.server.runs.router import router
 
 SCENARIOS = ("veyru", "spot_the_difference")
@@ -450,3 +456,19 @@ async def test_a_filter_matching_nothing_returns_nothing(runs_dir: Path) -> None
 
     assert page.runs == []
     assert exported == []
+
+
+async def test_the_label_union_ignores_a_labels_file_that_is_not_a_list(runs_dir: Path) -> None:
+    """Before the shared reader, an object's keys leaked into the filesystem-mode union."""
+    (runs_dir / "spot_the_difference" / "1000000003" / "labels.json").write_bytes(
+        orjson.dumps({"leaked_key": ["budget=800"]})
+    )
+    app = SimpleNamespace(state=SimpleNamespace(runs_dir=runs_dir, db_pool=None))
+    request = Request(scope={"type": "http", "method": "GET", "headers": [], "app": app})
+    request.state.identity = Identity(
+        user_id="local-user", active_group_id=uuid4(), is_local_mode=True
+    )
+
+    labels = await list_all_labels_for_group(request=request)
+
+    assert labels == ["baseline_oss", "budget=800"]

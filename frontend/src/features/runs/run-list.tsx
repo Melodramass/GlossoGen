@@ -17,7 +17,9 @@ import { useRouter } from "next/navigation";
 import { api } from "@/shared/lib/api-client";
 import { cn } from "@/shared/lib/cn";
 import { splitRunId } from "@/shared/lib/run-id";
+import { useGroupLabels } from "@/shared/lib/use-group-labels";
 import { useLabelDescriptions } from "@/shared/lib/use-label-descriptions";
+import { useScenarioCatalog } from "@/shared/lib/use-scenario-catalog";
 import { Tooltip } from "@/shared/components/ui/tooltip";
 import type { components } from "@/types/api.gen";
 import { useActiveGroupSlug } from "@/features/auth/group-context";
@@ -90,29 +92,11 @@ export function RunList() {
     [groupSlug, router]
   );
 
-  const { data: labelsData } = useQuery({
-    queryKey: ["all-labels"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/api/g/{group_slug}/labels");
-      if (error) {
-        throw new Error("Failed to fetch labels");
-      }
-      return data;
-    },
-  });
+  const { data: labelsData } = useGroupLabels();
 
   const labelDescriptions = useLabelDescriptions();
 
-  const { data: scenariosData } = useQuery({
-    queryKey: ["scenarios"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/api/g/{group_slug}/scenarios");
-      if (error) {
-        throw new Error("Failed to fetch scenarios");
-      }
-      return data;
-    },
-  });
+  const { data: scenariosData } = useScenarioCatalog();
 
   function toggleLabel(label: string) {
     setSelectedLabels(prev => {
@@ -268,7 +252,7 @@ export function RunList() {
     return names;
   }, [knobFilters]);
 
-  const allLabels = useMemo(() => labelsData?.labels ?? [], [labelsData]);
+  const allLabels = useMemo(() => labelsData ?? [], [labelsData]);
   const regularFilterLabels = useMemo(
     () => allLabels.filter(label => !label.startsWith("eval:") && !label.startsWith("src=")),
     [allLabels]

@@ -27,12 +27,12 @@ from glossogen.run_export.archive_member_filter import should_include_in_archive
 from glossogen.run_export.export_limits import ExportTooLargeError, check_raw_bytes
 from glossogen.run_export.runs_zip_archive import write_single_run_zip
 from glossogen.run_identity import compose_run_id
+from glossogen.run_labels_file import read_run_labels
 from glossogen.run_lineage import read_timeline_parent
 from glossogen.scenario_name import is_valid_scenario_name
 from glossogen.server.runs.archive_streaming_response import (
     build_temp_file_archive_response,
 )
-from glossogen.server.runs.discovery import read_run_labels
 from glossogen.server.runs.listing import list_runs_for_group
 from glossogen.server.runs.lookup import register_new_run, resolve_run_or_404
 from glossogen.server.runs.models import BundleManifest, ImportBundleResponse, RunSummary
