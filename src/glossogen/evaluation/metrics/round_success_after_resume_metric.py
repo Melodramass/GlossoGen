@@ -41,6 +41,7 @@ from glossogen.evaluation.metric_core.resume_anchors import (
 from glossogen.llm.provider import LLMProvider
 from glossogen.models.agent_config import AgentConfig
 from glossogen.models.event import RoundResultRecorded, SimulationEvent
+from glossogen.run_file_paths import event_log_path
 from glossogen.scenario_base import ScenarioBase
 
 logger = logging.getLogger(__name__)
@@ -180,7 +181,7 @@ class RoundSuccessAfterResumeMetric(Metric):
         source_dir = resolve_external_source_dir(source_run_dir=anchor.external_source_run_dir)
         if source_dir is None:
             return {}
-        source_log = source_dir / f"{scenario_name}.jsonl"
+        source_log = event_log_path(run_dir=source_dir, scenario_name=scenario_name)
         if not source_log.exists():
             return {}
         source_events = await load_events(log_path=source_log)

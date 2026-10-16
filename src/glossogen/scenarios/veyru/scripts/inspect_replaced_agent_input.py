@@ -29,6 +29,7 @@ from glossogen.message_rewind import AgentHistoryFilter, build_rewind_state_from
 from glossogen.model_catalog import Provider
 from glossogen.models.event import AgentRegistered, InjectionDelivered
 from glossogen.resume_state_loader import read_replace_manifest_info
+from glossogen.run_file_paths import event_log_path
 
 
 def _print_section(title: str) -> None:
@@ -74,7 +75,7 @@ async def main() -> None:
     args = parser.parse_args()
 
     run_dir = args.run_dir
-    log_path = run_dir / f"{args.scenario}.jsonl"
+    log_path = event_log_path(run_dir=run_dir, scenario_name=args.scenario)
 
     replace_info = read_replace_manifest_info(run_dir=run_dir)
     if replace_info is None:

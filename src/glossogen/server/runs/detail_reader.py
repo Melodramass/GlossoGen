@@ -32,6 +32,7 @@ from glossogen.models.event import (
     ToolResultReceived,
 )
 from glossogen.run_detail_types import AgentDetail, ChannelMessage
+from glossogen.run_file_paths import evaluation_report_path
 from glossogen.run_labels_file import read_run_labels
 from glossogen.server.runs.manifest_sources import (
     read_cross_run_replace_agent_source,
@@ -464,7 +465,7 @@ async def load_run_detail(
                 status = RunStatus.STARTING
             else:
                 status = RunStatus.ERROR
-    report_path = log_path.with_name(f"{scenario_name}_report.json")
+    report_path = evaluation_report_path(run_dir=run_dir, scenario_name=scenario_name)
     evaluation = await load_evaluation_report(report_path=report_path)
     eval_manifest = read_eval_manifest(run_dir=run_dir)
     evaluation_in_progress = eval_manifest is not None
@@ -531,11 +532,6 @@ async def load_run_detail(
         round_injections=round_injections,
         scenario_extras=scenario_extras,
     )
-
-
-def debug_log_path_for(log_path: Path, scenario_name: str) -> Path:
-    """Return the debug JSONL path corresponding to the main event log."""
-    return log_path.with_name(f"{scenario_name}_debug.jsonl")
 
 
 async def _read_note(run_dir: Path) -> str | None:

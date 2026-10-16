@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from glossogen.evaluation.reports.evaluation_report import EvaluationReport, load_report_tolerant
+from glossogen.run_file_paths import evaluation_report_path
 from glossogen.server.runs.models import RunSummary
 
 logger = logging.getLogger(__name__)
@@ -32,11 +33,6 @@ class ExportRunRecord(NamedTuple):
     report: EvaluationReport | None
 
 
-def report_path_for(summary: RunSummary) -> Path:
-    """Return where the run's evaluation report lives on disk."""
-    return Path(summary.run_dir) / f"{summary.scenario_name}_report.json"
-
-
 async def load_export_run_record(summary: RunSummary) -> ExportRunRecord:
     """Load one run's report, treating an unreadable one as absent.
 
@@ -45,7 +41,11 @@ async def load_export_run_record(summary: RunSummary) -> ExportRunRecord:
     what the projections cost.
     """
     try:
-        report = await load_report_tolerant(report_path=report_path_for(summary=summary))
+        report = await load_report_tolerant(
+            report_path=evaluation_report_path(
+                run_dir=Path(summary.run_dir), scenario_name=summary.scenario_name
+            )
+        )
     except Exception:
         logger.exception(
             "Could not read the evaluation report for %s; exporting it without scores",

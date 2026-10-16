@@ -30,6 +30,7 @@ from glossogen.models.event_base import EventBase
 from glossogen.models.mcp_responses import SendReceipt, SendStatus
 from glossogen.models.message import SimulationMessage
 from glossogen.resume_state_loader import load_resume_state
+from glossogen.run_file_paths import event_log_path
 from glossogen.runners.pydantic_ai_runner import PydanticAIRunner
 from glossogen.runtime.activity_notification import NewInfoNotification
 from glossogen.runtime.communication_tools import SEND_MESSAGE_TOOL_NAME
@@ -290,7 +291,7 @@ async def resume_simulation(
     JSONL. The returned events cover the whole log, pre-boundary lines
     included.
     """
-    log_path = run_dir / f"{scenario.name()}.jsonl"
+    log_path = event_log_path(run_dir=run_dir, scenario_name=scenario.name())
     events = await load_events(log_path=log_path)
     resume_state = await load_resume_state(run_dir=run_dir, events=events)
     scenario.set_run_dir(run_dir=run_dir)

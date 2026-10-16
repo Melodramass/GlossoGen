@@ -29,6 +29,7 @@ from glossogen.models.event import (
     SimulationStarted,
 )
 from glossogen.replace_manifest import REPLACE_MANIFEST_FILENAME, boundary_round_of, rounds_after_of
+from glossogen.run_file_paths import evaluation_report_path, event_log_path
 from glossogen.run_identity import compose_run_id
 from glossogen.run_labels_file import read_run_labels
 from glossogen.server.runs.evaluation_score_reader import (
@@ -400,7 +401,9 @@ def _live_fields(timestamp_dir: Path) -> _LiveFields:
 
 def _report_scores(scenario_name: str, timestamp_dir: Path) -> EvaluationReportScores:
     """Read the run's evaluation report. A run that has not ended reports none."""
-    return read_evaluation_scores(report_path=timestamp_dir / f"{scenario_name}_report.json")
+    return read_evaluation_scores(
+        report_path=evaluation_report_path(run_dir=timestamp_dir, scenario_name=scenario_name)
+    )
 
 
 def read_scenario_config(scenario_name: str, timestamp_dir: Path) -> dict[str, Any] | None:
@@ -425,7 +428,7 @@ def read_scenario_config(scenario_name: str, timestamp_dir: Path) -> dict[str, A
     across an empty file, an unparseable line and a line that is not an event,
     which is why this catches broadly.
     """
-    jsonl_path = timestamp_dir / f"{scenario_name}.jsonl"
+    jsonl_path = event_log_path(run_dir=timestamp_dir, scenario_name=scenario_name)
     if not jsonl_path.exists():
         return None
 
@@ -456,7 +459,7 @@ def _build_summary_sync(
     thread via :func:`build_summary`. That lets a page of runs enrich with true
     IO parallelism instead of serializing sync reads on the event loop.
     """
-    jsonl_path = timestamp_dir / f"{scenario_name}.jsonl"
+    jsonl_path = event_log_path(run_dir=timestamp_dir, scenario_name=scenario_name)
     if not jsonl_path.exists():
         return None
 
@@ -678,7 +681,7 @@ def discover_run_descriptors(runs_dir: Path) -> list[RunDescriptor]:
         for timestamp_dir in scenario_dir.iterdir():
             if not timestamp_dir.is_dir():
                 continue
-            if not (timestamp_dir / f"{scenario_name}.jsonl").exists():
+            if not event_log_path(run_dir=timestamp_dir, scenario_name=scenario_name).exists():
                 continue
             descriptors.append(
                 RunDescriptor(

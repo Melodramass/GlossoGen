@@ -18,13 +18,14 @@ import sys
 from pathlib import Path
 
 from glossogen.evaluation.log_reader import load_events
+from glossogen.run_file_paths import event_log_path
 from glossogen.scenarios.spot_the_intersection.recorded_board_audit import audit_events
 from glossogen.scenarios.spot_the_intersection.scenario import SpotTheIntersectionScenario
 
 
 async def audit_run_dir(run_dir: Path) -> bool:
     """Audit one run directory and print what was found; return whether it passed."""
-    log_path = run_dir / f"{SpotTheIntersectionScenario.name()}.jsonl"
+    log_path = event_log_path(run_dir=run_dir, scenario_name=SpotTheIntersectionScenario.name())
     audit = audit_events(events=await load_events(log_path=log_path))
     status = "OK"
     if audit.findings:

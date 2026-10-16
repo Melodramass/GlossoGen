@@ -29,6 +29,7 @@ from glossogen.atif_export.atif_trajectory_builder import (
 )
 from glossogen.run_export.archive_member_filter import should_include_in_archive
 from glossogen.run_export.export_limits import check_raw_bytes
+from glossogen.run_file_paths import event_log_path
 from glossogen.server.runs.models import RunSummary
 
 logger = logging.getLogger(__name__)
@@ -124,7 +125,7 @@ def _add_atif_trajectories(
 
     A run with no event log yet (claimed, never started) has no agents to write.
     """
-    log_path = run_dir / f"{scenario_name}.jsonl"
+    log_path = event_log_path(run_dir=run_dir, scenario_name=scenario_name)
     if not log_path.exists():
         return RunZipTally(file_count=0, byte_count=0)
     context = load_atif_run_context_blocking(run_dir=run_dir, scenario_name=scenario_name)

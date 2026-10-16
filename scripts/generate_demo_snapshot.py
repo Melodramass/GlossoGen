@@ -27,6 +27,7 @@ from pathlib import Path
 from fastapi.encoders import jsonable_encoder
 
 from glossogen.run_export.runs_zip_archive import write_single_run_zip
+from glossogen.run_file_paths import event_log_path
 from glossogen.server.runs.detail_reader import load_run_detail
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ logger = logging.getLogger(__name__)
 async def write_demo_snapshot(run_dir: Path, out_dir: Path) -> None:
     """Serialize ``run_dir`` into ``run.json`` + ``run.zip`` under ``out_dir``."""
     scenario_name = run_dir.parent.name
-    log_path = run_dir / f"{scenario_name}.jsonl"
+    log_path = event_log_path(run_dir=run_dir, scenario_name=scenario_name)
     if not log_path.is_file():
         raise FileNotFoundError(f"No event log at {log_path}")
 

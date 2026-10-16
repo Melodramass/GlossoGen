@@ -38,6 +38,7 @@ from glossogen.label_descriptions.label_description_models import LabelDescripti
 from glossogen.oauth_client import Credentials, load_or_refresh_credentials
 from glossogen.prod_push import HTTP_TIMEOUT, LocalRun, PushSpec, collect_local_runs
 from glossogen.remote_run_listing import RemoteRunEntry, fetch_remote_runs
+from glossogen.run_file_paths import evaluation_report_path
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +179,9 @@ async def sync_glossary(
 
 async def _local_report_hash(*, run_dir: Path, scenario: str) -> str | None:
     """Return the digest of the local report's measurements, or ``None`` if absent."""
-    report = await load_report(report_path=run_dir / f"{scenario}_report.json")
+    report = await load_report(
+        report_path=evaluation_report_path(run_dir=run_dir, scenario_name=scenario)
+    )
     if report is None:
         return None
     return compute_measurements_hash(measurements=report.measurements)
@@ -250,7 +253,9 @@ async def _put_evaluation(
     is the full ``EvaluationReport`` JSON; the remote endpoint replaces
     its on-disk copy and updates its ``evaluation_content_hash`` row.
     """
-    report = await load_report(report_path=run_dir / f"{scenario}_report.json")
+    report = await load_report(
+        report_path=evaluation_report_path(run_dir=run_dir, scenario_name=scenario)
+    )
     if report is None:
         return False
     await _put_with_retry(

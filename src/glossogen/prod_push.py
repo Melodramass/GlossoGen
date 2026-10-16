@@ -20,6 +20,7 @@ import httpx
 
 from glossogen.oauth_client import Credentials, load_or_refresh_credentials
 from glossogen.remote_run_listing import fetch_remote_runs
+from glossogen.run_file_paths import evaluation_report_path
 from glossogen.run_labels_file import load_run_labels
 from glossogen.server.runs.bundle_router import build_bundle_bytes
 from glossogen.server.runs.models import ImportBundleResponse
@@ -84,7 +85,6 @@ def collect_local_runs(*, spec: PushSpec) -> list[LocalRun]:
             continue
         if spec.scenarios is not None and scenario_name not in spec.scenarios:
             continue
-        report_filename = f"{scenario_name}_report.json"
         for run_dir in scenario_dir.iterdir():
             if not run_dir.is_dir():
                 continue
@@ -94,7 +94,8 @@ def collect_local_runs(*, spec: PushSpec) -> list[LocalRun]:
             label_set = set(labels)
             if not spec.labels.issubset(label_set):
                 continue
-            if spec.require_report and not (run_dir / report_filename).exists():
+            report_path = evaluation_report_path(run_dir=run_dir, scenario_name=scenario_name)
+            if spec.require_report and not report_path.exists():
                 continue
             results.append(
                 LocalRun(

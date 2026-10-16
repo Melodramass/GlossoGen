@@ -15,6 +15,7 @@ from pathlib import Path
 from fastapi import HTTPException, Request
 
 from glossogen.db.queries import delete_run, get_run, insert_run
+from glossogen.run_file_paths import event_log_path
 from glossogen.server.identity.identity_model import Identity
 from glossogen.server.runs.discovery import ResolvedRun
 
@@ -55,7 +56,7 @@ async def resolve_run_or_404(
     identity = get_identity(request=request)
 
     run_dir = runs_dir / scenario / run_dir_name
-    jsonl_path = run_dir / f"{scenario}.jsonl"
+    jsonl_path = event_log_path(run_dir=run_dir, scenario_name=scenario)
 
     if pool is None:
         if not run_dir.is_dir() or not jsonl_path.exists():

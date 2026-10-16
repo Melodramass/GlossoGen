@@ -56,6 +56,7 @@ from glossogen.models.event import (
 )
 from glossogen.replace_manifest import read_replace_manifest
 from glossogen.run_archive import resume_round_from_log
+from glossogen.run_file_paths import event_log_path
 from glossogen.runtime.scheduled_events import (
     ChannelVisibility,
     ChannelVisibilityFromRound,
@@ -547,7 +548,9 @@ def resume_first_round(resume_dir: Path | None, scenario_name: str) -> int:
     """
     if resume_dir is None:
         return 1
-    first_round = resume_round_from_log(log_path=resume_dir / f"{scenario_name}.jsonl")
+    first_round = resume_round_from_log(
+        log_path=event_log_path(run_dir=resume_dir, scenario_name=scenario_name)
+    )
     replace_info = read_replace_manifest_info(run_dir=resume_dir)
     if replace_info is not None:
         first_round = max(first_round, replace_info.entry_round)

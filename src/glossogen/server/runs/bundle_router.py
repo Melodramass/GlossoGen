@@ -27,6 +27,7 @@ from glossogen.run_archive import claim_run_dir, strip_legacy_git_dir
 from glossogen.run_export.archive_member_filter import should_include_in_archive
 from glossogen.run_export.export_limits import ExportTooLargeError, check_raw_bytes
 from glossogen.run_export.runs_zip_archive import write_single_run_zip
+from glossogen.run_file_paths import event_log_path
 from glossogen.run_identity import compose_run_id
 from glossogen.run_labels_file import read_run_labels
 from glossogen.run_lineage import read_timeline_parent
@@ -86,7 +87,7 @@ def _read_origin_run_id(run_dir: Path, scenario_name: str, fallback: str) -> str
     name) to stay importable across machines. Falls back to ``fallback`` if the
     JSONL can't be read or its first event isn't a SimulationStarted.
     """
-    jsonl_path = run_dir / f"{scenario_name}.jsonl"
+    jsonl_path = event_log_path(run_dir=run_dir, scenario_name=scenario_name)
     try:
         with jsonl_path.open("rb") as handle:
             first_line = first_nonblank_line(lines=handle)

@@ -17,6 +17,7 @@ from glossogen.message_history_builder import build_message_history, resolve_his
 from glossogen.model_catalog import Provider
 from glossogen.models.agent_config import AgentConfig
 from glossogen.models.event import SimulationEvent
+from glossogen.run_file_paths import event_log_path
 from glossogen.runners.communication_protocol import (
     build_full_system_prompt,
     runner_prompts_from_events,
@@ -169,7 +170,7 @@ async def export_agent_thread_from_run_dir(
     ``output_format=None`` defaults to the format matching the agent's own
     provider. ``run_id`` is derived as ``<scenario>/<run_dir_name>``.
     """
-    log_path = run_dir / f"{scenario_name}.jsonl"
+    log_path = event_log_path(run_dir=run_dir, scenario_name=scenario_name)
     events = await load_events(log_path=log_path)
     agent_configs = extract_agent_configs(events=events)
     agent_config = _resolve_agent_config(agent_configs=agent_configs, agent_id=agent_id)
