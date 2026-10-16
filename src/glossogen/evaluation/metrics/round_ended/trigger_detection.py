@@ -1,8 +1,8 @@
 """Helpers for reading round-end trigger information from a simulation event log.
 
-Scenario-agnostic. Used by generic evaluators that flag rounds by how their
-main phase terminated (see ``round_ended_idle_evaluator`` and
-``round_ended_timeout_evaluator``).
+Scenario-agnostic. Used by the generic metrics that flag rounds by how their
+main phase or postmortem phase terminated (see ``main_phase_ending_count`` and
+``postmortem_ended_timeout_metric``).
 """
 
 from glossogen.models.event import (

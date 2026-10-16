@@ -5,11 +5,12 @@ split is what says whether agents finished talking or were cut off — which
 changes what every throughput number on that run means.
 """
 
+import json
 from pathlib import Path
 
 import pytest
 
-from glossogen.testing.metric_harness import NO_OPTIONS, MetricRun, score_metrics
+from glossogen.testing.metric_harness import NO_OPTIONS, MetricRun, isolated_run, score_metrics
 from tests.metrics.conftest import METRIC_RUN_GROUP, ROUND_COUNT
 
 pytestmark = METRIC_RUN_GROUP
@@ -85,3 +86,40 @@ async def test_idle_and_timeout_partition_the_run(
     timed_out = scored.measurement(metric_name=METRIC).score
     idle = scored.measurement(metric_name="round_ended_idle").score
     assert timed_out + idle == pytest.approx(float(ROUND_COUNT))
+
+
+@pytest.mark.parametrize("metric_name", [METRIC, "round_ended_idle"])
+async def test_a_run_predating_round_ended_events_says_so_instead_of_counting(
+    metric_name: str,
+    timed_out_postmortem_run: MetricRun,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A log with rounds but no `round_ended` lines cannot be counted either way.
+
+    Its zero says the run is too old to score, in the summary, so it is not
+    read as "no round ended this way". Stripping the lines from a copy of a run
+    that did time out shows the fallback wins over the triggers it can no
+    longer see.
+    """
+    run = isolated_run(run=timed_out_postmortem_run, tmp_path=tmp_path)
+    kept_lines = [
+        line
+        for line in run.log_path.read_text().splitlines()
+        if json.loads(line)["event_type"] != "round_ended"
+    ]
+    run.log_path.write_text("\n".join(kept_lines) + "\n")
+
+    scored = await score_metrics(
+        run=run,
+        metric_names=[metric_name],
+        judge_responses=[],
+        options=NO_OPTIONS,
+        report_path=tmp_path / "report.json",
+        monkeypatch=monkeypatch,
+    )
+
+    measurement = scored.measurement(metric_name=metric_name)
+    assert measurement.score == pytest.approx(0.0)
+    assert measurement.per_round == []
+    assert "predates" in measurement.summary

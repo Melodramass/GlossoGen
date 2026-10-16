@@ -5,25 +5,19 @@ clock. A round is flagged when its main phase terminated because the
 wall-clock duration limit was reached.
 """
 
-import logging
 from pathlib import Path
 
-from glossogen.evaluation.metric_core.measurement import Measurement, RoundObservation
+from glossogen.evaluation.metric_core.measurement import Measurement
 from glossogen.evaluation.metric_core.metric_protocol import Metric
 from glossogen.evaluation.metric_core.metric_run_options import MetricRunOptions
-from glossogen.evaluation.metrics.round_ended.trigger_detection import (
-    count_rounds,
-    find_round_end_triggers,
+from glossogen.evaluation.metrics.round_ended.main_phase_ending_count import (
+    count_main_phase_endings,
 )
 from glossogen.llm.provider import LLMProvider
 from glossogen.models.agent_config import AgentConfig
 from glossogen.models.event import SimulationEvent
 from glossogen.runtime.round_end_trigger import RoundEndTrigger
 from glossogen.scenario_base import ScenarioBase
-
-logger = logging.getLogger(__name__)
-
-_TIMEOUT_TRIGGER = RoundEndTrigger.ROUND_TIMEOUT
 
 
 class RoundEndedTimeoutMetric(Metric):
@@ -42,45 +36,8 @@ class RoundEndedTimeoutMetric(Metric):
     ) -> list[Measurement]:
         """Identify rounds that ended via the timeout trigger."""
         _ = agent_configs, scenario, llm_provider, run_dir, options
-        total_rounds = count_rounds(events=events)
-        triggers = find_round_end_triggers(events=events)
-
-        if total_rounds > 0 and not triggers:
-            return [
-                Measurement(
-                    metric_name=self.name,
-                    score=0.0,
-                    score_unit="rounds ended via round_timeout",
-                    summary=(
-                        "round_ended_timeout metric requires round_ended events; "
-                        "this run predates that event type — re-run the scenario to re-evaluate."
-                    ),
-                    per_round=[],
-                    per_agent=[],
-                )
-            ]
-
-        identified = sorted(r for r, trigger in triggers.items() if trigger == _TIMEOUT_TRIGGER)
-        per_round = [
-            RoundObservation(round_number=r, value=1.0, note=_TIMEOUT_TRIGGER) for r in identified
-        ]
-        summary = (
-            f"{len(identified)}/{total_rounds} rounds ended with the round_timeout "
-            f"trigger: {identified}"
+        return count_main_phase_endings(
+            metric_name=self.name,
+            trigger=RoundEndTrigger.ROUND_TIMEOUT,
+            events=events,
         )
-
-        logger.info(
-            "round_ended_timeout: total=%d identified=%s",
-            total_rounds,
-            identified,
-        )
-        return [
-            Measurement(
-                metric_name=self.name,
-                score=float(len(identified)),
-                score_unit=f"rounds ended via round_timeout (out of {total_rounds})",
-                summary=summary,
-                per_round=per_round,
-                per_agent=[],
-            )
-        ]

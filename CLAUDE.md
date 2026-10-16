@@ -140,6 +140,7 @@ make check-frontend    # frontend CI mode (prettier --check, no auto-fix)
       - `round_ended_timeout_metric.py` — flags rounds whose main phase ended via the `round_timeout` trigger
       - `postmortem_ended_timeout_metric.py` — flags rounds whose *postmortem* phase ended via `postmortem_timeout` (wall-clock) rather than all agents going idle. Reads `PostmortemEnded` events (authoritative; covers the final round) with a fallback to `RoundAdvanced(trigger="postmortem_timeout")` for runs predating that event
       - `trigger_detection.py` — shared helpers for reading `RoundEnded` / `PostmortemEnded` / `RoundAdvanced` trigger events
+      - `main_phase_ending_count.py` — `count_main_phase_endings`, the body of `round_ended_idle` and `round_ended_timeout`, which differ only in the trigger they count
   - `metric_core/` (additions):
     - `round_result_index.py` — `per_round_joint_success(events)` builds round→bool from `RoundResultRecorded` events (multi-team joint = all teams succeeded)
     - `protocol_boundary.py` — `ProtocolBoundaryWindow` NamedTuple returned by `detect_protocol_boundary_window`
