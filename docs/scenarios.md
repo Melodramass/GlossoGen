@@ -151,10 +151,11 @@ Finding the one object every viewer holds. Each viewer has a private board of
 shapes and colors on a shared grid; exactly one object is on every board of a
 team, and the rest are on some boards but not all. `team_size` sets the viewers
 per team, from 2 to 12. The presets' 6×6 grid fits 3 or 4 as shipped, and 2 with
-decoys off (`decoy_count_values: [0]`); larger teams need a larger `grid_size`.
-With `near_misses` on (the default), certification requires
-that leaving out any one board leaves at least two candidates, so every viewer is
-needed, and every member must submit the common object for the team to be right.
+decoys off (`decoy_count_values: [0]` and `decoy_count_weights: [1]`); larger
+teams need a larger `grid_size`. With `near_misses` on (the default),
+certification requires that leaving out any one board leaves at least two
+candidates, so every viewer is needed, and every member must submit the common
+object for the team to be right.
 Two teams play the same boards, and among correct teams the one that said least
 wins. Every round is certified from the lines the viewers read before it is
 played, and recorded runs can be audited against what each viewer was sent.

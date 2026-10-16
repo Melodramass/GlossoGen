@@ -240,10 +240,11 @@ class SpotTheIntersectionScenario(SimulationScenario):
     async def on_round_advanced(self, round_number: int) -> None:
         """Load the round's boards and record them in the event log.
 
-        A run resumed partway through a round already holds that round's start
-        in its log, so the start is not recorded a second time.
+        A resumed run that reopens a round whose start its log already holds,
+        whether it stopped during the round or during its discussion phase, does
+        not record the start a second time.
         """
-        start_recorded = self._world.continues_recorded_round(round_number=round_number)
+        start_recorded = self._world.round_start_recorded(round_number=round_number)
         self._world.finalize_round_sync(round_number=round_number)
         if start_recorded:
             return

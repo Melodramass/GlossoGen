@@ -10,8 +10,9 @@ they all hold, and then every member submits it.
 `team_size` sets the viewers per team, from 2 to 12. Boards grow with the team,
 so the grid has to grow too. With the presets' decoy and filler draws, the
 smallest grids accepted are 6×6 for 3 or 4 viewers, 7×7 for 5 to 10, and 8×8 for
-11 or 12. Two viewers need decoys off (`decoy_count_values: [0]`), and then 5×5.
-The presets' own 6×6 grid fits 3 or 4 as shipped, and 2 with decoys off.
+11 or 12. Two viewers need decoys off (`decoy_count_values: [0]` and
+`decoy_count_weights: [1]`), and then 5×5. The presets' own 6×6 grid fits 3 or 4
+as shipped, and 2 with decoys off.
 
 With `near_misses` on (the default), certification requires that leaving out
 any one board leaves at least two candidates, so every viewer is needed to find

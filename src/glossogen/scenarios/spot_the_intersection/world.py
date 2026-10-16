@@ -26,6 +26,7 @@ from glossogen.scenarios.spot_the_intersection.ids import (
     ROUND_WON_MARKER,
 )
 from glossogen.scenarios.spot_the_intersection.outcome_reconstruction import (
+    RestoredRounds,
     RoundInProgress,
     restore_rounds_from_events,
 )
@@ -83,8 +84,9 @@ class SpotTheIntersectionWorld(RoundWorld):
             for spec in team_specs
         }
         self._current: RoundBoards | None = None
-        # The round a resumed run stopped in, applied when that round is loaded.
-        self._round_in_progress: RoundInProgress | None = None
+        # What a resumed run's log already holds: the rounds it started, and the
+        # one it stopped in, applied when that round is loaded.
+        self._restored = RestoredRounds(started_rounds=frozenset(), in_progress=None)
         self._outcome_log: RoundOutcomeLog[IntersectionOutcome] = RoundOutcomeLog(
             team_ids=tuple(self._teams)
         )
@@ -175,10 +177,9 @@ class SpotTheIntersectionWorld(RoundWorld):
                 team_id=outcome.team_id, round_number=round_number, outcome=outcome
             )
 
-    def continues_recorded_round(self, round_number: int) -> bool:
-        """Whether loading ``round_number`` resumes a round the restored log already started."""
-        in_progress = self._round_in_progress
-        return in_progress is not None and in_progress.round_number == round_number
+    def round_start_recorded(self, round_number: int) -> bool:
+        """Whether the restored log already holds ``round_number``'s start, ended or not."""
+        return round_number in self._restored.started_rounds
 
     def finalize_round_sync(self, round_number: int) -> None:
         """Score the round just played if needed, then load ``round_number``."""
@@ -189,10 +190,10 @@ class SpotTheIntersectionWorld(RoundWorld):
         self._current = self._rounds[round_number - 1]
         # After the outcome above, which reads the counters of the round that ended.
         self.begin_round()
-        in_progress = self._round_in_progress
+        in_progress = self._restored.in_progress
         if in_progress is not None and in_progress.round_number == round_number:
             self._continue_round(in_progress=in_progress)
-        self._round_in_progress = None
+        self._restored = self._restored._replace(in_progress=None)
 
     def begin_round(self) -> None:
         """Clear the engine's per-round counters and every team's own state."""
@@ -201,8 +202,8 @@ class SpotTheIntersectionWorld(RoundWorld):
             team.reset_for_new_round()
 
     def restore_rounds_from_events(self, events: list[Any]) -> None:
-        """Seed outcomes, and the round the log stopped in, from a recorded log on resume."""
-        self._round_in_progress = restore_rounds_from_events(
+        """Seed outcomes, the rounds already started, and the round the log stopped in."""
+        self._restored = restore_rounds_from_events(
             teams=self._teams,
             outcome_log=self._outcome_log,
             competitive=self._competitive,

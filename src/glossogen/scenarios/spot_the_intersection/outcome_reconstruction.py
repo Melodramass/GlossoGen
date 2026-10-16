@@ -10,7 +10,8 @@ A finished round is scored through :func:`score_round`, the rule the live world
 applies, so the next round's briefing reports the right previous result. A round
 that started and never ended is the one the run stopped in; its submissions and
 character counts are returned so the resumed round continues from them rather
-than from nothing.
+than from nothing. Every round whose start the log holds is returned too, so a
+resume that reopens one does not record its start again.
 
 The answer comes from the log rather than from regenerating the round, so a run
 recorded before a change to board generation is still scored on the boards it
@@ -55,6 +56,17 @@ class RoundInProgress(NamedTuple):
     teams: tuple[TeamInProgress, ...]
 
 
+class RestoredRounds(NamedTuple):
+    """What a resume carries forward beyond the outcomes it records.
+
+    ``started_rounds`` are the rounds whose start the log already holds, ended
+    or not. ``in_progress`` is the round the log stopped in, if one never ended.
+    """
+
+    started_rounds: frozenset[int]
+    in_progress: RoundInProgress | None
+
+
 class _RecordedRounds(NamedTuple):
     """What a log records per round, read in one pass."""
 
@@ -70,13 +82,12 @@ def restore_rounds_from_events(
     competitive: bool,
     budget: int,
     events: list[Any],
-) -> RoundInProgress | None:
+) -> RestoredRounds:
     """Record an outcome for every round ``events`` shows finished.
 
-    Returns the state of the round the log stopped in, or ``None`` when every
-    round it started also ended. Raises ``ValueError`` for a finished round
-    whose start was never recorded, since there is then no answer to score it
-    against.
+    Returns the rounds whose start the log holds and the state of the round it
+    stopped in. Raises ``ValueError`` for a finished round whose start was never
+    recorded, since there is then no answer to score it against.
     """
     recorded = _read_rounds(teams=teams, events=events)
     for round_number in sorted(recorded.ended):
@@ -104,7 +115,10 @@ def restore_rounds_from_events(
             round_number=round_number, snapshots=snapshots, competitive=competitive
         ):
             outcome_log.record(team_id=outcome.team_id, round_number=round_number, outcome=outcome)
-    return _round_in_progress(teams=teams, recorded=recorded)
+    return RestoredRounds(
+        started_rounds=frozenset(recorded.started),
+        in_progress=_round_in_progress(teams=teams, recorded=recorded),
+    )
 
 
 def _read_rounds(teams: dict[str, TeamState], events: list[Any]) -> _RecordedRounds:
