@@ -177,3 +177,7 @@ each team's link, `communication_*` via `build_communication_rounds`, and the
   recorded answers.
 - `tools.py`, `team_declaration.py`, `seats.py`, `injection_rendering.py`,
   `round_event_conversion.py`, `events.py`: the tool, roster, prompts, and events.
+- `run_detail_extension.py`: the run page's round data. The round timeline
+  (`frontend/src/features/runs/spot_the_intersection/`) draws every seat's board
+  as its viewers read it, with the answer and the near-misses marked, and each
+  team's submissions and result.

@@ -17,6 +17,7 @@
  */
 
 import type { ComponentType, ReactNode } from "react";
+import type { components } from "@/types/api.gen";
 import type { NotificationPayload } from "./notification-display";
 
 /** Color palette for a scenario timeline marker's FAB and divider. */
@@ -76,11 +77,14 @@ export interface LiveJudgeConfig {
  * ``extras`` is the run's ``scenario_extras`` payload typed as ``unknown``
  * so the registry can hold every plug-in under a single type without
  * variance conflicts. Each plug-in narrows it internally with a single
- * cast to its own discriminated-union variant.
+ * cast to its own discriminated-union variant. ``roundResults`` is the
+ * round's ``RoundResultRecorded`` verdicts, one per team, so a panel showing
+ * outcomes reads them from the platform instead of its own extras.
  */
 export interface RoundDetailPanelProps {
   roundNumber: number;
   extras: unknown;
+  roundResults: components["schemas"]["RoundResult"][];
 }
 
 /**

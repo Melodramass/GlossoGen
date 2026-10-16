@@ -4953,6 +4953,186 @@
         "title": "ImportBundleResponse",
         "description": "Response after successfully importing a run bundle."
       },
+      "IntersectionBoardObject": {
+        "properties": {
+          "shape": {
+            "type": "string",
+            "title": "Shape"
+          },
+          "color": {
+            "type": "string",
+            "title": "Color"
+          },
+          "cell": {
+            "type": "string",
+            "title": "Cell"
+          },
+          "column": {
+            "type": "integer",
+            "title": "Column"
+          },
+          "row": {
+            "type": "integer",
+            "title": "Row"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "boards_holding": {
+            "type": "integer",
+            "title": "Boards Holding"
+          }
+        },
+        "type": "object",
+        "required": [
+          "shape",
+          "color",
+          "cell",
+          "column",
+          "row",
+          "kind",
+          "boards_holding"
+        ],
+        "title": "IntersectionBoardObject",
+        "description": "One object on one viewer's board.\n\n``column`` and ``row`` count from 0, with ``A1`` at the top left. ``kind`` is\nwhat the generator placed the object for (``answer``, ``near_miss``,\n``decoy``, ...) and ``boards_holding`` is how many of the round's boards hold\nthe same object in the same cell."
+      },
+      "IntersectionRoundCase": {
+        "properties": {
+          "round_number": {
+            "type": "integer",
+            "title": "Round Number"
+          },
+          "grid_size": {
+            "type": "integer",
+            "title": "Grid Size"
+          },
+          "team_size": {
+            "type": "integer",
+            "title": "Team Size"
+          },
+          "board_size": {
+            "type": "integer",
+            "title": "Board Size"
+          },
+          "decoy_count": {
+            "type": "integer",
+            "title": "Decoy Count"
+          },
+          "filler_count": {
+            "type": "integer",
+            "title": "Filler Count"
+          },
+          "answer_line": {
+            "type": "string",
+            "title": "Answer Line"
+          },
+          "boards": {
+            "items": {
+              "$ref": "#/components/schemas/IntersectionSeatBoard"
+            },
+            "type": "array",
+            "title": "Boards"
+          }
+        },
+        "type": "object",
+        "required": [
+          "round_number",
+          "grid_size",
+          "team_size",
+          "board_size",
+          "decoy_count",
+          "filler_count",
+          "answer_line",
+          "boards"
+        ],
+        "title": "IntersectionRoundCase",
+        "description": "One round's boards, seat by seat, and the object every board holds."
+      },
+      "IntersectionSeatBoard": {
+        "properties": {
+          "seat_number": {
+            "type": "integer",
+            "title": "Seat Number"
+          },
+          "agent_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Agent Ids"
+          },
+          "objects": {
+            "items": {
+              "$ref": "#/components/schemas/IntersectionBoardObject"
+            },
+            "type": "array",
+            "title": "Objects"
+          }
+        },
+        "type": "object",
+        "required": [
+          "seat_number",
+          "agent_ids",
+          "objects"
+        ],
+        "title": "IntersectionSeatBoard",
+        "description": "The board of seat ``seat_number`` and the viewers who read it, one per team."
+      },
+      "IntersectionSubmission": {
+        "properties": {
+          "round_number": {
+            "type": "integer",
+            "title": "Round Number"
+          },
+          "agent_id": {
+            "type": "string",
+            "title": "Agent Id"
+          },
+          "team_id": {
+            "type": "string",
+            "title": "Team Id"
+          },
+          "seat_number": {
+            "type": "integer",
+            "title": "Seat Number"
+          },
+          "shape": {
+            "type": "string",
+            "title": "Shape"
+          },
+          "color": {
+            "type": "string",
+            "title": "Color"
+          },
+          "cell": {
+            "type": "string",
+            "title": "Cell"
+          },
+          "correct": {
+            "type": "boolean",
+            "title": "Correct"
+          },
+          "team_characters": {
+            "type": "integer",
+            "title": "Team Characters"
+          }
+        },
+        "type": "object",
+        "required": [
+          "round_number",
+          "agent_id",
+          "team_id",
+          "seat_number",
+          "shape",
+          "color",
+          "cell",
+          "correct",
+          "team_characters"
+        ],
+        "title": "IntersectionSubmission",
+        "description": "One accepted ``submit_object`` call.\n\n``team_characters`` is the team's link-character count when the viewer\nsubmitted."
+      },
       "JudgeGroundTruthMetadata": {
         "properties": {
           "expected_actions": {
@@ -6091,6 +6271,9 @@
                     "$ref": "#/components/schemas/SpotTheDifferenceRunExtras"
                   },
                   {
+                    "$ref": "#/components/schemas/SpotTheIntersectionRunExtras"
+                  },
+                  {
                     "$ref": "#/components/schemas/VeyruRunExtras"
                   }
                 ],
@@ -6101,6 +6284,7 @@
                     "drive_module_repair": "#/components/schemas/DriveModuleRepairRunExtras",
                     "orbital_anomaly": "#/components/schemas/OrbitalAnomalyRunExtras",
                     "spot_the_difference": "#/components/schemas/SpotTheDifferenceRunExtras",
+                    "spot_the_intersection": "#/components/schemas/SpotTheIntersectionRunExtras",
                     "veyru": "#/components/schemas/VeyruRunExtras"
                   }
                 }
@@ -7410,42 +7594,6 @@
         "title": "SpotSubmissionMetadata",
         "description": "Verdict for a single ``submit_differences`` call attached by ``call_id``."
       },
-      "SpotTeamRoundResult": {
-        "properties": {
-          "round_number": {
-            "type": "integer",
-            "title": "Round Number"
-          },
-          "team_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Team Id"
-          },
-          "success": {
-            "type": "boolean",
-            "title": "Success"
-          },
-          "reason": {
-            "type": "string",
-            "title": "Reason"
-          }
-        },
-        "type": "object",
-        "required": [
-          "round_number",
-          "team_id",
-          "success",
-          "reason"
-        ],
-        "title": "SpotTeamRoundResult",
-        "description": "One team's outcome for one round (the correctness-gate + win/loss verdict).\n\n``team_id`` is ``null`` in single-team mode. ``reason`` is the human-readable\nexplanation written by ``judge_round_result`` (e.g. ``won, found 3/3, 465\nchars`` / ``did not submit (found 0/3, 576 chars)``)."
-      },
       "SpotTheDifferenceCaseSummary": {
         "properties": {
           "round_number": {
@@ -7521,13 +7669,6 @@
             "type": "object",
             "title": "Submission Metadata By Call Id"
           },
-          "team_results": {
-            "items": {
-              "$ref": "#/components/schemas/SpotTeamRoundResult"
-            },
-            "type": "array",
-            "title": "Team Results"
-          },
           "judge_ground_truth_by_call_id": {
             "additionalProperties": {
               "$ref": "#/components/schemas/JudgeGroundTruthMetadata"
@@ -7540,11 +7681,41 @@
         "required": [
           "cases",
           "submission_metadata_by_call_id",
-          "team_results",
           "judge_ground_truth_by_call_id"
         ],
         "title": "SpotTheDifferenceRunExtras",
         "description": "Scenario-specific run-detail payload surfaced for spot_the_difference runs."
+      },
+      "SpotTheIntersectionRunExtras": {
+        "properties": {
+          "scenario_name": {
+            "type": "string",
+            "const": "spot_the_intersection",
+            "title": "Scenario Name",
+            "default": "spot_the_intersection"
+          },
+          "cases": {
+            "items": {
+              "$ref": "#/components/schemas/IntersectionRoundCase"
+            },
+            "type": "array",
+            "title": "Cases"
+          },
+          "submissions": {
+            "items": {
+              "$ref": "#/components/schemas/IntersectionSubmission"
+            },
+            "type": "array",
+            "title": "Submissions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cases",
+          "submissions"
+        ],
+        "title": "SpotTheIntersectionRunExtras",
+        "description": "Scenario-specific run-detail payload surfaced for spot_the_intersection runs."
       },
       "StartEvaluationRequest": {
         "properties": {

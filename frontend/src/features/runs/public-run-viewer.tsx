@@ -481,6 +481,7 @@ export function PublicRunViewer({ run }: { run: RunDetailResponse }) {
             roundEnding={
               run.round_endings.find(ending => ending.round_number === timelineRound) ?? null
             }
+            roundResults={run.round_results.filter(result => result.round_number === timelineRound)}
             onClose={() => setTimelineRound(null)}
           />
         ) : null}

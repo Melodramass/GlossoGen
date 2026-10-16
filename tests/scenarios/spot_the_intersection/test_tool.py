@@ -18,60 +18,27 @@ from glossogen.scenarios.spot_the_intersection.board_rendering import render_boa
 from glossogen.scenarios.spot_the_intersection.events import IntersectionSubmissionRecorded
 from glossogen.scenarios.spot_the_intersection.ids import ALREADY_SUBMITTED_MARKER
 from glossogen.scenarios.spot_the_intersection.scenario import SpotTheIntersectionScenario
-from glossogen.scenarios.spot_the_intersection.world import SpotTheIntersectionWorld
-from glossogen.testing.scenario_runtime import ROUND_SECONDS, build_scenario
 from glossogen.testing.scripted_agent import SayTurn, ScriptedTurn, ToolTurn
-from glossogen.testing.simulation_harness import SimulationResult, never_times_out, run_simulation
-
-SCENARIO = "spot_the_intersection"
-TOOL = "submit_object"
-TEAM_A = ("viewer_a_1", "viewer_a_2", "viewer_a_3", "viewer_a_4")
-TEAM_B = ("viewer_b_1", "viewer_b_2", "viewer_b_3", "viewer_b_4")
+from glossogen.testing.simulation_harness import SimulationResult
+from tests.scenarios.spot_the_intersection.conftest import (
+    SCENARIO,
+    TEAM_A,
+    TEAM_B,
+    TOOL,
+    answer_of,
+    one_round_scenario,
+    play,
+    submit,
+    world_of,
+)
 
 pytestmark = pytest.mark.xdist_group(SCENARIO)
-
-
-def one_round_scenario() -> SimulationScenario:
-    """The shipped two-team preset, cut to one round with no debrief."""
-    return build_scenario(
-        scenario_name=SCENARIO,
-        preset_name="knobs_default",
-        overrides={
-            "round_count": 1,
-            "max_round_duration_seconds": ROUND_SECONDS,
-            "postmortem_enabled": False,
-        },
-    )
-
-
-def world_of(scenario: SimulationScenario) -> SpotTheIntersectionWorld:
-    """The scenario's world, typed."""
-    world = scenario.get_world()
-    assert isinstance(world, SpotTheIntersectionWorld)
-    return world
-
-
-def answer_of(scenario: SimulationScenario) -> BoardObject:
-    """Round one's answer."""
-    return world_of(scenario=scenario).round_boards(round_number=1).certificate.answer
 
 
 def near_miss_of(scenario: SimulationScenario) -> BoardObject:
     """A round-one object on every board but one: the strongest wrong answer."""
     round_boards = world_of(scenario=scenario).round_boards(round_number=1)
     return next(entry.obj for entry in round_boards.declared if entry.kind is ObjectKind.NEAR_MISS)
-
-
-def submit(obj: BoardObject) -> ToolTurn:
-    """A turn submitting ``obj``."""
-    return ToolTurn(
-        tool_name=TOOL,
-        args={
-            "shape": obj.shape,
-            "color": obj.color,
-            "cell": cell_label(column=obj.column, row=obj.row),
-        },
-    )
 
 
 def say_on(scenario: SimulationScenario, channel_id: str, text: str) -> ToolTurn:
@@ -83,24 +50,6 @@ def say_on(scenario: SimulationScenario, channel_id: str, text: str) -> ToolTurn
     if "force" in parameters:
         arguments["force"] = True
     return ToolTurn(tool_name="send_message", args=arguments)
-
-
-async def play(
-    scenario: SimulationScenario,
-    scripts: dict[str, list[ScriptedTurn]],
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> SimulationResult:
-    """Run one round; agents without a script idle."""
-    for agent in scenario.get_agents(default_model="m", default_provider="anthropic"):
-        scripts.setdefault(agent.agent_id, [SayTurn(text="idle")])
-    return await run_simulation(
-        scenario=scenario,
-        scripts=scripts,
-        tmp_path=tmp_path,
-        monkeypatch=monkeypatch,
-        phase_timed_out=never_times_out,
-    )
 
 
 def verdict_for(result: SimulationResult, team_id: str) -> RoundResultRecorded:

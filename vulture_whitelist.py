@@ -209,6 +209,7 @@ generation_attempts  # unused variable (src/glossogen/scenarios/spot_the_interse
 _._validate_count_distributions  # unused method (src/glossogen/scenarios/spot_the_intersection/knobs.py:52)
 _._validate_decoys_need_three_viewers  # unused method (src/glossogen/scenarios/spot_the_intersection/knobs.py:71)
 _._validate_grid_capacity  # unused method (src/glossogen/scenarios/spot_the_intersection/knobs.py:90)
+boards_holding  # unused variable (src/glossogen/scenarios/spot_the_intersection/run_detail_extension.py:47)
 delivery_carrier  # unused variable (src/glossogen/scenarios/textcraft_shared_workspace/events.py:74)
 message_ids  # unused variable (src/glossogen/scenarios/textcraft_shared_workspace/events.py:75)
 actions_used  # unused variable (src/glossogen/scenarios/textcraft_shared_workspace/events.py:87)

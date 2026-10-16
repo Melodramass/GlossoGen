@@ -2203,6 +2203,92 @@ export interface components {
             run_dir: string;
         };
         /**
+         * IntersectionBoardObject
+         * @description One object on one viewer's board.
+         *
+         *     ``column`` and ``row`` count from 0, with ``A1`` at the top left. ``kind`` is
+         *     what the generator placed the object for (``answer``, ``near_miss``,
+         *     ``decoy``, ...) and ``boards_holding`` is how many of the round's boards hold
+         *     the same object in the same cell.
+         */
+        IntersectionBoardObject: {
+            /** Shape */
+            shape: string;
+            /** Color */
+            color: string;
+            /** Cell */
+            cell: string;
+            /** Column */
+            column: number;
+            /** Row */
+            row: number;
+            /** Kind */
+            kind: string;
+            /** Boards Holding */
+            boards_holding: number;
+        };
+        /**
+         * IntersectionRoundCase
+         * @description One round's boards, seat by seat, and the object every board holds.
+         */
+        IntersectionRoundCase: {
+            /** Round Number */
+            round_number: number;
+            /** Grid Size */
+            grid_size: number;
+            /** Team Size */
+            team_size: number;
+            /** Board Size */
+            board_size: number;
+            /** Decoy Count */
+            decoy_count: number;
+            /** Filler Count */
+            filler_count: number;
+            /** Answer Line */
+            answer_line: string;
+            /** Boards */
+            boards: components["schemas"]["IntersectionSeatBoard"][];
+        };
+        /**
+         * IntersectionSeatBoard
+         * @description The board of seat ``seat_number`` and the viewers who read it, one per team.
+         */
+        IntersectionSeatBoard: {
+            /** Seat Number */
+            seat_number: number;
+            /** Agent Ids */
+            agent_ids: string[];
+            /** Objects */
+            objects: components["schemas"]["IntersectionBoardObject"][];
+        };
+        /**
+         * IntersectionSubmission
+         * @description One accepted ``submit_object`` call.
+         *
+         *     ``team_characters`` is the team's link-character count when the viewer
+         *     submitted.
+         */
+        IntersectionSubmission: {
+            /** Round Number */
+            round_number: number;
+            /** Agent Id */
+            agent_id: string;
+            /** Team Id */
+            team_id: string;
+            /** Seat Number */
+            seat_number: number;
+            /** Shape */
+            shape: string;
+            /** Color */
+            color: string;
+            /** Cell */
+            cell: string;
+            /** Correct */
+            correct: boolean;
+            /** Team Characters */
+            team_characters: number;
+        };
+        /**
          * JudgeGroundTruthMetadata
          * @description LLM-judge ground truth for a single judged action tool call.
          *
@@ -2758,7 +2844,7 @@ export interface components {
             /** Round Injections */
             round_injections: components["schemas"]["RoundInjection"][];
             /** Scenario Extras */
-            scenario_extras: (components["schemas"]["ContainerYardRunExtras"] | components["schemas"]["DriveModuleRepairRunExtras"] | components["schemas"]["OrbitalAnomalyRunExtras"] | components["schemas"]["SpotTheDifferenceRunExtras"] | components["schemas"]["VeyruRunExtras"]) | null;
+            scenario_extras: (components["schemas"]["ContainerYardRunExtras"] | components["schemas"]["DriveModuleRepairRunExtras"] | components["schemas"]["OrbitalAnomalyRunExtras"] | components["schemas"]["SpotTheDifferenceRunExtras"] | components["schemas"]["SpotTheIntersectionRunExtras"] | components["schemas"]["VeyruRunExtras"]) | null;
         };
         /**
          * RunListResponse
@@ -3382,24 +3468,6 @@ export interface components {
             explanation: string;
         };
         /**
-         * SpotTeamRoundResult
-         * @description One team's outcome for one round (the correctness-gate + win/loss verdict).
-         *
-         *     ``team_id`` is ``null`` in single-team mode. ``reason`` is the human-readable
-         *     explanation written by ``judge_round_result`` (e.g. ``won, found 3/3, 465
-         *     chars`` / ``did not submit (found 0/3, 576 chars)``).
-         */
-        SpotTeamRoundResult: {
-            /** Round Number */
-            round_number: number;
-            /** Team Id */
-            team_id: string | null;
-            /** Success */
-            success: boolean;
-            /** Reason */
-            reason: string;
-        };
-        /**
          * SpotTheDifferenceCaseSummary
          * @description Per-round case metadata used by the round-detail panel.
          *
@@ -3438,12 +3506,25 @@ export interface components {
             submission_metadata_by_call_id: {
                 [key: string]: components["schemas"]["SpotSubmissionMetadata"];
             };
-            /** Team Results */
-            team_results: components["schemas"]["SpotTeamRoundResult"][];
             /** Judge Ground Truth By Call Id */
             judge_ground_truth_by_call_id: {
                 [key: string]: components["schemas"]["JudgeGroundTruthMetadata"];
             };
+        };
+        /**
+         * SpotTheIntersectionRunExtras
+         * @description Scenario-specific run-detail payload surfaced for spot_the_intersection runs.
+         */
+        SpotTheIntersectionRunExtras: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            scenario_name: "spot_the_intersection";
+            /** Cases */
+            cases: components["schemas"]["IntersectionRoundCase"][];
+            /** Submissions */
+            submissions: components["schemas"]["IntersectionSubmission"][];
         };
         /**
          * StartEvaluationRequest

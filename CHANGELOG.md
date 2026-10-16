@@ -10,6 +10,10 @@ the commit log.
 ## Unreleased
 
 ### Changed
+- A scenario's round-detail panel receives the round's verdicts as
+  `roundResults`, the run detail's `round_results` for that round.
+  `SpotTheDifferenceRunExtras.team_results` is gone, since it repeated them; read
+  `round_results` on the run detail instead.
 - **A scenario declares its own metrics and run-detail extension from its class.**
   `scenario_metrics()` returns its metric classes and `run_detail_extension()` its
   extension. `get_available_metric_names` is gone, as are `_SCENARIO_METRICS` and
@@ -299,7 +303,9 @@ the commit log.
   size is the `team_size` knob. Every round is certified from the lines the
   viewers read before it is played, and `scripts/certify_boards.py` and
   `scripts/audit_recorded_boards.py` in the scenario package check boards before
-  a cohort and recorded runs after it. See its
+  a cohort and recorded runs after it. The run page's round timeline draws every
+  seat's board with the answer and the near-misses marked, and each team's
+  submissions. See its
   [README](src/glossogen/scenarios/spot_the_intersection/README.md).
 - `glossogen.engine.fewest_characters_winner`, the fewest-characters comparison
   competing teams are ranked by, now shared by `spot_the_difference` and

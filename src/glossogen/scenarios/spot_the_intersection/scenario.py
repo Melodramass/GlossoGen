@@ -30,6 +30,7 @@ from glossogen.runtime.scenario_tool import ScenarioTool
 from glossogen.runtime.scenario_world import ScenarioWorld
 from glossogen.scenario_base import PrimaryChannel, RoundResult
 from glossogen.scenario_protocol import SimulationScenario
+from glossogen.scenario_run_detail_extension import ScenarioRunDetailExtension
 from glossogen.scenarios.channel_noise import apply_character_noise
 from glossogen.scenarios.spot_the_intersection.board_generation import generate_rounds
 from glossogen.scenarios.spot_the_intersection.board_model import column_letter
@@ -53,6 +54,9 @@ from glossogen.scenarios.spot_the_intersection.injection_rendering import (
 )
 from glossogen.scenarios.spot_the_intersection.knobs import SpotTheIntersectionKnobs
 from glossogen.scenarios.spot_the_intersection.round_event_conversion import round_started_event
+from glossogen.scenarios.spot_the_intersection.run_detail_extension import (
+    SpotTheIntersectionRunDetailExtension,
+)
 from glossogen.scenarios.spot_the_intersection.team_declaration import intersection_teams
 from glossogen.scenarios.spot_the_intersection.tools import build_tools
 from glossogen.scenarios.spot_the_intersection.world import SpotTheIntersectionWorld
@@ -71,6 +75,11 @@ class SpotTheIntersectionScenario(SimulationScenario):
     postmortem_channel_ids: ClassVar[frozenset[str]] = frozenset(
         {POSTMORTEM_CHANNEL_ID, POSTMORTEM_A_CHANNEL_ID, POSTMORTEM_B_CHANNEL_ID}
     )
+
+    @classmethod
+    def run_detail_extension(cls) -> ScenarioRunDetailExtension:
+        """Each round's boards and submissions, for the run page."""
+        return SpotTheIntersectionRunDetailExtension()
 
     @classmethod
     def knobs_model(cls) -> type[SpotTheIntersectionKnobs]:

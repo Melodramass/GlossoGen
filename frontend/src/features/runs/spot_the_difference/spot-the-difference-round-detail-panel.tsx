@@ -1,44 +1,21 @@
 "use client";
 
-import { Check, X } from "lucide-react";
 import type { components } from "@/types/api.gen";
 import type { RoundDetailPanelProps } from "../scenario-plugin";
+import { colorHex, shapeGlyph } from "../shape-glyphs";
+import { resultTeamId, TeamResultPill, teamDisplayName } from "../team-result-pill";
 
 type SpotExtras = components["schemas"]["SpotTheDifferenceRunExtras"];
 type SpotObject = components["schemas"]["SpotObject"];
 type SpotPlantedDifference = components["schemas"]["SpotPlantedDifference"];
 type SpotSubmissionMetadata = components["schemas"]["SpotSubmissionMetadata"];
-type SpotTeamRoundResult = components["schemas"]["SpotTeamRoundResult"];
-
-const SHAPE_GLYPH: Record<string, string> = {
-  circle: "●",
-  square: "■",
-  triangle: "▲",
-  star: "★",
-};
-
-const COLOR_HEX: Record<string, string> = {
-  red: "#ef4444",
-  blue: "#3b82f6",
-  green: "#22c55e",
-  yellow: "#eab308",
-  purple: "#a855f7",
-  orange: "#f97316",
-  pink: "#ec4899",
-  brown: "#a16207",
-};
+type RoundResult = components["schemas"]["RoundResult"];
 
 const KIND_LABEL: Record<string, string> = {
   attribute_changed: "attribute changed",
   object_moved: "moved",
   object_added: "added",
   object_removed: "removed",
-};
-
-const TEAM_LABEL: Record<string, string> = {
-  team_a: "Team A",
-  team_b: "Team B",
-  solo: "Team",
 };
 
 function isSpotExtras(extras: unknown): extras is SpotExtras {
@@ -48,14 +25,6 @@ function isSpotExtras(extras: unknown): extras is SpotExtras {
 
 function cellKey(obj: SpotObject): string {
   return `${obj.column},${obj.row}`;
-}
-
-function glyph(obj: SpotObject): string {
-  return SHAPE_GLYPH[obj.shape] ?? "●";
-}
-
-function objectColor(obj: SpotObject): string {
-  return COLOR_HEX[obj.color] ?? "#6b7280";
 }
 
 function SceneGrid({
@@ -85,10 +54,12 @@ function SceneGrid({
           className={`flex aspect-square items-center justify-center rounded-[2px] text-[9px] leading-none ${
             isDiff ? "ring-2 ring-amber-500 ring-offset-0" : ""
           } ${obj || isDiff ? "bg-background" : "bg-muted/40"}`}
-          style={obj ? { color: objectColor(obj) } : undefined}
+          style={obj ? { color: colorHex(obj.color) } : undefined}
         >
           {obj ? (
-            <span style={{ fontSize: obj.size === "large" ? "11px" : "8px" }}>{glyph(obj)}</span>
+            <span style={{ fontSize: obj.size === "large" ? "11px" : "8px" }}>
+              {shapeGlyph(obj.shape)}
+            </span>
           ) : (
             ""
           )}
@@ -129,23 +100,6 @@ function DifferenceRow({ diff, index }: { diff: SpotPlantedDifference; index: nu
   );
 }
 
-function ResultPill({ result }: { result: SpotTeamRoundResult | null }) {
-  if (result === null) {
-    return <span className="text-[11px] text-muted-foreground">no result recorded</span>;
-  }
-  const tone = result.success
-    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
-    : "bg-rose-500/15 text-rose-700 dark:text-rose-400";
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${tone}`}
-    >
-      {result.success ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-      {result.reason}
-    </span>
-  );
-}
-
 function TeamCard({
   teamId,
   submission,
@@ -153,13 +107,13 @@ function TeamCard({
 }: {
   teamId: string;
   submission: SpotSubmissionMetadata | null;
-  result: SpotTeamRoundResult | null;
+  result: RoundResult | null;
 }) {
   return (
     <div className="rounded-md border border-border/70 bg-background px-3 py-2">
       <div className="mb-1.5 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium">{TEAM_LABEL[teamId] ?? teamId}</span>
-        <ResultPill result={result} />
+        <span className="text-xs font-medium">{teamDisplayName(teamId)}</span>
+        <TeamResultPill result={result} />
       </div>
       {submission === null ? (
         <div className="text-[11px] italic text-muted-foreground">
@@ -195,7 +149,11 @@ function TeamCard({
 }
 
 /** spot_the_difference per-round detail rendered at the top of the round-timeline modal. */
-export function SpotTheDifferenceRoundDetailPanel({ roundNumber, extras }: RoundDetailPanelProps) {
+export function SpotTheDifferenceRoundDetailPanel({
+  roundNumber,
+  extras,
+  roundResults,
+}: RoundDetailPanelProps) {
   if (!isSpotExtras(extras)) return null;
   const diffCase = extras.cases.find(c => c.round_number === roundNumber) ?? null;
   if (diffCase === null) return null;
@@ -210,12 +168,11 @@ export function SpotTheDifferenceRoundDetailPanel({ roundNumber, extras }: Round
   const submissions = Object.values(extras.submission_metadata_by_call_id).filter(
     s => s.round_number === roundNumber
   );
-  const results = extras.team_results.filter(r => r.round_number === roundNumber);
   const teamIds = Array.from(
-    new Set([...results.map(r => r.team_id ?? "solo"), ...submissions.map(s => s.team_id)])
+    new Set([...roundResults.map(resultTeamId), ...submissions.map(s => s.team_id)])
   ).sort();
   const submissionByTeam = new Map(submissions.map(s => [s.team_id, s]));
-  const resultByTeam = new Map(results.map(r => [r.team_id ?? "solo", r]));
+  const resultByTeam = new Map(roundResults.map(r => [resultTeamId(r), r]));
 
   return (
     <div className="mb-5 space-y-3 rounded-lg border border-border bg-muted/40 p-3">
