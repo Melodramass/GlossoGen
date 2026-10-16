@@ -23,6 +23,7 @@ from glossogen.scenarios.satellite_contact_window.scenario import SatelliteConta
 from glossogen.scenarios.signal_game.scenario import SignalGameScenario
 from glossogen.scenarios.spillway_release.scenario import SpillwayReleaseScenario
 from glossogen.scenarios.spot_the_difference.scenario import SpotTheDifferenceScenario
+from glossogen.scenarios.spot_the_intersection.scenario import SpotTheIntersectionScenario
 from glossogen.scenarios.textcraft_shared_workspace.scenario import TextcraftSharedWorkspaceScenario
 from glossogen.scenarios.veyru.scenario import VeyruScenario
 from glossogen.scenarios.warehouse_robot_recovery.scenario import WarehouseRobotRecoveryScenario
@@ -37,6 +38,7 @@ SCENARIO_REGISTRY: dict[str, type[SimulationScenario]] = {
     "signal_game": SignalGameScenario,
     "spillway_release": SpillwayReleaseScenario,
     "spot_the_difference": SpotTheDifferenceScenario,
+    "spot_the_intersection": SpotTheIntersectionScenario,
     "textcraft_shared_workspace": TextcraftSharedWorkspaceScenario,
     "veyru": VeyruScenario,
     "warehouse_robot_recovery": WarehouseRobotRecoveryScenario,

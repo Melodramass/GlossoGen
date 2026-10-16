@@ -33,9 +33,10 @@ glossogen run veyru \
 ```
 
 The budget is a knob (`round_time_budget_seconds`), and the rows from
-`hospital_bed_assignment_privacy` down do without it. `spot_the_difference` lets the
-team that spent fewest characters win instead, `hospital_bed_assignment_privacy` gets its pressure from an eavesdropper on
-the channel, `prisoners_dilemma` has no such knob, and `textcraft_shared_workspace`
+`hospital_bed_assignment_privacy` down do without it. `spot_the_difference` and
+`spot_the_intersection` let the team that spent fewest characters win instead,
+`hospital_bed_assignment_privacy` gets its pressure from an eavesdropper on the
+channel, `prisoners_dilemma` has no such knob, and `textcraft_shared_workspace`
 leaves it unlimited in its presets and budgets the team's actions and tokens.
 `signal_game` has no channel to meter. The column is each scenario's own default
 preset.
@@ -51,6 +52,7 @@ preset.
 | [spillway_release](../src/glossogen/scenarios/spillway_release/README.md) | 3 | Deterministic | 300 |
 | [hospital_bed_assignment_privacy](../src/glossogen/scenarios/hospital_bed_assignment_privacy/README.md) | 3 | Deterministic | none (`null`) |
 | [spot_the_difference](../src/glossogen/scenarios/spot_the_difference/README.md) | 4 (2 per team) | LLM judge | none (`-1`) |
+| [spot_the_intersection](../src/glossogen/scenarios/spot_the_intersection/README.md) | 8 by default (`team_size` per team, 2 to 12) | Deterministic | none (`-1`) |
 | [prisoners_dilemma](../src/glossogen/scenarios/prisoners_dilemma/README.md) | 2 | Deterministic | no such knob |
 | [textcraft_shared_workspace](../src/glossogen/scenarios/textcraft_shared_workspace/README.md) | 3 (a knob; 1 is the baseline) | Deterministic | none (`-1`) |
 | [signal_game](../src/glossogen/scenarios/signal_game/README.md) | 2 | Deterministic | no channel |
@@ -142,6 +144,18 @@ isolated teams, or as two teams sharing one link where each side hears everythin
 the other says. Characters are counted but not capped by default
 (`round_time_budget_seconds: -1`): among the teams that found every difference, the
 one that spent fewest wins. Set the knob positive to add the wall back.
+
+## Spot the intersection
+
+Finding the one object every viewer holds. Each viewer has a private board of
+shapes and colors on a shared grid; exactly one object is on every board of a
+team, and the rest are on some boards but not all. `team_size` sets the viewers
+per team, from 2 to 12. With `near_misses` on (the default), certification requires
+that leaving out any one board leaves at least two candidates, so every viewer is
+needed, and every member must submit the common object for the team to be right.
+Two teams play the same boards, and among correct teams the one that said least
+wins. Every round is certified from the lines the viewers read before it is
+played, and recorded runs can be audited against what each viewer was sent.
 
 ## Prisoners' dilemma
 

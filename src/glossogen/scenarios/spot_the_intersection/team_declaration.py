@@ -1,0 +1,73 @@
+"""Spot the intersection's structure, stated as engine declarations.
+
+One team, or two isolated teams on the same boards. Each team is ``team_size``
+interchangeable viewers on one link channel, with a debrief when the run holds
+one.
+"""
+
+from glossogen.engine.team_declaration import (
+    Debrief,
+    DebriefPolicy,
+    NoDebrief,
+    RoleSpec,
+    TaskChannel,
+    TeamSpec,
+)
+from glossogen.scenarios.spot_the_intersection.ids import TOOLS_VIEWER, VIEWER_SYSTEM_TEMPLATE
+from glossogen.scenarios.spot_the_intersection.knobs import SpotTheIntersectionKnobs
+from glossogen.scenarios.spot_the_intersection.seats import (
+    link_channel_id_for,
+    link_display_name_for,
+    postmortem_channel_id_for,
+    postmortem_display_name_for,
+    team_ids_for,
+    viewer_id,
+    viewer_role_name,
+)
+
+
+def _viewer(team_id: str, index: int) -> RoleSpec:
+    """Build one viewer; every viewer is present from round one and holds the debrief."""
+    return RoleSpec(
+        agent_id=viewer_id(team_id=team_id, index=index),
+        role_name=viewer_role_name(team_id=team_id, index=index),
+        system_template=VIEWER_SYSTEM_TEMPLATE,
+        tool_names=TOOLS_VIEWER,
+        joins_debrief=True,
+        starts_as_member=True,
+    )
+
+
+def _debrief(team_id: str, active: bool) -> DebriefPolicy:
+    """Return the team's debrief, or ``NoDebrief`` when this run carries none."""
+    if not active:
+        return NoDebrief()
+    display_name = postmortem_display_name_for(team_id=team_id)
+    return Debrief(
+        channel_id=postmortem_channel_id_for(team_id=team_id),
+        name=display_name,
+        display_name=display_name,
+    )
+
+
+def intersection_teams(knobs: SpotTheIntersectionKnobs) -> tuple[TeamSpec, ...]:
+    """Return the teams a run with these knobs holds."""
+    debrief_active = knobs.postmortem_enabled and not knobs.postmortem_disabled_at_start
+    teams: list[TeamSpec] = []
+    for team_id in team_ids_for(two_teams=knobs.two_teams):
+        link_name = link_display_name_for(team_id=team_id)
+        teams.append(
+            TeamSpec(
+                team_id=team_id,
+                task=TaskChannel(
+                    channel_id=link_channel_id_for(team_id=team_id),
+                    name=link_name,
+                    display_name=link_name,
+                ),
+                debrief=_debrief(team_id=team_id, active=debrief_active),
+                roles=tuple(
+                    _viewer(team_id=team_id, index=index) for index in range(knobs.team_size)
+                ),
+            )
+        )
+    return tuple(teams)
