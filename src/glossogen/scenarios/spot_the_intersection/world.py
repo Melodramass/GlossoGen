@@ -4,7 +4,8 @@ Holds the run's certified boards, meters each team's link characters, and
 records each viewer's submission. A team locks once every member has submitted,
 latching its character count, and link traffic after that is not metered. When
 the round ends every team is scored (see :mod:`world_state`) and told its result
-on its link channel. The answer is never revealed.
+on its link channel. The answer is never revealed. A run resumed partway through
+a round picks up that round's submissions and character counts from its log.
 """
 
 from collections.abc import Sequence
@@ -25,7 +26,8 @@ from glossogen.scenarios.spot_the_intersection.ids import (
     ROUND_WON_MARKER,
 )
 from glossogen.scenarios.spot_the_intersection.outcome_reconstruction import (
-    restore_outcomes_from_events,
+    RoundInProgress,
+    restore_rounds_from_events,
 )
 from glossogen.scenarios.spot_the_intersection.seats import Seat, seats_by_agent_id
 from glossogen.scenarios.spot_the_intersection.world_state import (
@@ -36,6 +38,8 @@ from glossogen.scenarios.spot_the_intersection.world_state import (
 
 _THRESHOLD_LOW = "low"
 _THRESHOLD_EXCEEDED = "exceeded"
+# The share of the budget spent at which a team is told it is running low.
+_LOW_BUDGET_FRACTION = 0.75
 
 
 class SubmissionReceipt(NamedTuple):
@@ -79,6 +83,8 @@ class SpotTheIntersectionWorld(RoundWorld):
             for spec in team_specs
         }
         self._current: RoundBoards | None = None
+        # The round a resumed run stopped in, applied when that round is loaded.
+        self._round_in_progress: RoundInProgress | None = None
         self._outcome_log: RoundOutcomeLog[IntersectionOutcome] = RoundOutcomeLog(
             team_ids=tuple(self._teams)
         )
@@ -178,6 +184,10 @@ class SpotTheIntersectionWorld(RoundWorld):
         self._current = self._rounds[round_number - 1]
         # After the outcome above, which reads the counters of the round that ended.
         self.begin_round()
+        in_progress = self._round_in_progress
+        if in_progress is not None and in_progress.round_number == round_number:
+            self._continue_round(in_progress=in_progress)
+        self._round_in_progress = None
 
     def begin_round(self) -> None:
         """Clear the engine's per-round counters and every team's own state."""
@@ -185,15 +195,39 @@ class SpotTheIntersectionWorld(RoundWorld):
         for team in self._teams.values():
             team.reset_for_new_round()
 
-    def restore_outcomes_from_events(self, events: list[Any]) -> None:
-        """Seed every team's outcome history from a recorded event log on resume."""
-        restore_outcomes_from_events(
+    def restore_rounds_from_events(self, events: list[Any]) -> None:
+        """Seed outcomes, and the round the log stopped in, from a recorded log on resume."""
+        self._round_in_progress = restore_rounds_from_events(
             teams=self._teams,
             outcome_log=self._outcome_log,
             competitive=self._competitive,
             budget=self._budget,
             events=events,
         )
+
+    def _continue_round(self, in_progress: RoundInProgress) -> None:
+        """Give every team back the submissions and spend it had when the run stopped.
+
+        A budget notice the team had already been sent is marked as sent.
+        """
+        for recorded in in_progress.teams:
+            team = self._teams[recorded.team_id]
+            team.submissions_by_agent = dict(recorded.submissions_by_agent)
+            self.restore_characters_used(team_id=team.team_id, characters=recorded.characters)
+            if len(team.submissions_by_agent) == team.members_required:
+                team.locked = True
+                team.characters_at_lock = recorded.characters
+            if self._budget <= 0:
+                continue
+            if recorded.characters >= self._budget:
+                team.round_budget_exceeded = True
+                self.claim_round_budget_threshold(
+                    team_id=team.team_id, round_budget_threshold=_THRESHOLD_EXCEEDED
+                )
+            elif recorded.characters >= self._budget * _LOW_BUDGET_FRACTION:
+                self.claim_round_budget_threshold(
+                    team_id=team.team_id, round_budget_threshold=_THRESHOLD_LOW
+                )
 
     async def announce_team_locked(self, team_id: str) -> None:
         """Tell the team its answer is locked."""
@@ -237,7 +271,6 @@ class SpotTheIntersectionWorld(RoundWorld):
 
     async def on_message_async(self, event: MessageEvent, context: WorldContext) -> None:
         """Announce a low or exhausted budget once each per round."""
-        _ = context
         team_id = self.team_for_task_channel(channel_id=event.channel_id)
         if team_id is None or self._budget <= 0:
             return
@@ -254,7 +287,7 @@ class SpotTheIntersectionWorld(RoundWorld):
                 ),
             )
             return
-        if used >= self._budget * 0.75 and self.claim_round_budget_threshold(
+        if used >= self._budget * _LOW_BUDGET_FRACTION and self.claim_round_budget_threshold(
             team_id=team_id, round_budget_threshold=_THRESHOLD_LOW
         ):
             await context.send_update_to_channel(
@@ -267,17 +300,21 @@ class SpotTheIntersectionWorld(RoundWorld):
 
 
 def _terminal_text(outcome: IntersectionOutcome) -> str:
-    """The end-of-round result one team reads on its link."""
+    """The end-of-round result one team reads on its link.
+
+    An exhausted budget is reported first: it can end the round before the
+    team's last members submit, so their missing submissions follow from it.
+    """
     characters = f"{outcome.characters_used} characters"
-    if outcome.members_submitted < outcome.members_required:
-        return (
-            f"{ROUND_RESULT_MARKER}. Your team did not finish: only {outcome.members_submitted} "
-            f"of {outcome.members_required} members submitted, and every member must submit."
-        )
     if outcome.budget_exceeded:
         return (
             f"{ROUND_RESULT_MARKER}. Communication budget exceeded ({characters}); your team "
             "could not win this round."
+        )
+    if outcome.members_submitted < outcome.members_required:
+        return (
+            f"{ROUND_RESULT_MARKER}. Your team did not finish: only {outcome.members_submitted} "
+            f"of {outcome.members_required} members submitted, and every member must submit."
         )
     correct_count = (
         f"{outcome.members_correct} of {outcome.members_required} members submitted the "

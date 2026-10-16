@@ -26,11 +26,13 @@ class SpotTheIntersectionKnobs(BaseKnobs):
     Each team has ``team_size`` viewers, each holding a private board of
     objects (a shape and a color in a cell of a ``grid_size`` x ``grid_size``
     grid). Exactly one object is on every board of a team. With ``near_misses``
-    on and three or more viewers, every board holds what rules out one
-    candidate the others cannot, so no viewer can be left out. Each round draws
-    ``decoy_count_*`` objects held by some boards but not all, and
-    ``filler_count_*`` objects held by one board; a board holds the planted
-    objects plus both, so its size grows with ``team_size``.
+    on and three or more viewers, certification requires that leaving out any
+    one board leaves at least two candidates. Each round draws a decoy count and
+    a filler count. Decoys are objects held by more than one board and fewer
+    than all. Every board holds the planted objects plus both counts, padded
+    with fillers (objects held by one board), so a board holds the filler count
+    plus one filler for each decoy it lacks, and its size grows with
+    ``team_size``.
 
     ``two_teams`` runs a second team on the same boards seat for seat. Among
     teams whose every member submits the correct object, the one that sent the
@@ -74,7 +76,8 @@ class SpotTheIntersectionKnobs(BaseKnobs):
             raise ValueError(
                 "a decoy is on more than one board and fewer than all, which needs "
                 f"team_size >= 3 (got team_size={self.team_size}, "
-                f"decoy_count_values={self.decoy_count_values}); set decoy_count_values to [0]"
+                f"decoy_count_values={self.decoy_count_values}); set decoy_count_values to [0] "
+                "and decoy_count_weights to [1]"
             )
         return self
 

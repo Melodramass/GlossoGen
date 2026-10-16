@@ -13,6 +13,7 @@ import pytest
 
 from glossogen.models.event import AgentRegistered, SimulationEvent
 from glossogen.run_detail_types import AgentDetail
+from glossogen.scenarios.spot_the_intersection.board_certification import ObjectKind
 from glossogen.scenarios.spot_the_intersection.board_model import BoardObject, cell_label
 from glossogen.scenarios.spot_the_intersection.board_rendering import render_board_line
 from glossogen.scenarios.spot_the_intersection.events import (
@@ -110,7 +111,9 @@ async def test_the_answer_is_the_only_object_on_every_board(
         if obj.boards_holding == case.team_size
     }
     answers = {
-        f"{obj.color} {obj.shape} at {obj.cell}" for obj in every_object if obj.kind == "answer"
+        f"{obj.color} {obj.shape} at {obj.cell}"
+        for obj in every_object
+        if obj.kind is ObjectKind.ANSWER
     }
     assert on_every_board == answers == {case.answer_line}
 

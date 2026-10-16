@@ -148,6 +148,33 @@ def test_the_leak_check_catches_an_answer_listed_first() -> None:
     assert "listed_first" in leaking
 
 
+def test_the_leak_check_catches_a_guesser_right_on_every_board_of_one_size() -> None:
+    """Every board of 16 objects gives a chance of exactly 1/16, so the spread is zero."""
+    settings = settings_for(team_size=4, grid_size=6)._replace(
+        decoy_count_values=[3],
+        decoy_count_weights=[1],
+        filler_count_values=[4],
+        filler_count_weights=[1],
+    )
+    rounds = generate_rounds(seed=7, round_count=ROUNDS, settings=settings)
+    assert {round_boards.board_size for round_boards in rounds} == {16}
+    reordered: list[RoundBoards] = []
+    for round_boards in rounds:
+        answer_line = render_board_line(obj=round_boards.certificate.answer)
+        lines = tuple(
+            (answer_line, *[line for line in board if line != answer_line])
+            for board in round_boards.board_lines
+        )
+        reordered.append(round_boards._replace(board_lines=lines))
+
+    listed_first = next(
+        rate for rate in single_board_hit_rates(rounds=reordered) if rate.guesser == "listed_first"
+    )
+
+    assert listed_first.standard_error == 0
+    assert listed_first.leaks
+
+
 def test_a_round_that_cannot_certify_raises_instead_of_being_played() -> None:
     settings = settings_for(team_size=8, grid_size=3)
 

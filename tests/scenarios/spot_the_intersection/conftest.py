@@ -1,5 +1,6 @@
 """Helpers shared by spot_the_intersection's tests that play scripted rounds."""
 
+import inspect
 from pathlib import Path
 
 import pytest
@@ -70,3 +71,14 @@ async def play(
         monkeypatch=monkeypatch,
         phase_timed_out=never_times_out,
     )
+
+
+def say_on(scenario: SimulationScenario, channel_id: str, text: str) -> ToolTurn:
+    """A turn sending ``text``, with the arguments this scenario's send takes."""
+    parameters = inspect.signature(scenario.send_message_executor()).parameters
+    arguments: dict[str, object] = {"text": text}
+    if "channel_id" in parameters:
+        arguments["channel_id"] = channel_id
+    if "force" in parameters:
+        arguments["force"] = True
+    return ToolTurn(tool_name="send_message", args=arguments)

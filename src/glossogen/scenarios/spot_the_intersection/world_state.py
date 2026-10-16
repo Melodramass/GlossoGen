@@ -181,18 +181,22 @@ def _opponent_of(
 
 
 def outcome_reason(outcome: IntersectionOutcome) -> str:
-    """A one-line reason for the round result the clock records."""
+    """A one-line reason for the round result the clock records.
+
+    An exhausted budget comes first, since it can end the round before every
+    member has submitted.
+    """
     counts = (
         f"{outcome.members_correct}/{outcome.members_required} submitted the answer, "
         f"{outcome.characters_used} chars"
     )
+    if outcome.budget_exceeded:
+        return f"over budget ({counts})"
     if outcome.members_submitted < outcome.members_required:
         return (
             f"only {outcome.members_submitted}/{outcome.members_required} members submitted "
             f"({counts})"
         )
-    if outcome.budget_exceeded:
-        return f"over budget ({counts})"
     if outcome.won:
         return f"won ({counts})"
     if outcome.correct and outcome.competitive:

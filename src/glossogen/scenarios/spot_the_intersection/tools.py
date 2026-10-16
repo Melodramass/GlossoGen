@@ -4,7 +4,9 @@
 team. Each viewer submits once per round and cannot change it, and the team is
 scored once every member has submitted. Whether a submission was right is
 revealed only when the round ends, so no viewer can submit, learn the answer,
-and pass it on.
+and pass it on. A submission arriving after its round was scored, while the
+clock is still closing the round, is refused rather than recorded against a
+result it can no longer change.
 """
 
 from collections.abc import Callable
@@ -59,6 +61,8 @@ def build_tools(
         current = world.current_round_boards
         if current is None:
             return "There is no round in play yet."
+        if world.outcome_for(team_id=seat.team_id, round_number=current.round_number) is not None:
+            return "This round has ended and been scored. Wait for the next round."
         column, row = parse_cell_label(label=cell.strip().upper(), grid_size=current.grid_size)
         if world.has_submitted(agent_id=agent_id):
             return (
@@ -69,6 +73,7 @@ def build_tools(
         receipt = world.record_submission(agent_id=agent_id, obj=obj)
         await _log_submission(
             get_runtime=get_runtime,
+            round_number=current.round_number,
             agent_id=agent_id,
             team_id=seat.team_id,
             seat_number=seat.board_index + 1,
@@ -91,19 +96,20 @@ def build_tools(
 
 async def _log_submission(
     get_runtime: Callable[[], ScenarioRuntimeHandle | None],
+    round_number: int,
     agent_id: str,
     team_id: str,
     seat_number: int,
     obj: BoardObject,
     receipt: SubmissionReceipt,
 ) -> None:
-    """Record one accepted submission in the event log."""
+    """Record one accepted submission in the event log, under the round it was recorded for."""
     runtime = get_runtime()
     if runtime is None:
         return
     await runtime.event_logger.log(
         event=IntersectionSubmissionRecorded(
-            round_number=runtime.current_round,
+            round_number=round_number,
             agent_id=agent_id,
             team_id=team_id,
             seat_number=seat_number,

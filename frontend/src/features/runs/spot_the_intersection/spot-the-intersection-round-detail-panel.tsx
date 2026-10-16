@@ -13,9 +13,10 @@ type IntersectionSeatBoard = components["schemas"]["IntersectionSeatBoard"];
 type IntersectionBoardObject = components["schemas"]["IntersectionBoardObject"];
 type IntersectionSubmission = components["schemas"]["IntersectionSubmission"];
 type RoundResult = components["schemas"]["RoundResult"];
+type ObjectKind = components["schemas"]["ObjectKind"];
 
-const ANSWER_KIND = "answer";
-const NEAR_MISS_KIND = "near_miss";
+const ANSWER_KIND: ObjectKind = "answer";
+const NEAR_MISS_KIND: ObjectKind = "near_miss";
 
 function isIntersectionExtras(extras: unknown): extras is IntersectionExtras {
   if (typeof extras !== "object" || extras === null) return false;
@@ -195,7 +196,7 @@ function CaseHeader({ roundCase }: { roundCase: IntersectionRoundCase }) {
       ) : null}
       <span className="ml-auto text-[11px] text-muted-foreground">
         {roundCase.grid_size}×{roundCase.grid_size} grid · {roundCase.board_size} objects per board
-        · {roundCase.decoy_count} decoys · {roundCase.filler_count} fillers
+        · {roundCase.decoy_count} decoy{roundCase.decoy_count === 1 ? "" : "s"}
       </span>
     </div>
   );
@@ -213,6 +214,7 @@ export function SpotTheIntersectionRoundDetailPanel({
 
   const submissions = extras.submissions.filter(s => s.round_number === roundNumber);
   const resultByTeam = new Map(roundResults.map(r => [resultTeamId(r), r]));
+  const sharedByTeams = roundCase.boards.some(board => board.agent_ids.length > 1);
 
   return (
     <div className="mb-5 space-y-3 rounded-lg border border-border bg-muted/40 p-3">
@@ -220,7 +222,7 @@ export function SpotTheIntersectionRoundDetailPanel({
 
       <div>
         <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-          Boards (both teams hold the same board at each seat)
+          {sharedByTeams ? "Boards (both teams hold the same board at each seat)" : "Boards"}
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {roundCase.boards.map(board => (

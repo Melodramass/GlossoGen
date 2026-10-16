@@ -5,7 +5,6 @@ submit, they must all submit the answer, and among correct teams the one that
 said less wins. The answer itself must never reach an agent.
 """
 
-import inspect
 from pathlib import Path
 
 import pytest
@@ -28,6 +27,7 @@ from tests.scenarios.spot_the_intersection.conftest import (
     answer_of,
     one_round_scenario,
     play,
+    say_on,
     submit,
     world_of,
 )
@@ -39,17 +39,6 @@ def near_miss_of(scenario: SimulationScenario) -> BoardObject:
     """A round-one object on every board but one: the strongest wrong answer."""
     round_boards = world_of(scenario=scenario).round_boards(round_number=1)
     return next(entry.obj for entry in round_boards.declared if entry.kind is ObjectKind.NEAR_MISS)
-
-
-def say_on(scenario: SimulationScenario, channel_id: str, text: str) -> ToolTurn:
-    """A turn sending ``text``, with the arguments this scenario's send takes."""
-    parameters = inspect.signature(scenario.send_message_executor()).parameters
-    arguments: dict[str, object] = {"text": text}
-    if "channel_id" in parameters:
-        arguments["channel_id"] = channel_id
-    if "force" in parameters:
-        arguments["force"] = True
-    return ToolTurn(tool_name="send_message", args=arguments)
 
 
 def verdict_for(result: SimulationResult, team_id: str) -> RoundResultRecorded:

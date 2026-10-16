@@ -4976,8 +4976,7 @@
             "title": "Row"
           },
           "kind": {
-            "type": "string",
-            "title": "Kind"
+            "$ref": "#/components/schemas/ObjectKind"
           },
           "boards_holding": {
             "type": "integer",
@@ -4995,7 +4994,7 @@
           "boards_holding"
         ],
         "title": "IntersectionBoardObject",
-        "description": "One object on one viewer's board.\n\n``column`` and ``row`` count from 0, with ``A1`` at the top left. ``kind`` is\nwhat the generator placed the object for (``answer``, ``near_miss``,\n``decoy``, ...) and ``boards_holding`` is how many of the round's boards hold\nthe same object in the same cell."
+        "description": "One object on one viewer's board.\n\n``column`` and ``row`` count from 0, with ``A1`` at the top left. ``kind`` is\nwhat the generator placed the object for, and ``boards_holding`` is how many\nof the round's boards hold the same object in the same cell."
       },
       "IntersectionRoundCase": {
         "properties": {
@@ -5019,10 +5018,6 @@
             "type": "integer",
             "title": "Decoy Count"
           },
-          "filler_count": {
-            "type": "integer",
-            "title": "Filler Count"
-          },
           "answer_line": {
             "type": "string",
             "title": "Answer Line"
@@ -5042,12 +5037,11 @@
           "team_size",
           "board_size",
           "decoy_count",
-          "filler_count",
           "answer_line",
           "boards"
         ],
         "title": "IntersectionRoundCase",
-        "description": "One round's boards, seat by seat, and the object every board holds."
+        "description": "One round's boards, seat by seat, and the object every board holds.\n\n``decoy_count`` is how many decoy objects the round planted, each on more\nthan one board and fewer than all."
       },
       "IntersectionSeatBoard": {
         "properties": {
@@ -5492,6 +5486,20 @@
         ],
         "title": "NoteResponse",
         "description": "Lightweight response for fetching a run's note content."
+      },
+      "ObjectKind": {
+        "type": "string",
+        "enum": [
+          "answer",
+          "near_miss",
+          "stand_in",
+          "cell_twin",
+          "look_twin",
+          "decoy",
+          "filler"
+        ],
+        "title": "ObjectKind",
+        "description": "What the generator placed an object for."
       },
       "OpenAIAssistantMessage": {
         "additionalProperties": true,

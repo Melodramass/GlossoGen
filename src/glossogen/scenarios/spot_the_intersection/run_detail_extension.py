@@ -16,6 +16,7 @@ from glossogen.scenario_run_detail_extension import (
     ScenarioRunDetailExtension,
     ScenarioRunExtrasBase,
 )
+from glossogen.scenarios.spot_the_intersection.board_certification import ObjectKind
 from glossogen.scenarios.spot_the_intersection.board_model import cell_label
 from glossogen.scenarios.spot_the_intersection.board_rendering import parse_board_line
 from glossogen.scenarios.spot_the_intersection.events import (
@@ -33,9 +34,8 @@ class IntersectionBoardObject(BaseModel):
     """One object on one viewer's board.
 
     ``column`` and ``row`` count from 0, with ``A1`` at the top left. ``kind`` is
-    what the generator placed the object for (``answer``, ``near_miss``,
-    ``decoy``, ...) and ``boards_holding`` is how many of the round's boards hold
-    the same object in the same cell.
+    what the generator placed the object for, and ``boards_holding`` is how many
+    of the round's boards hold the same object in the same cell.
     """
 
     shape: str
@@ -43,7 +43,7 @@ class IntersectionBoardObject(BaseModel):
     cell: str
     column: int
     row: int
-    kind: str
+    kind: ObjectKind
     boards_holding: int
 
 
@@ -56,14 +56,17 @@ class IntersectionSeatBoard(BaseModel):
 
 
 class IntersectionRoundCase(BaseModel):
-    """One round's boards, seat by seat, and the object every board holds."""
+    """One round's boards, seat by seat, and the object every board holds.
+
+    ``decoy_count`` is how many decoy objects the round planted, each on more
+    than one board and fewer than all.
+    """
 
     round_number: int
     grid_size: int
     team_size: int
     board_size: int
     decoy_count: int
-    filler_count: int
     answer_line: str
     boards: list[IntersectionSeatBoard]
 
@@ -155,7 +158,6 @@ def _build_case(
         team_size=event.team_size,
         board_size=event.board_size,
         decoy_count=event.decoy_count,
-        filler_count=event.filler_count,
         answer_line=event.answer_line,
         boards=boards,
     )

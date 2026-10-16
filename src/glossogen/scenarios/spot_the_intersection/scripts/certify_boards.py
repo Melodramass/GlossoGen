@@ -7,9 +7,11 @@ per (preset, team size) and exits non-zero if any round fails to generate or
 re-certify, or any guesser beats chance by more than ``LEAK_Z_THRESHOLD``
 standard errors.
 
-Run it before launching a cohort on a new configuration. Each team size is
-checked on the smallest grid the knobs accept for it, the tightest fit for its
-boards:
+Each team size runs on the preset's own grid when its boards fit there, and on
+the smallest grid the knobs accept for it, the tightest fit, when that differs.
+Board settings already swept under an earlier preset (presets differing only in
+knobs board generation does not read, such as ``two_teams``) are not swept
+again. Run it before launching a cohort on a new configuration:
 
     VIRTUAL_ENV= uv run --no-sync python -m \
       glossogen.scenarios.spot_the_intersection.scripts.certify_boards --seed-count 200
@@ -24,9 +26,11 @@ from typing import Any, NamedTuple
 from glossogen.scenarios.spot_the_intersection.board_certification import certify_boards
 from glossogen.scenarios.spot_the_intersection.board_generation import (
     BoardGenerationError,
+    BoardSettings,
     RoundBoards,
     generate_rounds,
 )
+from glossogen.scenarios.spot_the_intersection.board_model import MAX_GRID_SIZE
 from glossogen.scenarios.spot_the_intersection.knobs import (
     MAX_TEAM_SIZE,
     SpotTheIntersectionKnobs,
@@ -54,8 +58,8 @@ class SweepRow(NamedTuple):
     problems: list[str]
 
 
-def knobs_for(preset: dict[str, Any], team_size: int) -> SpotTheIntersectionKnobs:
-    """The preset at ``team_size``, on the smallest grid the knobs accept.
+def knobs_at(preset: dict[str, Any], team_size: int) -> list[SpotTheIntersectionKnobs]:
+    """The preset at ``team_size`` on each grid to sweep: its own if it fits, and the smallest.
 
     Decoys need three viewers, so a two-viewer team runs without them.
     """
@@ -64,9 +68,25 @@ def knobs_for(preset: dict[str, Any], team_size: int) -> SpotTheIntersectionKnob
     if team_size < 3:
         config["decoy_count_values"] = [0]
         config["decoy_count_weights"] = [1]
-    probe = SpotTheIntersectionKnobs.model_validate({**config, "grid_size": 26})
-    config["grid_size"] = max(3, math.ceil(math.sqrt(2 * largest_board_size(knobs=probe))))
-    return SpotTheIntersectionKnobs.model_validate(config)
+    probe = SpotTheIntersectionKnobs.model_validate({**config, "grid_size": MAX_GRID_SIZE})
+    smallest = max(3, math.ceil(math.sqrt(2 * largest_board_size(knobs=probe))))
+    grids = sorted({max(preset["grid_size"], smallest), smallest})
+    return [
+        SpotTheIntersectionKnobs.model_validate({**config, "grid_size": grid}) for grid in grids
+    ]
+
+
+def settings_key(settings: BoardSettings) -> tuple[object, ...]:
+    """A hashable form of ``settings``, so two presets with the same boards sweep once."""
+    return (
+        settings.team_size,
+        settings.grid_size,
+        settings.near_misses,
+        tuple(settings.decoy_count_values),
+        tuple(settings.decoy_count_weights),
+        tuple(settings.filler_count_values),
+        tuple(settings.filler_count_weights),
+    )
 
 
 def recertification_failures(rounds: list[RoundBoards], near_misses: bool) -> int:
@@ -85,10 +105,9 @@ def recertification_failures(rounds: list[RoundBoards], near_misses: bool) -> in
 
 
 def sweep_configuration(
-    preset_name: str, preset: dict[str, Any], team_size: int, seed_count: int
+    preset_name: str, knobs: SpotTheIntersectionKnobs, seed_count: int
 ) -> SweepRow:
     """Generate, re-certify and probe every round of ``seed_count`` seeds."""
-    knobs = knobs_for(preset=preset, team_size=team_size)
     rounds: list[RoundBoards] = []
     problems: list[str] = []
     generation_errors = 0
@@ -118,7 +137,7 @@ def sweep_configuration(
             )
     return SweepRow(
         preset=preset_name,
-        team_size=team_size,
+        team_size=knobs.team_size,
         grid_size=knobs.grid_size,
         rounds=len(rounds),
         generation_errors=generation_errors,
@@ -152,21 +171,28 @@ def main() -> None:
     parser.add_argument("--seed-count", type=int, required=True)
     args = parser.parse_args()
     any_problem = False
+    swept: dict[tuple[object, ...], str] = {}
     for preset_name in SpotTheIntersectionScenario.knobs_preset_names():
         preset = SpotTheIntersectionScenario.load_knobs_preset(preset_name=preset_name)
         for team_size in range(2, MAX_TEAM_SIZE + 1):
-            row = sweep_configuration(
-                preset_name=preset_name,
-                preset=preset,
-                team_size=team_size,
-                seed_count=args.seed_count,
-            )
-            print_row(row=row)
-            any_problem = any_problem or bool(row.problems)
+            for knobs in knobs_at(preset=preset, team_size=team_size):
+                key = settings_key(settings=knobs.board_settings())
+                if key in swept:
+                    print(
+                        f"{preset_name:20s} N={team_size:2d} grid={knobs.grid_size:2d} "
+                        f"same boards as {swept[key]}, not swept again"
+                    )
+                    continue
+                swept[key] = preset_name
+                row = sweep_configuration(
+                    preset_name=preset_name, knobs=knobs, seed_count=args.seed_count
+                )
+                print_row(row=row)
+                any_problem = any_problem or bool(row.problems)
     if any_problem:
         print("FAILED: see PROBLEM lines above")
         sys.exit(1)
-    print("OK: every round generated, re-certified, and no board gives the answer away")
+    print("OK: every round generated and re-certified, and no single-board guesser beats chance")
 
 
 if __name__ == "__main__":

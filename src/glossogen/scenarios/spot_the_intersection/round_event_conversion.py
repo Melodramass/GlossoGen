@@ -5,10 +5,7 @@ certificate into the event log. ``declared_from_event`` reads the declaration
 back out, so a recorded run can be certified again from its own log.
 """
 
-from glossogen.scenarios.spot_the_intersection.board_certification import (
-    DeclaredObject,
-    ObjectKind,
-)
+from glossogen.scenarios.spot_the_intersection.board_certification import DeclaredObject
 from glossogen.scenarios.spot_the_intersection.board_generation import RoundBoards
 from glossogen.scenarios.spot_the_intersection.board_model import BoardObject, cell_label
 from glossogen.scenarios.spot_the_intersection.board_rendering import (
@@ -26,7 +23,7 @@ def _object_record(declared: DeclaredObject) -> IntersectionObjectRecord:
     """One declared object, with seats numbered from 1."""
     obj = declared.obj
     return IntersectionObjectRecord(
-        kind=declared.kind.value,
+        kind=declared.kind,
         shape=obj.shape,
         color=obj.color,
         cell=cell_label(column=obj.column, row=obj.row),
@@ -71,7 +68,7 @@ def declared_from_event(event: SpotTheIntersectionRoundStarted) -> list[Declared
         column, row = parse_cell_label(label=record.cell, grid_size=event.grid_size)
         declared.append(
             DeclaredObject(
-                kind=ObjectKind(record.kind),
+                kind=record.kind,
                 obj=BoardObject(shape=record.shape, color=record.color, column=column, row=row),
                 seats=frozenset(number - 1 for number in record.seat_numbers),
             )

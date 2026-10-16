@@ -2,8 +2,9 @@
 
 Joins each round's link-channel messages with that round's
 ``SpotTheIntersectionRoundStarted`` event: every seat's board as its viewer read
-it, the answer, and the decoys, so a communication judge can tell which moves
-narrowed the candidates.
+it, the answer, and every object held by more than one board and fewer than all
+(decoys, near-misses, and twin objects that some boards share), so a
+communication judge can tell which moves narrowed the candidates.
 """
 
 from glossogen.evaluation.metrics.communication.round_view import (

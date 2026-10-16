@@ -2,9 +2,10 @@ r"""Audit recorded spot_the_intersection runs on the boards their viewers were s
 
 Takes one or more run directories, prints one line per run and every problem
 found beneath it, and exits non-zero if any run has one. Rounds whose recorded
-boards differ from what this checkout would generate are listed as notes: they
-do not fail the audit, but runs with and without them did not play the same
-boards. Run it on the first runs of a cohort, before launching the rest:
+boards differ from what this checkout would generate, or that this checkout
+cannot generate, are listed as notes: they do not fail the audit, but runs with
+and without them did not play the same boards. Run it on the first runs of a
+cohort, before launching the rest:
 
     VIRTUAL_ENV= uv run --no-sync python -m \
       glossogen.scenarios.spot_the_intersection.scripts.audit_recorded_boards \
@@ -34,6 +35,8 @@ async def audit_run_dir(run_dir: Path) -> bool:
     if audit.regenerated_differently:
         rounds = ", ".join(str(number) for number in audit.regenerated_differently)
         print(f"    NOTE: rounds {rounds} differ from what this checkout generates")
+    for note in audit.not_regenerated:
+        print(f"    NOTE: round {note.round_number} cannot be generated here: {note.problem}")
     return not audit.findings
 
 

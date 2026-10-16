@@ -199,8 +199,8 @@ class SpotTheIntersectionScenario(SimulationScenario):
         )
 
     def restore_state_from_events(self, events: list[Any]) -> None:
-        """Seed every team's outcome history from the source run on resume."""
-        self._world.restore_outcomes_from_events(events=events)
+        """Seed every team's outcomes, and the round the source stopped in, on resume."""
+        self._world.restore_rounds_from_events(events=events)
 
     def judge_round_result(self, round_number: int, trigger: str) -> list[RoundResult]:
         """Return each team's verdict: every member submitted the answer."""

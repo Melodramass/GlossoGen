@@ -304,8 +304,8 @@ def _plant_cell_twin(
 def _plant_look_twin(rng: random.Random, plan: _Plan, settings: BoardSettings) -> None:
     """Give every board one random shape and color, not all in one cell.
 
-    The look may be the answer's. Leaving it out made the answer's look rarer on
-    a board than other objects' looks, which a viewer could exploit alone.
+    The look may be the answer's, so the answer's look is as common on a board as
+    any other object's.
     """
     shape = rng.choice(SHAPES)
     color = rng.choice(COLORS)

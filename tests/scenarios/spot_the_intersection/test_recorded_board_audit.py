@@ -1,8 +1,9 @@
 """The recorded-run audit passes a clean run and catches a tampered one.
 
 The audit reads only the event log, so it is tested by playing a scripted run and
-then breaking the log it wrote: a board altered on its way to one viewer, and a
-recorded board that no longer matches what was sent.
+then breaking the log it wrote: a board altered on its way to one viewer, a
+recorded board that no longer matches what was sent, and a viewer sent no board.
+A round this checkout cannot generate is a note, not a failure.
 """
 
 from pathlib import Path
@@ -10,8 +11,18 @@ from pathlib import Path
 import pytest
 
 from glossogen.models.event import InjectionDelivered, SimulationEvent
+from glossogen.scenarios.spot_the_intersection import recorded_board_audit
+from glossogen.scenarios.spot_the_intersection.board_generation import (
+    BoardGenerationError,
+    BoardSettings,
+    RoundBoards,
+)
 from glossogen.scenarios.spot_the_intersection.events import SpotTheIntersectionRoundStarted
-from glossogen.scenarios.spot_the_intersection.recorded_board_audit import audit_events
+from glossogen.scenarios.spot_the_intersection.injection_rendering import BOARD_HEADER
+from glossogen.scenarios.spot_the_intersection.recorded_board_audit import (
+    AuditFinding,
+    audit_events,
+)
 from glossogen.testing.scenario_runtime import run_rounds
 
 SCENARIO = "spot_the_intersection"
@@ -81,3 +92,41 @@ async def test_a_recorded_board_the_viewers_never_saw_is_caught(
         finding.round_number == 2 and "seat 1's" in finding.problem for finding in audit.findings
     )
     assert audit.regenerated_differently == (2,)
+
+
+async def test_a_viewer_sent_no_board_is_the_only_finding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The rest of that team's boards are not certified out of seat order."""
+    events = await played_events(tmp_path=tmp_path, monkeypatch=monkeypatch)
+    without_delivery = [
+        event
+        for event in events
+        if not (
+            isinstance(event, InjectionDelivered)
+            and event.agent_id == "viewer_a_2"
+            and event.round_number == 1
+            and BOARD_HEADER in event.text
+        )
+    ]
+
+    audit = audit_events(events=without_delivery)
+
+    assert audit.findings == (AuditFinding(round_number=1, problem="viewer_a_2 got no board"),)
+
+
+async def test_a_round_this_checkout_cannot_generate_is_a_note(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    events = await played_events(tmp_path=tmp_path, monkeypatch=monkeypatch)
+
+    def cannot_generate(seed: int, round_number: int, settings: BoardSettings) -> RoundBoards:
+        _ = (seed, settings)
+        raise BoardGenerationError(f"round {round_number} did not certify")
+
+    monkeypatch.setattr(recorded_board_audit, "generate_round", cannot_generate)
+
+    audit = audit_events(events=events)
+
+    assert audit.findings == ()
+    assert [note.round_number for note in audit.not_regenerated] == [1, 2]

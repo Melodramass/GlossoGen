@@ -91,6 +91,13 @@ class RoundWorld(ScenarioWorld):
         """Return what ``team_id`` has spent this round."""
         return self._characters_used_by_team_id[team_id]
 
+    def restore_characters_used(self, team_id: str, characters: int) -> None:
+        """Set what ``team_id`` has spent this round, for a run resumed partway through it.
+
+        Call after ``begin_round``, which zeroes every counter.
+        """
+        self._characters_used_by_team_id[team_id] = characters
+
     def claim_round_budget_threshold(self, team_id: str, round_budget_threshold: str) -> bool:
         """Return True the first time this threshold is owed to ``team_id`` this round.
 

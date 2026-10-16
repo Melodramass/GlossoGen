@@ -4,9 +4,7 @@ Each guesser reads one board's lines, as a viewer does, and names one object.
 Picking a line at random names the answer with probability ``1 / board_size``,
 so a guesser that does measurably better has found something about how boards
 are built that a viewer could exploit without talking. Other ways of exploiting
-a board are not tested. Leaks found this way: a prototype listed the answer
-first on every board, and a look twin drawn from every look but the answer's
-made the answer's look rarer than other objects'.
+a board are not tested.
 
 Every board of a round holds the same answer, so a round's boards are not
 independent draws. The standard error is computed over rounds, which is why a
@@ -47,10 +45,17 @@ class GuesserHitRate(NamedTuple):
 
     @property
     def z_score(self) -> float:
-        """How many standard errors the rate sits above chance."""
+        """How many standard errors the rate sits above chance.
+
+        With no spread at all, which a guesser right on every board of every
+        round produces, any excess over chance is infinitely significant.
+        """
+        excess = self.rate - self.chance
         if self.standard_error == 0:
+            if excess > 0:
+                return math.inf
             return 0.0
-        return (self.rate - self.chance) / self.standard_error
+        return excess / self.standard_error
 
     @property
     def leaks(self) -> bool:

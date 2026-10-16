@@ -7,20 +7,25 @@ object is on every board of a team. The others are on some boards but not all,
 so the viewers talk on their team's link channel until they can tell which one
 they all hold, and then every member submits it.
 
-`team_size` sets the viewers per team, from 2 to 12. With `near_misses` on (the
-default), certification requires that leaving out any one board leaves at least
-two candidates, so every viewer is needed to find the answer.
+`team_size` sets the viewers per team, from 2 to 12. Boards grow with the team,
+so the grid has to grow too. With the presets' decoy and filler draws, the
+smallest grids accepted are 5×5 for 2 viewers, 6×6 for 3 or 4, 7×7 for 5 to 10,
+and 8×8 for 11 or 12; the presets' own 6×6 grid fits 2 to 4. With `near_misses`
+on (the default), certification requires that leaving out any one board leaves
+at least two candidates, so every viewer is needed to find the answer.
 
 ## Task and scoring
 
 - A viewer calls `submit_object(shape, color, cell)` once per round. A
   submission cannot be changed, and the tool never says whether it was right.
+  One that arrives after the round has been scored is refused.
 - A team is correct only when **every** member submitted the common object. A
   member who never submits, or who names anything else, loses the round for the
   team. Scoring is deterministic; there is no judge.
 - Two teams (the default) play the same boards seat for seat on isolated links.
   Among correct teams, the one that sent the fewest link characters wins, and
-  ties are shared. Each round's result is announced at the start of the next.
+  ties are shared. Each team is told its result on its link when the round
+  ends, and again in the discussion-phase briefing and the next round's.
 - Characters stop counting once a team's last member submits.
   `round_time_budget_seconds` is an optional hard cap (`-1`, the default, is
   none).
@@ -55,16 +60,12 @@ color with cell each leave at least two values every board holds.
 
 ## Certification
 
-spot_the_difference checked its scenes on exact coordinates, while its viewers
-saw only coarse regions. In one round, a removal and a move into the same region
-read to the viewers as a single change. That round was played in 56 runs; teams
-solved 17 of 112 team-rounds on it (15%) against 1778 of 2022 on every other round
-(88%). The checks below run on what the viewers read.
+Every check runs on what the viewers read.
 
 - **Certified from the lines the viewers read.** `board_certification.py` parses
   the rendered lines back and checks the properties above, plus that the declared
   objects are exactly the objects on the boards. It never reads the generator's
-  objects. A round that fails is redrawn; one that never passes raises
+  boards. A round that fails is redrawn; one that never passes raises
   `BoardGenerationError` and the run does not start.
 - **The certifier is tested by breaking rounds.** `test_board_certification.py`
   takes certified rounds and breaks one property at a time (a second common
@@ -74,13 +75,15 @@ solved 17 of 112 team-rounds on it (15%) against 1778 of 2022 on every other rou
   guessers that see one board alone: first listed, last listed, rarest look, most
   common look, most common color, most common shape, nearest the centre, and most
   crowded row. It flags one that beats chance by more than four standard errors,
-  clustered by round. Other ways of exploiting a board are not tested. During
-  development it flagged the answer listed first on every board, and a look twin
-  that excluded the answer's look and so made that look rarer than others.
+  clustered by round, or that is right on every board. Other ways of exploiting a
+  board are not tested.
 
 ### Before a cohort
 
-Sweep every preset at every team size:
+Sweep the presets' board settings at every team size, on the preset's own grid
+when the boards fit there and on the smallest grid the knobs accept. Presets
+whose boards are identical, such as the two shipped ones (board generation does
+not read `two_teams`), are swept once:
 
 ```bash
 VIRTUAL_ENV= uv run --no-sync python -m \
@@ -88,7 +91,7 @@ VIRTUAL_ENV= uv run --no-sync python -m \
 ```
 
 It exits non-zero if any round fails to generate or re-certify, or any
-single-board guess beats chance.
+single-board guesser beats chance.
 
 ### After the first runs
 
@@ -102,15 +105,15 @@ VIRTUAL_ENV= uv run --no-sync python -m \
 
 It requires every viewer's injected board to match the board recorded for its
 seat, both teams to have been sent the same boards, and the boards as sent to
-certify. It also notes rounds whose recorded boards differ from what the current
-checkout generates, which happens when generation changed between two cohorts
-sharing a seed.
+certify. A team with a viewer who was sent no board is reported once and not
+certified further. It also notes rounds whose recorded boards differ from what
+the current checkout generates, or that it cannot generate, which happens when
+generation changed between two cohorts sharing a seed.
 
 Then compare round success round by round. Runs sharing a seed and board knobs
 play identical boards (generation is keyed by seed and round number), so a round
 whose mean `round_success` sits far below the others is a candidate for a bad
-board. On spot_the_difference's runs, this table shows its bad round at 0.33
-against 0.6 to 1.0 for the rest:
+board:
 
 ```bash
 glossogen analyze --runs-dir ./runs --scenario spot_the_intersection --label <cohort> \
@@ -139,9 +142,10 @@ lists the viewer's own board and the previous round's result, never the answer.
 - `near_misses`: whether every board is required. Off, some viewers may be left
   out of a round without loss.
 - `decoy_count_values` / `_weights` and `filler_count_values` / `_weights`: drawn
-  per round. A board holds the planted objects (the team size plus five, with
-  near-misses on) plus both counts. Decoys need three viewers, so set
-  `decoy_count_values: [0]` for `team_size: 2`.
+  per round. A board holds the planted objects (five, plus one per viewer with
+  near-misses on and three or more viewers) plus both counts, so a board missing
+  a decoy holds an extra filler in its place. Decoys need three viewers, so set
+  `decoy_count_values: [0]` and `decoy_count_weights: [1]` for `team_size: 2`.
 - `round_time_budget_seconds`, `channel_noise_level`, `noise_replacement_mode`,
   and the postmortem knobs, as in other scenarios.
 
@@ -163,6 +167,12 @@ each team's link, `communication_*` via `build_communication_rounds`, and the
 `protocol_*` family via `get_protocol_probe_config` /
 `get_protocol_explanation_config`.
 
+`protocol_probe` asks each viewer what it would send first for each board in
+`protocol_probe_questions.json`: three 6×6 boards the default preset generates,
+at its smallest, middle and largest board sizes. A run on another grid is probed
+with the same boards, so on a grid smaller than 6×6 some of their cells lie off
+the run's grid.
+
 ## Files
 
 - `board_model.py`, `board_rendering.py`: objects, cell names, and the line
@@ -173,8 +183,8 @@ each team's link, `communication_*` via `build_communication_rounds`, and the
   audit.
 - `scripts/certify_boards.py`: the sweep before a cohort.
 - `world.py`, `world_state.py`, `outcome_reconstruction.py`: character metering,
-  submissions and locking, scoring, and rebuilding outcomes on resume from the
-  recorded answers.
+  submissions and locking, scoring, and on resume, rebuilding outcomes from the
+  recorded answers and continuing a round the run stopped in.
 - `tools.py`, `team_declaration.py`, `seats.py`, `injection_rendering.py`,
   `round_event_conversion.py`, `events.py`: the tool, roster, prompts, and events.
 - `run_detail_extension.py`: the run page's round data. The round timeline

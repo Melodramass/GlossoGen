@@ -11,16 +11,13 @@ from typing import Literal
 from pydantic import BaseModel
 
 from glossogen.models.event_base import EventBase
+from glossogen.scenarios.spot_the_intersection.board_certification import ObjectKind
 
 
 class IntersectionObjectRecord(BaseModel):
-    """One distinct object of a round, its purpose and the seats holding it.
+    """One distinct object of a round, what it was placed for and the seats holding it."""
 
-    ``kind`` is one of ``answer``, ``near_miss``, ``stand_in``, ``cell_twin``,
-    ``look_twin``, ``decoy``, ``filler``.
-    """
-
-    kind: str
+    kind: ObjectKind
     shape: str
     color: str
     cell: str
@@ -52,7 +49,10 @@ class SpotTheIntersectionRoundStarted(EventBase):
     """Emitted once at round start with the full ground truth.
 
     ``boards[i]`` is seat ``i + 1``'s board, line for line in the order its
-    viewer reads it, and both teams' seat ``i + 1`` hold it.
+    viewer reads it, and both teams' seat ``i + 1`` hold it. ``decoy_count`` and
+    ``filler_count`` are the round's two draws: ``decoy_count`` decoy objects,
+    and ``board_size`` objects on every board, padded with fillers, so a board
+    holds ``filler_count`` fillers plus one for each decoy it lacks.
     """
 
     event_type: Literal["spot_the_intersection_round_started"] = (

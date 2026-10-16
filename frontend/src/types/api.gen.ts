@@ -2207,9 +2207,8 @@ export interface components {
          * @description One object on one viewer's board.
          *
          *     ``column`` and ``row`` count from 0, with ``A1`` at the top left. ``kind`` is
-         *     what the generator placed the object for (``answer``, ``near_miss``,
-         *     ``decoy``, ...) and ``boards_holding`` is how many of the round's boards hold
-         *     the same object in the same cell.
+         *     what the generator placed the object for, and ``boards_holding`` is how many
+         *     of the round's boards hold the same object in the same cell.
          */
         IntersectionBoardObject: {
             /** Shape */
@@ -2222,14 +2221,16 @@ export interface components {
             column: number;
             /** Row */
             row: number;
-            /** Kind */
-            kind: string;
+            kind: components["schemas"]["ObjectKind"];
             /** Boards Holding */
             boards_holding: number;
         };
         /**
          * IntersectionRoundCase
          * @description One round's boards, seat by seat, and the object every board holds.
+         *
+         *     ``decoy_count`` is how many decoy objects the round planted, each on more
+         *     than one board and fewer than all.
          */
         IntersectionRoundCase: {
             /** Round Number */
@@ -2242,8 +2243,6 @@ export interface components {
             board_size: number;
             /** Decoy Count */
             decoy_count: number;
-            /** Filler Count */
-            filler_count: number;
             /** Answer Line */
             answer_line: string;
             /** Boards */
@@ -2466,6 +2465,12 @@ export interface components {
             /** Content */
             content: string | null;
         };
+        /**
+         * ObjectKind
+         * @description What the generator placed an object for.
+         * @enum {string}
+         */
+        ObjectKind: "answer" | "near_miss" | "stand_in" | "cell_twin" | "look_twin" | "decoy" | "filler";
         OpenAIAssistantMessage: {
             /**
              * @description discriminator enum property added by openapi-typescript
