@@ -10,6 +10,7 @@ import orjson
 from glossogen.eval_manifest import read_eval_manifest
 from glossogen.evaluation.log_reader import load_events
 from glossogen.evaluation.reports.evaluation_report import load_report_tolerant
+from glossogen.jsonl_lines import iter_nonblank_lines
 from glossogen.models.event import (
     AgentRegistered,
     AgentRunCycleFailed,
@@ -110,12 +111,9 @@ def _load_debug_logs_sync(debug_log_path: Path) -> list[DebugLogEntry]:
     """Parse debug JSONL synchronously; intended to be called via asyncio.to_thread."""
     entries: list[DebugLogEntry] = []
     with open(debug_log_path, mode="rb") as f:
-        for line in f:
-            stripped = line.strip()
-            if not stripped:
-                continue
+        for line in iter_nonblank_lines(lines=f):
             try:
-                raw = orjson.loads(stripped)
+                raw = orjson.loads(line)
                 entries.append(
                     DebugLogEntry(
                         timestamp=raw["timestamp"],

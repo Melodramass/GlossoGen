@@ -24,11 +24,10 @@ to `EventBase` omit it.
 
 import logging
 from pathlib import Path
-from typing import Any, NamedTuple, cast
+from typing import NamedTuple
 
-import orjson
-
-from glossogen.event_parsing import parse_event
+from glossogen.event_parsing import RoundNumberBackfill, parse_event
+from glossogen.jsonl_lines import MalformedLine, iter_json_objects_skipping_malformed
 from glossogen.models.event import (
     ChannelCreated,
     InjectionDelivered,
@@ -84,28 +83,20 @@ def scan_message_events(log_path: Path) -> MessageEventScan:
     injections: list[ScannedInjection] = []
     created_channels: list[ChannelCreated] = []
     skipped = 0
-    running_round = 0
+    round_numbers = RoundNumberBackfill()
     in_postmortem = False
 
+    def count_malformed(_line: MalformedLine) -> None:
+        nonlocal skipped
+        skipped += 1
+
     with open(log_path, mode="rb") as handle:
-        for line in handle:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            try:
-                raw = orjson.loads(stripped)
-            except orjson.JSONDecodeError:
-                skipped += 1
-                continue
-            if not isinstance(raw, dict):
-                skipped += 1
-                continue
-            event_raw = cast(dict[str, Any], raw)
-            event_type = event_raw.get("event_type")
+        for record in iter_json_objects_skipping_malformed(
+            lines=handle, on_malformed=count_malformed
+        ):
+            event_type = record.get("event_type")
             if event_type == _ROUND_ADVANCED:
-                advanced = event_raw.get("round_number")
-                if isinstance(advanced, int):
-                    running_round = advanced
+                round_numbers.observe(record=record)
                 in_postmortem = False
                 continue
             if event_type == _POSTMORTEM_STARTED:
@@ -113,10 +104,8 @@ def scan_message_events(log_path: Path) -> MessageEventScan:
                 continue
             if event_type not in _WANTED_EVENT_TYPES:
                 continue
-            if "round_number" not in event_raw:
-                event_raw = {**event_raw, "round_number": running_round}
             try:
-                event = parse_event(raw=event_raw)
+                event = parse_event(raw=round_numbers.apply(record=record))
             except Exception:
                 skipped += 1
                 continue

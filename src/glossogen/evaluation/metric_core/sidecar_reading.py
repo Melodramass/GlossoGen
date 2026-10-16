@@ -17,6 +17,12 @@ from typing import Any, cast
 import aiofiles
 import orjson
 
+from glossogen.jsonl_lines import (
+    MalformedLine,
+    MalformedLineReason,
+    iter_json_objects_skipping_malformed,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -52,18 +58,13 @@ async def read_jsonl_sidecar(path: Path) -> list[dict[str, Any]]:
         logger.exception("Skipping unreadable sidecar %s", path)
         return []
 
-    rows: list[dict[str, Any]] = []
-    for line in raw.splitlines():
-        if not line.strip():
-            continue
-        try:
-            parsed = orjson.loads(line)
-        except orjson.JSONDecodeError:
+    def warn_unparsable(line: MalformedLine) -> None:
+        if line.reason is MalformedLineReason.NOT_JSON:
             logger.warning("Skipping unparsable line in %s", path)
-            continue
-        if isinstance(parsed, dict):
-            rows.append(cast(dict[str, Any], parsed))
-    return rows
+
+    return list(
+        iter_json_objects_skipping_malformed(lines=raw.splitlines(), on_malformed=warn_unparsable)
+    )
 
 
 def object_rows(value: Any) -> list[dict[str, Any]]:

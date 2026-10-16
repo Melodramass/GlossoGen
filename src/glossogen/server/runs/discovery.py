@@ -6,6 +6,7 @@ Expects the standard directory layout:
 
 import asyncio
 import logging
+from collections import deque
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple, cast
@@ -15,7 +16,8 @@ from pydantic import BaseModel, ValidationError, model_validator
 
 from glossogen.cross_run_replace_manifest import CROSS_RUN_REPLACE_MANIFEST_FILENAME
 from glossogen.eval_manifest import read_eval_manifest
-from glossogen.event_parsing import parse_event, parse_event_bytes
+from glossogen.event_parsing import parse_event
+from glossogen.jsonl_lines import JsonObjectLines
 from glossogen.models.event import (
     AgentRegistered,
     AgentSwappedMidRun,
@@ -115,8 +117,8 @@ def _scan_jsonl_sync(file_path: Path) -> _SinglePassResult:
     Intended to be called via ``asyncio.to_thread`` so CPU and IO run in
     a worker thread, enabling true parallelism across concurrent requests.
     """
-    first_bytes: bytes | None = None
-    tail: list[bytes] = []
+    first_record: dict[str, Any] | None = None
+    tail: deque[dict[str, Any]] = deque(maxlen=20)
     agents_by_id: dict[str, _AgentModelInfo] = {}
     billed_by_agent: dict[str, BilledModel] = {}
     message_count = 0
@@ -124,26 +126,22 @@ def _scan_jsonl_sync(file_path: Path) -> _SinglePassResult:
     current_round = 0
 
     with open(file_path, mode="rb") as f:
-        for line_number, line in enumerate(f, start=1):
-            stripped = line.strip()
-            if not stripped:
-                continue
+        records = JsonObjectLines(lines=f)
+        for raw in records:
+            if first_record is None:
+                first_record = raw
 
-            if first_bytes is None:
-                first_bytes = stripped
+            tail.append(raw)
 
-            tail.append(stripped)
-            if len(tail) > 20:
-                tail.pop(0)
-
-            raw = orjson.loads(stripped)
             if raw.get("event_type") == "message_sent":
                 message_count += 1
                 continue
             if raw.get("event_type") not in _SCANNED_EVENT_TYPES:
                 continue
 
-            event = _parse_scanned_line(raw=raw, file_path=file_path, line_number=line_number)
+            event = _parse_scanned_line(
+                raw=raw, file_path=file_path, line_number=records.line_number
+            )
             if isinstance(event, AgentRegistered):
                 agents_by_id[event.agent_id] = _AgentModelInfo(
                     agent_id=event.agent_id,
@@ -173,16 +171,16 @@ def _scan_jsonl_sync(file_path: Path) -> _SinglePassResult:
             elif isinstance(event, RoundAdvanced):
                 current_round = max(current_round, event.round_number)
 
-    if first_bytes is None:
+    if first_record is None:
         raise ValueError(f"File is empty: {file_path}")
 
-    first_event = parse_event_bytes(raw_bytes=first_bytes)
+    first_event = parse_event(raw=first_record)
     if not isinstance(first_event, SimulationStarted):
         raise ValueError(f"First event is not SimulationStarted in {file_path}")
 
     last_ended: SimulationEnded | None = None
     for candidate in reversed(tail):
-        event = parse_event_bytes(raw_bytes=candidate)
+        event = parse_event(raw=candidate)
         if isinstance(event, SimulationEnded):
             last_ended = event
             break

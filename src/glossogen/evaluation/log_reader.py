@@ -16,9 +16,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
-import orjson
-
-from glossogen.event_parsing import parse_event
+from glossogen.event_parsing import RoundNumberBackfill, parse_event
+from glossogen.jsonl_lines import JsonObjectLines
 from glossogen.model_catalog import Provider
 from glossogen.models.agent_config import AgentConfig
 from glossogen.models.compaction_config import CompactionConfig
@@ -37,21 +36,10 @@ def _read_and_parse_events(log_path: Path) -> list[SimulationEvent]:
     """
     strip_legacy_git_dir(run_dir=log_path.parent)
     events: list[SimulationEvent] = []
-    running_round = 0
+    round_numbers = RoundNumberBackfill()
     with open(log_path, mode="rb") as f:
-        for line in f:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            raw = orjson.loads(stripped)
-            if raw.get("event_type") == "round_advanced":
-                advanced = raw.get("round_number")
-                if isinstance(advanced, int):
-                    running_round = advanced
-            if "round_number" not in raw:
-                raw["round_number"] = running_round
-            event = parse_event(raw=raw)
-            events.append(event)
+        for record in JsonObjectLines(lines=f):
+            events.append(parse_event(raw=round_numbers.apply(record=record)))
     logger.info("Loaded %d events from %s", len(events), log_path)
     return events
 
