@@ -150,8 +150,9 @@ one that spent fewest wins. Set the knob positive to add the wall back.
 Finding the one object every viewer holds. Each viewer has a private board of
 shapes and colors on a shared grid; exactly one object is on every board of a
 team, and the rest are on some boards but not all. `team_size` sets the viewers
-per team, from 2 to 12; the presets' 6×6 grid fits 2 to 4, and larger teams need
-a larger `grid_size`. With `near_misses` on (the default), certification requires
+per team, from 2 to 12. The presets' 6×6 grid fits 3 or 4 as shipped, and 2 with
+decoys off (`decoy_count_values: [0]`); larger teams need a larger `grid_size`.
+With `near_misses` on (the default), certification requires
 that leaving out any one board leaves at least two candidates, so every viewer is
 needed, and every member must submit the common object for the team to be right.
 Two teams play the same boards, and among correct teams the one that said least

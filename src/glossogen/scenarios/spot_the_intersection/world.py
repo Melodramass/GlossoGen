@@ -175,6 +175,11 @@ class SpotTheIntersectionWorld(RoundWorld):
                 team_id=outcome.team_id, round_number=round_number, outcome=outcome
             )
 
+    def continues_recorded_round(self, round_number: int) -> bool:
+        """Whether loading ``round_number`` resumes a round the restored log already started."""
+        in_progress = self._round_in_progress
+        return in_progress is not None and in_progress.round_number == round_number
+
     def finalize_round_sync(self, round_number: int) -> None:
         """Score the round just played if needed, then load ``round_number``."""
         if not 1 <= round_number <= len(self._rounds):

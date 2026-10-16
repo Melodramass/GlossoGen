@@ -3,7 +3,8 @@
 A submission arriving after the round was scored, while the clock is still
 closing it, must not join a result it can no longer change. A run that stopped
 partway through a round and is resumed must keep that round's submissions and
-character count, or a viewer who already submitted could never complete its team.
+character count, or a viewer who already submitted could never complete its team,
+and must not record the round's start a second time.
 """
 
 from pathlib import Path
@@ -12,6 +13,7 @@ import pytest
 
 from glossogen.models.event import RoundEnded, ToolResultReceived
 from glossogen.scenarios.spot_the_intersection.board_model import cell_label
+from glossogen.scenarios.spot_the_intersection.events import SpotTheIntersectionRoundStarted
 from glossogen.scenarios.spot_the_intersection.ids import ALREADY_SUBMITTED_MARKER
 from glossogen.scenarios.spot_the_intersection.scenario import SpotTheIntersectionScenario
 from glossogen.testing.scripted_agent import SayTurn, ScriptedTurn
@@ -104,3 +106,5 @@ async def test_a_resume_mid_round_keeps_its_submissions_and_spend(
         if event.tool_name == TOOL and event.agent_id == TEAM_A[0]
     ]
     assert resubmitted[-1].startswith(ALREADY_SUBMITTED_MARKER)
+    starts = resumed.of_type(event_type=SpotTheIntersectionRoundStarted)
+    assert [start.round_number for start in starts] == [1]
