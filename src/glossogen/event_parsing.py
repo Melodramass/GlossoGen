@@ -6,9 +6,9 @@ use the same deserialization path.
 ``round_number`` is required on every event but older JSONL logs predate
 its promotion to ``EventBase`` and lack it on lifecycle events. When
 parsing a single event in isolation (e.g. the first/last line of a log)
-we default missing ``round_number`` to ``0``; full-log loaders should
-use ``glossogen.evaluation.log_reader.load_events`` instead, which tracks
-the running round across the file and backfills with the correct value.
+we default missing ``round_number`` to ``0``. Readers that walk a whole log
+pass each line through ``RoundNumberBackfill`` first, which tracks the running
+round across the file and backfills with the correct value.
 """
 
 from typing import Any
@@ -18,6 +18,37 @@ import orjson
 from glossogen.models.event import SIMULATION_EVENT_ADAPTER, SimulationEvent
 
 EVENT_ADAPTER = SIMULATION_EVENT_ADAPTER
+
+
+class RoundNumberBackfill:
+    """Gives each event of a legacy log the round it was emitted in.
+
+    Logs written before ``round_number`` was promoted to ``EventBase`` omit it.
+    Walking the log in order, the round an event belongs to is the one most
+    recently opened by a ``round_advanced``, and ``0`` before the first. One
+    instance covers one pass over one log.
+    """
+
+    def __init__(self) -> None:
+        self._running_round = 0
+
+    def observe(self, record: dict[str, Any]) -> None:
+        """Advance the running round when ``record`` is a ``round_advanced`` with an integer one."""
+        if record.get("event_type") == "round_advanced":
+            advanced = record.get("round_number")
+            if isinstance(advanced, int):
+                self._running_round = advanced
+
+    def apply(self, record: dict[str, Any]) -> dict[str, Any]:
+        """Observe ``record``, then return it with ``round_number`` set when it had none.
+
+        A record that already carries one is returned as it is; one that lacks it
+        is copied, so the caller's dict is never changed.
+        """
+        self.observe(record=record)
+        if "round_number" in record:
+            return record
+        return {**record, "round_number": self._running_round}
 
 
 def parse_event(raw: dict[str, Any]) -> SimulationEvent:

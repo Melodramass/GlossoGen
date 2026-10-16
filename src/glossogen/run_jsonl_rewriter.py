@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import Any, Callable
 
-import orjson
+from glossogen.jsonl_lines import rewrite_json_objects
 
 logger = logging.getLogger(__name__)
 
@@ -42,18 +42,10 @@ def rewrite_run_jsonl(
     message ID, and drops events for which ``should_drop_event`` returns
     True. Returns the number of lines written.
     """
-    raw_bytes = log_path.read_bytes()
-    lines = raw_bytes.split(b"\n")
-    output_lines: list[bytes] = []
 
-    for line in lines:
-        stripped = line.strip()
-        if not stripped:
-            continue
-        event_dict = orjson.loads(stripped)
-
+    def derive(event_dict: dict[str, Any]) -> dict[str, Any] | None:
         if should_drop_event(event_dict):
-            continue
+            return None
 
         event_type = event_dict.get("event_type")
 
@@ -66,17 +58,18 @@ def rewrite_run_jsonl(
             if msg_id in message_edits:
                 msg["text"] = message_edits[msg_id]
 
-        output_lines.append(orjson.dumps(event_dict))
+        return event_dict
 
-    log_path.write_bytes(b"\n".join(output_lines) + b"\n")
+    rewritten = rewrite_json_objects(lines=log_path.read_bytes().split(b"\n"), transform=derive)
+    log_path.write_bytes(rewritten.content)
 
     logger.info(
         "JSONL rewrite complete: %d lines, run_id=%s, %d message edits",
-        len(output_lines),
+        rewritten.line_count,
         new_run_id,
         len(message_edits),
     )
-    return len(output_lines)
+    return rewritten.line_count
 
 
 def patch_simulation_started_scenario_config(
@@ -91,24 +84,22 @@ def patch_simulation_started_scenario_config(
     it into the cloned JSONL so downstream readers (evaluate, UI) see a
     config that matches the new run's actual configuration.
     """
-    raw_bytes = log_path.read_bytes()
-    lines = raw_bytes.split(b"\n")
-    output_lines: list[bytes] = []
     patched = False
 
-    for line in lines:
-        stripped = line.strip()
-        if not stripped:
-            continue
-        event_dict = orjson.loads(stripped)
+    def patch_first_start(event_dict: dict[str, Any]) -> dict[str, Any]:
+        nonlocal patched
         if not patched and event_dict.get("event_type") == "simulation_started":
             event_dict["scenario_config"] = scenario_config
             patched = True
-        output_lines.append(orjson.dumps(event_dict))
+        return event_dict
+
+    rewritten = rewrite_json_objects(
+        lines=log_path.read_bytes().split(b"\n"), transform=patch_first_start
+    )
 
     if not patched:
         raise ValueError(
             f"No simulation_started event found in {log_path}; cannot patch scenario_config"
         )
 
-    log_path.write_bytes(b"\n".join(output_lines) + b"\n")
+    log_path.write_bytes(rewritten.content)

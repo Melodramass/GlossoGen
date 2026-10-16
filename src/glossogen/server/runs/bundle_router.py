@@ -21,6 +21,7 @@ from fastapi import APIRouter, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
 from glossogen.event_parsing import parse_event_bytes
+from glossogen.jsonl_lines import first_nonblank_line
 from glossogen.models.event import RunStatus, SimulationStarted
 from glossogen.run_archive import claim_run_dir, strip_legacy_git_dir
 from glossogen.run_export.archive_member_filter import should_include_in_archive
@@ -88,14 +89,11 @@ def _read_origin_run_id(run_dir: Path, scenario_name: str, fallback: str) -> str
     jsonl_path = run_dir / f"{scenario_name}.jsonl"
     try:
         with jsonl_path.open("rb") as handle:
-            for line in handle:
-                stripped = line.strip()
-                if not stripped:
-                    continue
-                event = parse_event_bytes(raw_bytes=stripped)
-                if isinstance(event, SimulationStarted):
-                    return event.run_id
-                break
+            first_line = first_nonblank_line(lines=handle)
+        if first_line is not None:
+            event = parse_event_bytes(raw_bytes=first_line)
+            if isinstance(event, SimulationStarted):
+                return event.run_id
     except Exception:
         logger.exception("Failed to read origin run_id from %s", jsonl_path)
     return fallback
@@ -224,13 +222,8 @@ def _validate_jsonl_first_event(tar: tarfile.TarFile, scenario_name: str) -> Sim
     extracted = tar.extractfile(member)
     if extracted is None:
         raise ValueError(f"{jsonl_name} is not a regular file")
-    first_line = b""
-    for line in extracted:
-        stripped = line.strip()
-        if stripped:
-            first_line = stripped
-            break
-    if not first_line:
+    first_line = first_nonblank_line(lines=extracted)
+    if first_line is None:
         raise ValueError(f"{jsonl_name} is empty")
     event = parse_event_bytes(raw_bytes=first_line)
     if not isinstance(event, SimulationStarted):

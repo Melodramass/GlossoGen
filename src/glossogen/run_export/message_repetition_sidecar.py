@@ -18,6 +18,7 @@ from glossogen.evaluation.metrics.language_repetition_sidecar import (
     LANGUAGE_REPETITION_SIDECAR_FILENAME,
     MessageRepetitionRow,
 )
+from glossogen.jsonl_lines import iter_nonblank_lines
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +40,7 @@ def read_repetition_by_message_id(run_dir: Path) -> dict[str, float]:
         )
         return {}
     factors: dict[str, float] = {}
-    for line in lines:
-        if not line.strip():
-            continue
+    for line in iter_nonblank_lines(lines=lines):
         try:
             row = MessageRepetitionRow.model_validate_json(line)
         except ValidationError:
