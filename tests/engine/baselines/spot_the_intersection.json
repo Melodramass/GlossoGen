@@ -56,7 +56,8 @@
      1,
      1
     ],
-    "two_teams": true
+    "two_teams": true,
+    "simulated_opponent_ratio": null
    },
    "provider": "anthropic"
   },

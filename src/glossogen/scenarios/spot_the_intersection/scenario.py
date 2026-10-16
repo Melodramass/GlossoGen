@@ -119,6 +119,7 @@ class SpotTheIntersectionScenario(SimulationScenario):
             postmortem_channel_ids=type(self).postmortem_channel_ids,
             postmortem_globally_disabled=knobs.postmortem_disabled_at_start,
             competitive=knobs.two_teams,
+            simulated_opponent_ratio=knobs.simulated_opponent_ratio,
             round_time_budget_seconds=knobs.round_time_budget_seconds,
         )
 
@@ -134,6 +135,7 @@ class SpotTheIntersectionScenario(SimulationScenario):
                 "team_size": self._knobs.team_size,
                 "grid_size": self._knobs.grid_size,
                 "two_teams": self._knobs.two_teams,
+                "simulated_opponent_ratio": self._knobs.simulated_opponent_ratio,
                 "round_count": self._knobs.round_count,
             },
         )

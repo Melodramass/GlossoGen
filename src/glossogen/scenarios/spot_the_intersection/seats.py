@@ -38,8 +38,10 @@ class Seat(NamedTuple):
     board_index: int
 
 
-def team_ids_for(two_teams: bool) -> tuple[str, ...]:
-    """The teams a run holds."""
+def team_ids_for(two_teams: bool, simulated_opponent: bool) -> tuple[str, ...]:
+    """The teams whose viewers play a run; a simulated Team B has none."""
+    if two_teams and simulated_opponent:
+        return (TEAM_A_ID,)
     if two_teams:
         return (TEAM_A_ID, TEAM_B_ID)
     return (TEAM_SOLO_ID,)

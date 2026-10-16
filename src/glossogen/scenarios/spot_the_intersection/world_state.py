@@ -2,16 +2,20 @@
 
 A team is correct only when every member submitted the round's answer, within
 the character budget when one is set. Among correct teams, the fewest link
-characters wins. ``score_round`` is the one place that rule lives, read by the
-live world and by the event-log reconstruction alike.
+characters wins. A simulated opponent is ranked by the same rule. ``score_round``
+is the one place that rule lives, read by the live world and by the event-log
+reconstruction alike.
 """
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
+from fractions import Fraction
 from typing import NamedTuple, Self
 
 from glossogen.engine.fewest_characters_winner import fewest_characters_winners
 from glossogen.scenarios.spot_the_intersection.board_model import BoardObject
+from glossogen.scenarios.spot_the_intersection.ids import TEAM_B_ID
 
 
 class IntersectionOutcome(NamedTuple):
@@ -20,7 +24,8 @@ class IntersectionOutcome(NamedTuple):
     ``agreed`` is whether every member submitted and all submitted the same
     object, right or wrong. ``won`` holds only in two-team runs, for the
     correct team (or tied teams) with the fewest characters. The ``opponent_*``
-    fields describe the other team and are ``None`` with one team.
+    fields describe the other team and are ``None`` with one team;
+    ``opponent_simulated`` says that team was simulated rather than played.
     """
 
     round_number: int
@@ -36,6 +41,7 @@ class IntersectionOutcome(NamedTuple):
     competitive: bool
     opponent_correct: bool | None
     opponent_characters: int | None
+    opponent_simulated: bool
 
 
 class TeamSnapshot(NamedTuple):
@@ -131,18 +137,49 @@ def snapshot_from_submissions(
     )
 
 
+def simulated_opponent(played: TeamSnapshot, ratio: float) -> TeamSnapshot:
+    """The Team B a lone Team A is scored against: always correct, ``ratio`` of its characters.
+
+    The share is taken of the decimal the knob holds and rounded down, so 0.8 of
+    203 characters is 162 and binary rounding never moves it across a whole number.
+    """
+    return TeamSnapshot(
+        team_id=TEAM_B_ID,
+        members_required=played.members_required,
+        members_submitted=played.members_required,
+        members_correct=played.members_required,
+        agreed=True,
+        budget_exceeded=False,
+        characters=math.floor(Fraction(str(ratio)) * played.characters),
+    )
+
+
 def score_round(
-    round_number: int, snapshots: Sequence[TeamSnapshot], competitive: bool
+    round_number: int,
+    snapshots: Sequence[TeamSnapshot],
+    competitive: bool,
+    simulated_opponent_ratio: float | None,
 ) -> tuple[IntersectionOutcome, ...]:
-    """Apply the correctness gate, then fewest-characters-wins, in team order."""
+    """Apply the correctness gate, then fewest-characters-wins, in team order.
+
+    With ``simulated_opponent_ratio`` set, ``snapshots`` holds Team A alone, and
+    a simulated Team B joins the ranking; only Team A's outcome is returned.
+    """
+    ranked = list(snapshots)
+    if simulated_opponent_ratio is not None:
+        if len(snapshots) != 1:
+            raise ValueError(
+                f"a simulated opponent plays against one team (got {len(snapshots)} teams)"
+            )
+        ranked.append(simulated_opponent(played=snapshots[0], ratio=simulated_opponent_ratio))
     winners = fewest_characters_winners(
         characters_by_eligible_team_id={
-            snapshot.team_id: snapshot.characters for snapshot in snapshots if snapshot.correct
+            snapshot.team_id: snapshot.characters for snapshot in ranked if snapshot.correct
         }
     )
     outcomes: list[IntersectionOutcome] = []
     for snapshot in snapshots:
-        opponent = _opponent_of(snapshot=snapshot, snapshots=snapshots, competitive=competitive)
+        opponent = _opponent_of(snapshot=snapshot, snapshots=ranked, competitive=competitive)
         opponent_correct: bool | None = None
         opponent_characters: int | None = None
         if opponent is not None:
@@ -163,6 +200,7 @@ def score_round(
                 competitive=competitive,
                 opponent_correct=opponent_correct,
                 opponent_characters=opponent_characters,
+                opponent_simulated=simulated_opponent_ratio is not None,
             )
         )
     return tuple(outcomes)
@@ -184,12 +222,15 @@ def outcome_reason(outcome: IntersectionOutcome) -> str:
     """A one-line reason for the round result the clock records.
 
     An exhausted budget comes first, since it can end the round before every
-    member has submitted.
+    member has submitted. Against a simulated opponent the reason names it and
+    its count; the viewers are never told it was simulated.
     """
     counts = (
         f"{outcome.members_correct}/{outcome.members_required} submitted the answer, "
         f"{outcome.characters_used} chars"
     )
+    if outcome.opponent_simulated:
+        counts = f"{counts}, simulated opponent {outcome.opponent_characters} chars"
     if outcome.budget_exceeded:
         return f"over budget ({counts})"
     if outcome.members_submitted < outcome.members_required:

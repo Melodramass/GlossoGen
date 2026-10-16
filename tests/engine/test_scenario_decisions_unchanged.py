@@ -105,6 +105,12 @@ CONFIGURATIONS["container_yard_stacking_two_teams"] = (
     "container_yard_stacking",
     {"two_teams": True},
 )
+# Team A alone against a simulated Team B: only Team A's seats play, and its
+# verdict is ranked against a share of its own characters.
+CONFIGURATIONS["spot_the_intersection_simulated_opponent"] = (
+    "spot_the_intersection",
+    {"simulated_opponent_ratio": 0.8},
+)
 
 
 def baseline_path(configuration: str) -> Path:

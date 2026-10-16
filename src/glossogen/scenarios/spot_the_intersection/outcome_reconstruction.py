@@ -80,6 +80,7 @@ def restore_rounds_from_events(
     teams: dict[str, TeamState],
     outcome_log: RoundOutcomeLog[IntersectionOutcome],
     competitive: bool,
+    simulated_opponent_ratio: float | None,
     budget: int,
     events: list[Any],
 ) -> RestoredRounds:
@@ -112,7 +113,10 @@ def restore_rounds_from_events(
             for team_id, team in teams.items()
         ]
         for outcome in score_round(
-            round_number=round_number, snapshots=snapshots, competitive=competitive
+            round_number=round_number,
+            snapshots=snapshots,
+            competitive=competitive,
+            simulated_opponent_ratio=simulated_opponent_ratio,
         ):
             outcome_log.record(team_id=outcome.team_id, round_number=round_number, outcome=outcome)
     return RestoredRounds(

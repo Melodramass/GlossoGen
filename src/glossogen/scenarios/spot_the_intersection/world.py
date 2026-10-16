@@ -63,6 +63,7 @@ class SpotTheIntersectionWorld(RoundWorld):
         postmortem_channel_ids: frozenset[str],
         postmortem_globally_disabled: bool,
         competitive: bool,
+        simulated_opponent_ratio: float | None,
         round_time_budget_seconds: int,
     ) -> None:
         super().__init__(
@@ -73,6 +74,7 @@ class SpotTheIntersectionWorld(RoundWorld):
         )
         self._rounds = tuple(rounds)
         self._competitive = competitive
+        self._simulated_opponent_ratio = simulated_opponent_ratio
         self._budget = round_time_budget_seconds
         self._seats = seats_by_agent_id(teams=team_specs)
         self._teams: dict[str, TeamState] = {
@@ -171,7 +173,10 @@ class SpotTheIntersectionWorld(RoundWorld):
             for team_id, team in self._teams.items()
         ]
         for outcome in score_round(
-            round_number=round_number, snapshots=snapshots, competitive=self._competitive
+            round_number=round_number,
+            snapshots=snapshots,
+            competitive=self._competitive,
+            simulated_opponent_ratio=self._simulated_opponent_ratio,
         ):
             self._outcome_log.record(
                 team_id=outcome.team_id, round_number=round_number, outcome=outcome
@@ -207,6 +212,7 @@ class SpotTheIntersectionWorld(RoundWorld):
             teams=self._teams,
             outcome_log=self._outcome_log,
             competitive=self._competitive,
+            simulated_opponent_ratio=self._simulated_opponent_ratio,
             budget=self._budget,
             events=events,
         )

@@ -2,7 +2,8 @@
 
 One team, or two isolated teams on the same boards. Each team is ``team_size``
 interchangeable viewers on one link channel, with a debrief when the run holds
-one.
+one. A simulated Team B is declared nowhere: only Team A's viewers play, under
+the same names they hold in a two-team run.
 """
 
 from glossogen.engine.team_declaration import (
@@ -54,7 +55,10 @@ def intersection_teams(knobs: SpotTheIntersectionKnobs) -> tuple[TeamSpec, ...]:
     """Return the teams a run with these knobs holds."""
     debrief_active = knobs.postmortem_enabled and not knobs.postmortem_disabled_at_start
     teams: list[TeamSpec] = []
-    for team_id in team_ids_for(two_teams=knobs.two_teams):
+    for team_id in team_ids_for(
+        two_teams=knobs.two_teams,
+        simulated_opponent=knobs.simulated_opponent_ratio is not None,
+    ):
         link_name = link_display_name_for(team_id=team_id)
         teams.append(
             TeamSpec(

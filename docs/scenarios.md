@@ -157,8 +157,11 @@ certification requires that leaving out any one board leaves at least two
 candidates, so every viewer is needed, and every member must submit the common
 object for the team to be right.
 Two teams play the same boards, and among correct teams the one that said least
-wins. Every round is certified from the lines the viewers read before it is
-played, and recorded runs can be audited against what each viewer was sent.
+wins. `simulated_opponent_ratio` replaces Team B with a simulated team that is
+always right in that share of Team A's characters, while Team A reads exactly
+what it would against a real team. Every round is certified from the lines the
+viewers read before it is played, and recorded runs can be audited against what
+each viewer was sent.
 
 ## Prisoners' dilemma
 

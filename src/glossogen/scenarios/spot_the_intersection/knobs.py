@@ -2,8 +2,8 @@
 
 Controls how many viewers a team has, the grid and how many objects each board
 holds, whether near-misses make every board necessary, the competing second
-team, the postmortem discussion phase, channel noise, and the optional per-round
-character budget.
+team and whether it is simulated, the postmortem discussion phase, channel
+noise, and the optional per-round character budget.
 """
 
 from typing import Self
@@ -36,8 +36,12 @@ class SpotTheIntersectionKnobs(BaseKnobs):
 
     ``two_teams`` runs a second team on the same boards seat for seat. Among
     teams whose every member submits the correct object, the one that sent the
-    fewest link characters wins the round. ``round_time_budget_seconds`` is an
-    optional hard cap on those characters (``-1`` for none).
+    fewest link characters wins the round. ``simulated_opponent_ratio``, with
+    two teams, plays Team A alone and scores it against a simulated Team B that
+    gets every round right in that share of Team A's own characters, rounded
+    down; ``None`` plays both teams. Team A is told exactly what it would be
+    told against a real Team B. ``round_time_budget_seconds`` is an optional
+    hard cap on link characters (``-1`` for none).
     """
 
     round_time_budget_seconds: int
@@ -50,6 +54,7 @@ class SpotTheIntersectionKnobs(BaseKnobs):
     filler_count_values: list[int]
     filler_count_weights: list[int]
     two_teams: bool
+    simulated_opponent_ratio: float | None = Field(gt=0, allow_inf_nan=False)
 
     @model_validator(mode="after")
     def _validate_count_distributions(self) -> Self:
@@ -78,6 +83,15 @@ class SpotTheIntersectionKnobs(BaseKnobs):
                 f"team_size >= 3 (got team_size={self.team_size}, "
                 f"decoy_count_values={self.decoy_count_values}); set decoy_count_values to [0] "
                 "and decoy_count_weights to [1]"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_simulated_opponent(self) -> Self:
+        if self.simulated_opponent_ratio is not None and not self.two_teams:
+            raise ValueError(
+                "simulated_opponent_ratio stands in for Team B, so it needs two_teams=True "
+                f"(got simulated_opponent_ratio={self.simulated_opponent_ratio})"
             )
         return self
 

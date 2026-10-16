@@ -300,7 +300,10 @@ the commit log.
 - **`spot_the_intersection` scenario.** Each viewer holds a private board, exactly
   one object is on every board of a team, and every member must submit it; two
   teams play the same boards and the correct team that said least wins. The team
-  size is the `team_size` knob. Every round is certified from the lines the
+  size is the `team_size` knob. `simulated_opponent_ratio` plays Team A alone
+  against a simulated Team B, always right in that share of Team A's characters,
+  with Team A reading exactly what it would against a real team
+  (`knobs_simulated_opponent`). Every round is certified from the lines the
   viewers read before it is played, and `scripts/certify_boards.py` and
   `scripts/audit_recorded_boards.py` in the scenario package check boards before
   a cohort and recorded runs after it. The run page's round timeline draws every
