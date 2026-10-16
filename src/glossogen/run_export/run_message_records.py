@@ -39,6 +39,7 @@ from glossogen.evaluation.metric_core.pristine_text_index import (
 from glossogen.run_export.message_event_scan import scan_message_events
 from glossogen.run_export.message_repetition_sidecar import read_repetition_by_message_id
 from glossogen.run_export.primary_channel_resolution import resolve_primary_channels
+from glossogen.run_file_paths import event_log_path
 from glossogen.server.runs.models import RunSummary
 
 
@@ -87,14 +88,11 @@ class RunMessages(NamedTuple):
     messages: list[ExportMessage]
 
 
-def log_path_for(summary: RunSummary) -> Path:
-    """Return where the run's JSONL event log lives on disk."""
-    return Path(summary.run_dir) / f"{summary.scenario_name}.jsonl"
-
-
 def load_run_injections(summary: RunSummary) -> list[ExportInjection]:
     """Read one run's delivered injections off disk, in delivery order."""
-    scan = scan_message_events(log_path=log_path_for(summary=summary))
+    scan = scan_message_events(
+        log_path=event_log_path(run_dir=Path(summary.run_dir), scenario_name=summary.scenario_name)
+    )
     return [
         ExportInjection(
             round_number=scanned.event.round_number,
@@ -109,7 +107,9 @@ def load_run_injections(summary: RunSummary) -> list[ExportInjection]:
 
 def load_run_messages(summary: RunSummary) -> RunMessages:
     """Read one run's messages off disk, scored and ordered as the table emits them."""
-    scan = scan_message_events(log_path=log_path_for(summary=summary))
+    scan = scan_message_events(
+        log_path=event_log_path(run_dir=Path(summary.run_dir), scenario_name=summary.scenario_name)
+    )
     pristine = build_pristine_text_index(events=scan.send_results)
     repetition = read_repetition_by_message_id(run_dir=Path(summary.run_dir))
     primary = resolve_primary_channels(

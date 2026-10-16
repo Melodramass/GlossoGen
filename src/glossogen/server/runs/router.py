@@ -33,13 +33,13 @@ from glossogen.knob_filter import (
 from glossogen.model_catalog import JUDGE_PROVIDERS
 from glossogen.models.event import RunStatus, SimulationEnded
 from glossogen.run_archive import move_run_to_trash
+from glossogen.run_file_paths import debug_log_path, evaluation_report_path, event_log_path
 from glossogen.run_identity import compose_run_id
 from glossogen.scenario_loader import find_scenario_class
 from glossogen.server.response_models import LaunchStatus
 from glossogen.server.runs.branch_sources import list_branch_sources_for_group
 from glossogen.server.runs.derived_run_references import build_derived_run_references
 from glossogen.server.runs.detail_reader import (
-    debug_log_path_for,
     load_debug_logs,
     load_evaluation_report,
     load_run_detail,
@@ -169,7 +169,7 @@ async def get_run_detail(
     resolved = await resolve_run_or_404(
         request=request, scenario=scenario, run_dir_name=run_dir_name
     )
-    log_path = resolved.run_dir / f"{resolved.scenario_name}.jsonl"
+    log_path = event_log_path(run_dir=resolved.run_dir, scenario_name=resolved.scenario_name)
     identity = get_identity(request=request)
     children = await build_derived_run_references(
         pool=request.app.state.db_pool,
@@ -279,7 +279,9 @@ async def get_run_evaluation(
     resolved = await resolve_run_or_404(
         request=request, scenario=scenario, run_dir_name=run_dir_name
     )
-    report_path = resolved.run_dir / f"{resolved.scenario_name}_report.json"
+    report_path = evaluation_report_path(
+        run_dir=resolved.run_dir, scenario_name=resolved.scenario_name
+    )
     return await load_evaluation_report(report_path=report_path)
 
 
@@ -313,8 +315,7 @@ async def get_debug_logs(
     resolved = await resolve_run_or_404(
         request=request, scenario=scenario, run_dir_name=run_dir_name
     )
-    log_path = resolved.run_dir / f"{resolved.scenario_name}.jsonl"
-    debug_path = debug_log_path_for(log_path=log_path, scenario_name=resolved.scenario_name)
+    debug_path = debug_log_path(run_dir=resolved.run_dir, scenario_name=resolved.scenario_name)
     entries = await load_debug_logs(debug_log_path=debug_path)
     return DebugLogsResponse(entries=entries)
 
@@ -374,7 +375,7 @@ async def stop_run(scenario: str, run_dir_name: str, request: Request) -> None:
 
     delete_manifest(run_dir=resolved.run_dir)
 
-    jsonl_path = resolved.run_dir / f"{resolved.scenario_name}.jsonl"
+    jsonl_path = event_log_path(run_dir=resolved.run_dir, scenario_name=resolved.scenario_name)
     scan = await scan_jsonl(file_path=jsonl_path)
     _append_killed_event(
         run_dir=resolved.run_dir,
@@ -399,7 +400,7 @@ def _append_killed_event(
         total_cost_usd=total_cost_usd,
         round_number=round_number,
     )
-    jsonl_path = run_dir / f"{scenario_name}.jsonl"
+    jsonl_path = event_log_path(run_dir=run_dir, scenario_name=scenario_name)
     with open(jsonl_path, "ab") as f:
         f.write(orjson.dumps(event.model_dump(mode="json")) + b"\n")
     logger.info("Appended killed event to %s", jsonl_path)
@@ -434,7 +435,7 @@ async def start_evaluation(
     )
 
     run_dir = resolved.run_dir
-    jsonl_path = run_dir / f"{resolved.scenario_name}.jsonl"
+    jsonl_path = event_log_path(run_dir=run_dir, scenario_name=resolved.scenario_name)
     scan = await scan_jsonl(file_path=jsonl_path)
 
     if scan.last_event is not None:
@@ -695,7 +696,9 @@ async def update_evaluation(
     )
     identity = get_identity(request=request)
     run_id = compose_run_id(scenario_name=scenario, run_dir_name=run_dir_name)
-    report_path = resolved.run_dir / f"{resolved.scenario_name}_report.json"
+    report_path = evaluation_report_path(
+        run_dir=resolved.run_dir, scenario_name=resolved.scenario_name
+    )
     await write_report(report=body, report_path=report_path)
     content_hash = compute_measurements_hash(measurements=body.measurements)
     pool = request.app.state.db_pool

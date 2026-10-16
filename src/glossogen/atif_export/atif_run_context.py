@@ -13,6 +13,7 @@ from glossogen.atif_export.tool_definition_reconstruction import reconstruct_too
 from glossogen.evaluation.log_reader import extract_scenario_config, load_events
 from glossogen.models.event import AgentRegistered, SimulationEvent
 from glossogen.models.tool_definition import RecordedToolDefinition
+from glossogen.run_file_paths import event_log_path
 from glossogen.run_identity import compose_run_id
 
 
@@ -33,7 +34,9 @@ class AtifRunContext(NamedTuple):
 
 async def load_atif_run_context(run_dir: Path, scenario_name: str) -> AtifRunContext:
     """Load the run at ``run_dir``; its ``run_id`` is ``<scenario>/<run_dir_name>``."""
-    events = await load_events(log_path=run_dir / f"{scenario_name}.jsonl")
+    events = await load_events(
+        log_path=event_log_path(run_dir=run_dir, scenario_name=scenario_name)
+    )
     scenario_config = extract_scenario_config(events=events)
     reconstructed: list[RecordedToolDefinition] | None = None
     if _some_registration_lacks_schemas(events=events):

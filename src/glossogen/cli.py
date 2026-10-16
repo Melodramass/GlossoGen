@@ -112,6 +112,7 @@ from glossogen.run_export.export_request_models import (
 from glossogen.run_export.export_run_record import load_export_run_records
 from glossogen.run_export.run_selection_resolution import resolve_selection
 from glossogen.run_export.runs_zip_archive import write_runs_zip
+from glossogen.run_file_paths import debug_log_path, evaluation_report_path, event_log_path
 from glossogen.runners.pydantic_ai_runner import PydanticAIRunner
 from glossogen.runtime.game_clock import minimum_duration_elapsed, wall_clock_phase_timeout
 from glossogen.scenario_conformance import CheckOutcome, check_scenario, failures
@@ -1344,9 +1345,9 @@ def _setup_logging(
 
     Returns the two handlers so they can be removed during teardown.
     """
-    debug_log_path = run_dir / f"{scenario_name}_debug.jsonl"
+    debug_log_file = debug_log_path(run_dir=run_dir, scenario_name=scenario_name)
     run_dir.mkdir(parents=True, exist_ok=True)
-    json_handler = logging.FileHandler(debug_log_path)
+    json_handler = logging.FileHandler(debug_log_file)
     json_handler.setFormatter(JsonLineFormatter())
     logging.getLogger().addHandler(json_handler)
 
@@ -1405,7 +1406,7 @@ async def _run_simulation(
         agent_overrides=agent_overrides,
     )
 
-    log_path = run_dir / f"{scenario.name()}.jsonl"
+    log_path = event_log_path(run_dir=run_dir, scenario_name=scenario.name())
     event_bus = EventBus(max_queue_size=EVENT_BUS_MAX_QUEUE_SIZE)
 
     event_logger = EventLogger(log_path=log_path, event_bus=event_bus)
@@ -1504,8 +1505,8 @@ async def _run_evaluation(
     """
     metric_names = args.metrics.split(",")
     run_dir = Path(args.run_dir)
-    log_path = run_dir / f"{args.scenario_name}.jsonl"
-    report_path = run_dir / f"{args.scenario_name}_report.json"
+    log_path = event_log_path(run_dir=run_dir, scenario_name=args.scenario_name)
+    report_path = evaluation_report_path(run_dir=run_dir, scenario_name=args.scenario_name)
 
     events = await load_events(log_path=log_path)
     config = scenario_cls.strip_unknown_knobs(config=dict(extract_scenario_config(events=events)))
@@ -2166,7 +2167,7 @@ async def _resolve_default_visible_channels(
     knob resolves once ``knobs`` supplies it. A channel is visible by default
     unless the knob explicitly maps it to ``False``.
     """
-    log_path = source_run_dir / f"{scenario_name}.jsonl"
+    log_path = event_log_path(run_dir=source_run_dir, scenario_name=scenario_name)
     events = await load_events(log_path=log_path)
     scenario_cls = get_scenario_class(name=scenario_name)
 
@@ -2235,7 +2236,7 @@ async def _resolve_imported_model_from_source_b(
     missing. The orchestrator will catch the same case later, but this
     gives a clearer CLI error message.
     """
-    log_path = source_b_run_dir / f"{scenario_name}.jsonl"
+    log_path = event_log_path(run_dir=source_b_run_dir, scenario_name=scenario_name)
     events = await load_events(log_path=log_path)
     for event in events:
         if isinstance(event, AgentRegistered) and event.agent_id == replaced_agent_id:
@@ -2253,7 +2254,7 @@ async def _resolve_source_b_max_round(source_b_run_dir: Path, scenario_name: str
     actual reach when source A's swap point is past source B's tail.
     Raises ``SystemExit`` if source B has no ``RoundAdvanced`` events.
     """
-    log_path = source_b_run_dir / f"{scenario_name}.jsonl"
+    log_path = event_log_path(run_dir=source_b_run_dir, scenario_name=scenario_name)
     events = await load_events(log_path=log_path)
     max_round = 0
     for event in events:

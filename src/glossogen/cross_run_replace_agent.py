@@ -44,6 +44,7 @@ from glossogen.replace_agent import (
 )
 from glossogen.run_archive import claim_run_dir, copy_run_at_event, find_event_offset
 from glossogen.run_config_validation import validate_run_config
+from glossogen.run_file_paths import event_log_path, stdout_log_path
 from glossogen.run_identity import compose_run_id
 from glossogen.run_jsonl_rewriter import (
     drop_simulation_ended,
@@ -172,10 +173,14 @@ async def prepare_cross_run_replace_agent_run(
         imported_agent_id=request.replaced_agent_id,
     )
 
-    source_a_log_path = request.source_a_run_dir / f"{request.scenario_name}.jsonl"
+    source_a_log_path = event_log_path(
+        run_dir=request.source_a_run_dir, scenario_name=request.scenario_name
+    )
     if not source_a_log_path.exists():
         raise ValueError(f"Source A run JSONL not found: {source_a_log_path}")
-    source_b_log_path = request.source_b_run_dir / f"{request.scenario_name}.jsonl"
+    source_b_log_path = event_log_path(
+        run_dir=request.source_b_run_dir, scenario_name=request.scenario_name
+    )
     if not source_b_log_path.exists():
         raise ValueError(f"Source B run JSONL not found: {source_b_log_path}")
 
@@ -309,11 +314,11 @@ async def prepare_cross_run_replace_agent_run(
         runs_dir=request.runs_dir,
         scenario_name=request.scenario_name,
     )
-    new_log_filename = f"{request.scenario_name}.jsonl"
+    new_log_path = event_log_path(run_dir=new_run_dir, scenario_name=request.scenario_name)
     await copy_run_at_event(
         source_dir=request.source_a_run_dir,
         target_dir=new_run_dir,
-        jsonl_path_within_run=Path(new_log_filename),
+        jsonl_path_within_run=Path(new_log_path.name),
         truncate_after_offset=location.end_offset,
     )
 
@@ -321,7 +326,6 @@ async def prepare_cross_run_replace_agent_run(
         scenario_name=request.scenario_name,
         run_dir_name=new_run_dir.name,
     )
-    new_log_path = new_run_dir / new_log_filename
 
     rewrite_run_jsonl(
         log_path=new_log_path,
@@ -376,7 +380,7 @@ async def prepare_cross_run_replace_agent_run(
     manifest_path = new_run_dir / CROSS_RUN_REPLACE_MANIFEST_FILENAME
     manifest_path.write_bytes(orjson.dumps(manifest.model_dump()))
 
-    stdout_log = new_run_dir / f"{request.scenario_name}_stdout.log"
+    stdout_log = stdout_log_path(run_dir=new_run_dir, scenario_name=request.scenario_name)
     cmd = (
         sys.executable,
         "-m",

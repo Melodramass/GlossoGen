@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 from weasyprint.urls import URLFetcher  # type: ignore[import-untyped]
 
+from glossogen.run_file_paths import event_log_path
 from glossogen.server.pdf.export_data import build_pdf_export_data
 from glossogen.server.pdf.html_renderer import render_pdf_html
 from glossogen.server.runs.detail_reader import load_run_detail
@@ -61,7 +62,7 @@ async def export_run_pdf(
         run_dir_name=run_dir_name,
     )
 
-    log_path = resolved.run_dir / f"{resolved.scenario_name}.jsonl"
+    log_path = event_log_path(run_dir=resolved.run_dir, scenario_name=resolved.scenario_name)
 
     run_detail = await load_run_detail(log_path=log_path, children=[])
 

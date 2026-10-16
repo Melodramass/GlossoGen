@@ -27,6 +27,7 @@ from glossogen.evaluation.metric_core.scenario_metric_names import available_met
 from glossogen.evaluation.reports.evaluation_report import load_report_tolerant
 from glossogen.mcp_tool_rejection import surface_value_errors
 from glossogen.model_catalog import list_models, list_providers
+from glossogen.run_file_paths import debug_log_path, evaluation_report_path, event_log_path
 from glossogen.scenario_loader import get_scenario_class, iter_scenario_classes
 from glossogen.server.mcp.asgi_context import McpRunContextMiddleware
 from glossogen.server.mcp.models import (
@@ -65,7 +66,7 @@ from glossogen.server.runs.derived_run_references import (
     build_derived_run_references,
     timeline_parent_run_id,
 )
-from glossogen.server.runs.detail_reader import debug_log_path_for, load_debug_logs, load_run_detail
+from glossogen.server.runs.detail_reader import load_debug_logs, load_run_detail
 from glossogen.server.runs.listing import list_runs_owned_by_group
 from glossogen.server.runs.models import DerivedRunReference, RunDetailResponse, RunSummary
 from glossogen.thread_export.export_agent_thread import (
@@ -112,7 +113,7 @@ async def _find_run_by_prefix(run_id_prefix: str) -> RunSummary:
 async def _load_detail(run_summary: RunSummary) -> RunDetailResponse:
     """Load full run detail from a RunSummary."""
     run_dir = Path(run_summary.run_dir)
-    jsonl_path = run_dir / f"{run_summary.scenario_name}.jsonl"
+    jsonl_path = event_log_path(run_dir=run_dir, scenario_name=run_summary.scenario_name)
     return await load_run_detail(log_path=jsonl_path, children=[])
 
 
@@ -233,7 +234,9 @@ def _derived_run_to_entry(reference: DerivedRunReference) -> McpDerivedRun:
 
 async def _load_evaluation_measurements(run_summary: RunSummary) -> list[McpMeasurement] | None:
     """Load evaluation measurements from the report JSON, or return None."""
-    report_path = Path(run_summary.run_dir) / f"{run_summary.scenario_name}_report.json"
+    report_path = evaluation_report_path(
+        run_dir=Path(run_summary.run_dir), scenario_name=run_summary.scenario_name
+    )
     try:
         report = await load_report_tolerant(report_path=report_path)
     except Exception:
@@ -563,11 +566,8 @@ async def _tool_get_run(
     debug_logs: list[McpDebugLog] | None = None
     if with_debug_logs:
         run_dir = Path(run_summary.run_dir)
-        jsonl_path = run_dir / f"{run_summary.scenario_name}.jsonl"
         raw_debug_logs = await load_debug_logs(
-            debug_log_path=debug_log_path_for(
-                log_path=jsonl_path, scenario_name=run_summary.scenario_name
-            )
+            debug_log_path=debug_log_path(run_dir=run_dir, scenario_name=run_summary.scenario_name)
         )
         debug_logs = [
             McpDebugLog(
