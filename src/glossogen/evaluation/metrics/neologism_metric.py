@@ -1,22 +1,20 @@
 """Metric that detects whether agents invented new words during communication."""
 
-import logging
 from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from glossogen.evaluation.metric_core.measurement import Measurement, RoundNote, merge_round_notes
+from glossogen.evaluation.metric_core.measurement import Measurement, RoundNote
 from glossogen.evaluation.metric_core.metric_protocol import Metric
 from glossogen.evaluation.metric_core.metric_run_options import MetricRunOptions
-from glossogen.evaluation.metric_core.pristine_text_index import build_pristine_text_index
-from glossogen.evaluation.prompts.prompt_renderer import render_evaluator_prompt
-from glossogen.evaluation.round_transcript_builder import build_round_transcripts
-from glossogen.llm.provider import LLMMessage, LLMProvider
+from glossogen.evaluation.metrics.flagged_round_judge import (
+    FlaggedRoundVerdict,
+    judge_flagged_rounds,
+)
+from glossogen.llm.provider import LLMProvider
 from glossogen.models.agent_config import AgentConfig
 from glossogen.models.event import SimulationEvent
 from glossogen.scenario_base import ScenarioBase
-
-logger = logging.getLogger(__name__)
 
 
 class NeologismOutput(BaseModel):
@@ -41,6 +39,20 @@ class NeologismOutput(BaseModel):
     )
 
 
+def _read_verdict(output: NeologismOutput) -> FlaggedRoundVerdict:
+    """Take the round notes, summary qualifiers and explanation from the judge's answer."""
+    qualifiers: list[str] = []
+    if output.semantically_stable:
+        qualifiers.append("semantically stable")
+    if output.mutually_adopted:
+        qualifiers.append("mutually adopted")
+    return FlaggedRoundVerdict(
+        per_round_notes=output.per_round_notes,
+        qualifiers=qualifiers,
+        explanation=output.explanation,
+    )
+
+
 class NeologismMetric(Metric):
     """Detects whether agents invented new words or terms during communication."""
 
@@ -57,57 +69,19 @@ class NeologismMetric(Metric):
     ) -> list[Measurement]:
         """Evaluate whether agents invented new vocabulary."""
         _ = run_dir, options
-        round_transcripts = build_round_transcripts(
+        return await judge_flagged_rounds(
+            metric_name=self.name,
+            finding="detected neologisms",
             events=events,
             scenario=scenario,
-            pristine_index=build_pristine_text_index(events=events),
-        )
-
-        if not round_transcripts:
-            logger.info("%s: skipping — no messages found", self.name)
-            return []
-
-        agent_prompts = [
-            {"role_name": config.role_name, "system_prompt": config.system_prompt}
-            for config in agent_configs
-        ]
-
-        judge_prompt = render_evaluator_prompt(
-            template_name="neologism_user.jinja",
-            template_variables={
-                "rounds": round_transcripts,
-                "agent_prompts": agent_prompts,
+            llm_provider=llm_provider,
+            user_template_name="neologism_user.jinja",
+            extra_template_variables={
+                "agent_prompts": [
+                    {"role_name": config.role_name, "system_prompt": config.system_prompt}
+                    for config in agent_configs
+                ]
             },
-        )
-
-        result = await llm_provider.generate_structured(
-            system_prompt=render_evaluator_prompt(
-                template_name="evaluator_system.jinja",
-                template_variables={},
-            ),
-            messages=[LLMMessage(role="user", content=judge_prompt)],
             output_schema=NeologismOutput,
+            read_verdict=_read_verdict,
         )
-
-        per_round = merge_round_notes(notes=result.per_round_notes)
-        flags: list[str] = []
-        if result.semantically_stable:
-            flags.append("semantically stable")
-        if result.mutually_adopted:
-            flags.append("mutually adopted")
-        flag_text = f" ({'; '.join(flags)})" if flags else ""
-        summary = (
-            f"{len(per_round)}/{len(round_transcripts)} rounds contained "
-            f"detected neologisms{flag_text}. {result.explanation}"
-        )
-
-        return [
-            Measurement(
-                metric_name=self.name,
-                score=float(len(per_round)),
-                score_unit=f"rounds with detected neologisms (out of {len(round_transcripts)})",
-                summary=summary,
-                per_round=per_round,
-                per_agent=[],
-            )
-        ]

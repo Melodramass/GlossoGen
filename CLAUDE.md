@@ -119,6 +119,7 @@ make check-frontend    # frontend CI mode (prettier --check, no auto-fix)
     - `slang_emergence_metric.py` — detects informal register shifts and colloquial expressions
     - `neologism_metric.py` — detects genuinely invented words (not abbreviations or codes)
     - `shorthand_codes_metric.py` — detects abbreviation systems and symbol-to-meaning mappings
+    - `flagged_round_judge.py` — `judge_flagged_rounds`, the run-level judge call the language-emergence metrics above share: one call over every round's transcript, scored as the number of distinct rounds the judge noted. Each metric supplies its template, output schema and summary qualifiers
     - `content_filter_refusal_metric.py` — counts ``ContentFilterError`` refusals across the run, with per-round + per-agent breakdowns
     - `perplexity_metric.py` — mean per-token surprisal of primary-channel messages under `gpt2`
     - `mcr_metric.py` — mean total characters per round on the primary channel
@@ -139,6 +140,7 @@ make check-frontend    # frontend CI mode (prettier --check, no auto-fix)
       - `round_ended_timeout_metric.py` — flags rounds whose main phase ended via the `round_timeout` trigger
       - `postmortem_ended_timeout_metric.py` — flags rounds whose *postmortem* phase ended via `postmortem_timeout` (wall-clock) rather than all agents going idle. Reads `PostmortemEnded` events (authoritative; covers the final round) with a fallback to `RoundAdvanced(trigger="postmortem_timeout")` for runs predating that event
       - `trigger_detection.py` — shared helpers for reading `RoundEnded` / `PostmortemEnded` / `RoundAdvanced` trigger events
+      - `main_phase_ending_count.py` — `count_main_phase_endings`, the body of `round_ended_idle` and `round_ended_timeout`, which differ only in the trigger they count
   - `metric_core/` (additions):
     - `round_result_index.py` — `per_round_joint_success(events)` builds round→bool from `RoundResultRecorded` events (multi-team joint = all teams succeeded)
     - `protocol_boundary.py` — `ProtocolBoundaryWindow` NamedTuple returned by `detect_protocol_boundary_window`

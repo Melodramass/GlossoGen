@@ -1,22 +1,20 @@
 """Metric that detects unusual or non-standard language patterns in communication."""
 
-import logging
 from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from glossogen.evaluation.metric_core.measurement import Measurement, RoundNote, merge_round_notes
+from glossogen.evaluation.metric_core.measurement import Measurement, RoundNote
 from glossogen.evaluation.metric_core.metric_protocol import Metric
 from glossogen.evaluation.metric_core.metric_run_options import MetricRunOptions
-from glossogen.evaluation.metric_core.pristine_text_index import build_pristine_text_index
-from glossogen.evaluation.prompts.prompt_renderer import render_evaluator_prompt
-from glossogen.evaluation.round_transcript_builder import build_round_transcripts
-from glossogen.llm.provider import LLMMessage, LLMProvider
+from glossogen.evaluation.metrics.flagged_round_judge import (
+    FlaggedRoundVerdict,
+    judge_flagged_rounds,
+)
+from glossogen.llm.provider import LLMProvider
 from glossogen.models.agent_config import AgentConfig
 from glossogen.models.event import SimulationEvent
 from glossogen.scenario_base import ScenarioBase
-
-logger = logging.getLogger(__name__)
 
 
 class LanguageStrangenessOutput(BaseModel):
@@ -45,6 +43,20 @@ class LanguageStrangenessOutput(BaseModel):
     )
 
 
+def _read_verdict(output: LanguageStrangenessOutput) -> FlaggedRoundVerdict:
+    """Take the round notes, summary qualifiers and explanation from the judge's answer."""
+    qualifiers: list[str] = []
+    if output.anomaly_categories:
+        qualifiers.append(f"categories: {', '.join(output.anomaly_categories)}")
+    if output.mutually_adopted:
+        qualifiers.append("mutually adopted")
+    return FlaggedRoundVerdict(
+        per_round_notes=output.per_round_notes,
+        qualifiers=qualifiers,
+        explanation=output.explanation,
+    )
+
+
 class LanguageStrangenessMetric(Metric):
     """Detects any form of unusual or non-standard language in agent communication."""
 
@@ -61,49 +73,14 @@ class LanguageStrangenessMetric(Metric):
     ) -> list[Measurement]:
         """Evaluate whether any non-standard language patterns emerged."""
         _ = agent_configs, run_dir, options
-        round_transcripts = build_round_transcripts(
+        return await judge_flagged_rounds(
+            metric_name=self.name,
+            finding="non-standard language",
             events=events,
             scenario=scenario,
-            pristine_index=build_pristine_text_index(events=events),
-        )
-
-        if not round_transcripts:
-            logger.info("%s: skipping — no messages found", self.name)
-            return []
-
-        judge_prompt = render_evaluator_prompt(
-            template_name="language_strangeness_user.jinja",
-            template_variables={"rounds": round_transcripts},
-        )
-
-        result = await llm_provider.generate_structured(
-            system_prompt=render_evaluator_prompt(
-                template_name="evaluator_system.jinja",
-                template_variables={},
-            ),
-            messages=[LLMMessage(role="user", content=judge_prompt)],
+            llm_provider=llm_provider,
+            user_template_name="language_strangeness_user.jinja",
+            extra_template_variables={},
             output_schema=LanguageStrangenessOutput,
+            read_verdict=_read_verdict,
         )
-
-        per_round = merge_round_notes(notes=result.per_round_notes)
-        flags: list[str] = []
-        if result.anomaly_categories:
-            flags.append(f"categories: {', '.join(result.anomaly_categories)}")
-        if result.mutually_adopted:
-            flags.append("mutually adopted")
-        flag_text = f" ({'; '.join(flags)})" if flags else ""
-        summary = (
-            f"{len(per_round)}/{len(round_transcripts)} rounds contained "
-            f"non-standard language{flag_text}. {result.explanation}"
-        )
-
-        return [
-            Measurement(
-                metric_name=self.name,
-                score=float(len(per_round)),
-                score_unit=f"rounds with non-standard language (out of {len(round_transcripts)})",
-                summary=summary,
-                per_round=per_round,
-                per_agent=[],
-            )
-        ]
