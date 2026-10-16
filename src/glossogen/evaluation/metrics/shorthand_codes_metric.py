@@ -1,22 +1,20 @@
 """Metric that detects shorthand codes and abbreviation systems in communication."""
 
-import logging
 from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from glossogen.evaluation.metric_core.measurement import Measurement, RoundNote, merge_round_notes
+from glossogen.evaluation.metric_core.measurement import Measurement, RoundNote
 from glossogen.evaluation.metric_core.metric_protocol import Metric
 from glossogen.evaluation.metric_core.metric_run_options import MetricRunOptions
-from glossogen.evaluation.metric_core.pristine_text_index import build_pristine_text_index
-from glossogen.evaluation.prompts.prompt_renderer import render_evaluator_prompt
-from glossogen.evaluation.round_transcript_builder import build_round_transcripts
-from glossogen.llm.provider import LLMMessage, LLMProvider
+from glossogen.evaluation.metrics.flagged_round_judge import (
+    FlaggedRoundVerdict,
+    judge_flagged_rounds,
+)
+from glossogen.llm.provider import LLMProvider
 from glossogen.models.agent_config import AgentConfig
 from glossogen.models.event import SimulationEvent
 from glossogen.scenario_base import ScenarioBase
-
-logger = logging.getLogger(__name__)
 
 
 class ShorthandCodesOutput(BaseModel):
@@ -50,6 +48,22 @@ class ShorthandCodesOutput(BaseModel):
     )
 
 
+def _read_verdict(output: ShorthandCodesOutput) -> FlaggedRoundVerdict:
+    """Take the round notes, summary qualifiers and explanation from the judge's answer."""
+    qualifiers: list[str] = []
+    if output.systematic:
+        qualifiers.append("systematic")
+    if output.messages_shortened:
+        qualifiers.append("messages shortened")
+    if output.shared_understanding:
+        qualifiers.append("shared understanding")
+    return FlaggedRoundVerdict(
+        per_round_notes=output.per_round_notes,
+        qualifiers=qualifiers,
+        explanation=output.explanation,
+    )
+
+
 class ShorthandCodesMetric(Metric):
     """Detects whether agents developed shorthand codes or abbreviation systems."""
 
@@ -66,51 +80,14 @@ class ShorthandCodesMetric(Metric):
     ) -> list[Measurement]:
         """Evaluate whether agents developed shorthand codes."""
         _ = agent_configs, run_dir, options
-        round_transcripts = build_round_transcripts(
+        return await judge_flagged_rounds(
+            metric_name=self.name,
+            finding="shorthand codes",
             events=events,
             scenario=scenario,
-            pristine_index=build_pristine_text_index(events=events),
-        )
-
-        if not round_transcripts:
-            logger.info("%s: skipping — no messages found", self.name)
-            return []
-
-        judge_prompt = render_evaluator_prompt(
-            template_name="shorthand_codes_user.jinja",
-            template_variables={"rounds": round_transcripts},
-        )
-
-        result = await llm_provider.generate_structured(
-            system_prompt=render_evaluator_prompt(
-                template_name="evaluator_system.jinja",
-                template_variables={},
-            ),
-            messages=[LLMMessage(role="user", content=judge_prompt)],
+            llm_provider=llm_provider,
+            user_template_name="shorthand_codes_user.jinja",
+            extra_template_variables={},
             output_schema=ShorthandCodesOutput,
+            read_verdict=_read_verdict,
         )
-
-        per_round = merge_round_notes(notes=result.per_round_notes)
-        flags: list[str] = []
-        if result.systematic:
-            flags.append("systematic")
-        if result.messages_shortened:
-            flags.append("messages shortened")
-        if result.shared_understanding:
-            flags.append("shared understanding")
-        flag_text = f" ({'; '.join(flags)})" if flags else ""
-        summary = (
-            f"{len(per_round)}/{len(round_transcripts)} rounds contained "
-            f"shorthand codes{flag_text}. {result.explanation}"
-        )
-
-        return [
-            Measurement(
-                metric_name=self.name,
-                score=float(len(per_round)),
-                score_unit=f"rounds with shorthand codes (out of {len(round_transcripts)})",
-                summary=summary,
-                per_round=per_round,
-                per_agent=[],
-            )
-        ]

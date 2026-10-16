@@ -1,22 +1,20 @@
 """Metric that detects whether agents repurposed existing words with new meanings."""
 
-import logging
 from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from glossogen.evaluation.metric_core.measurement import Measurement, RoundNote, merge_round_notes
+from glossogen.evaluation.metric_core.measurement import Measurement, RoundNote
 from glossogen.evaluation.metric_core.metric_protocol import Metric
 from glossogen.evaluation.metric_core.metric_run_options import MetricRunOptions
-from glossogen.evaluation.metric_core.pristine_text_index import build_pristine_text_index
-from glossogen.evaluation.prompts.prompt_renderer import render_evaluator_prompt
-from glossogen.evaluation.round_transcript_builder import build_round_transcripts
-from glossogen.llm.provider import LLMMessage, LLMProvider
+from glossogen.evaluation.metrics.flagged_round_judge import (
+    FlaggedRoundVerdict,
+    judge_flagged_rounds,
+)
+from glossogen.llm.provider import LLMProvider
 from glossogen.models.agent_config import AgentConfig
 from glossogen.models.event import SimulationEvent
 from glossogen.scenario_base import ScenarioBase
-
-logger = logging.getLogger(__name__)
 
 
 class SlangEmergenceOutput(BaseModel):
@@ -44,6 +42,20 @@ class SlangEmergenceOutput(BaseModel):
     )
 
 
+def _read_verdict(output: SlangEmergenceOutput) -> FlaggedRoundVerdict:
+    """Take the round notes, summary qualifiers and explanation from the judge's answer."""
+    qualifiers: list[str] = []
+    if output.shared_slang:
+        qualifiers.append("shared")
+    if output.domain_specific_slang:
+        qualifiers.append("domain-specific")
+    return FlaggedRoundVerdict(
+        per_round_notes=output.per_round_notes,
+        qualifiers=qualifiers,
+        explanation=output.explanation,
+    )
+
+
 class SlangEmergenceMetric(Metric):
     """Detects whether agents created new meanings for existing words."""
 
@@ -60,49 +72,14 @@ class SlangEmergenceMetric(Metric):
     ) -> list[Measurement]:
         """Evaluate whether new meanings emerged for existing words."""
         _ = agent_configs, run_dir, options
-        round_transcripts = build_round_transcripts(
+        return await judge_flagged_rounds(
+            metric_name=self.name,
+            finding="slang emergence",
             events=events,
             scenario=scenario,
-            pristine_index=build_pristine_text_index(events=events),
-        )
-
-        if not round_transcripts:
-            logger.info("%s: skipping — no messages found", self.name)
-            return []
-
-        judge_prompt = render_evaluator_prompt(
-            template_name="slang_emergence_user.jinja",
-            template_variables={"rounds": round_transcripts},
-        )
-
-        result = await llm_provider.generate_structured(
-            system_prompt=render_evaluator_prompt(
-                template_name="evaluator_system.jinja",
-                template_variables={},
-            ),
-            messages=[LLMMessage(role="user", content=judge_prompt)],
+            llm_provider=llm_provider,
+            user_template_name="slang_emergence_user.jinja",
+            extra_template_variables={},
             output_schema=SlangEmergenceOutput,
+            read_verdict=_read_verdict,
         )
-
-        per_round = merge_round_notes(notes=result.per_round_notes)
-        flags: list[str] = []
-        if result.shared_slang:
-            flags.append("shared")
-        if result.domain_specific_slang:
-            flags.append("domain-specific")
-        flag_text = f" ({'; '.join(flags)})" if flags else ""
-        summary = (
-            f"{len(per_round)}/{len(round_transcripts)} rounds contained "
-            f"slang emergence{flag_text}. {result.explanation}"
-        )
-
-        return [
-            Measurement(
-                metric_name=self.name,
-                score=float(len(per_round)),
-                score_unit=f"rounds with slang emergence (out of {len(round_transcripts)})",
-                summary=summary,
-                per_round=per_round,
-                per_agent=[],
-            )
-        ]
