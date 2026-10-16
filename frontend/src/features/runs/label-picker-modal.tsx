@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2, Pencil, Plus, X } from "lucide-react";
 import { api } from "@/shared/lib/api-client";
 import { splitRunId } from "@/shared/lib/run-id";
+import { GROUP_LABELS_QUERY_KEY, useGroupLabels } from "@/shared/lib/use-group-labels";
 import { useLabelDescriptions } from "@/shared/lib/use-label-descriptions";
 
 const LABEL_COLORS = [
@@ -71,13 +72,7 @@ export function LabelPickerModal({
   const queryClient = useQueryClient();
   const descriptions = useLabelDescriptions();
 
-  const { data: allLabelsData } = useQuery({
-    queryKey: ["all-labels"],
-    queryFn: async () => {
-      const { data: resp } = await api.GET("/api/g/{group_slug}/labels");
-      return resp;
-    },
-  });
+  const { data: allLabelsData } = useGroupLabels();
 
   const mutation = useMutation({
     mutationFn: async (labels: string[]) => {
@@ -89,7 +84,7 @@ export function LabelPickerModal({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["runs"] });
       queryClient.invalidateQueries({ queryKey: ["run", runId] });
-      queryClient.invalidateQueries({ queryKey: ["all-labels"] });
+      queryClient.invalidateQueries({ queryKey: GROUP_LABELS_QUERY_KEY });
     },
   });
 
@@ -169,7 +164,7 @@ export function LabelPickerModal({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  const allLabels = allLabelsData?.labels ?? [];
+  const allLabels = allLabelsData ?? [];
   const combined = Array.from(new Set([...allLabels, ...selected])).sort();
 
   return createPortal(

@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { api } from "@/shared/lib/api-client";
 import { splitRunId } from "@/shared/lib/run-id";
+import { useScenarioCatalog } from "@/shared/lib/use-scenario-catalog";
 import { humanize } from "./format";
 import { ModelPicker } from "./model-picker";
 
@@ -25,16 +26,7 @@ export function StartEvaluationModal({
   const [selectedMetrics, setSelectedMetrics] = useState<Set<string>>(new Set());
   const [initialized, setInitialized] = useState(false);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["scenarios"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/api/g/{group_slug}/scenarios");
-      if (error) {
-        throw new Error("Failed to fetch scenarios");
-      }
-      return data;
-    },
-  });
+  const { data, isLoading } = useScenarioCatalog();
 
   const scenarioInfo = data?.scenarios.find(s => s.scenario_name === scenarioName);
   const availableMetrics = scenarioInfo?.available_metrics ?? [];

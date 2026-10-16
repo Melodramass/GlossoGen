@@ -12,11 +12,11 @@
  * the field either way.
  */
 
-import { useQuery } from "@tanstack/react-query";
 import { Check } from "lucide-react";
-import { api } from "@/shared/lib/api-client";
 import { cn } from "@/shared/lib/cn";
+import { useGroupLabels } from "@/shared/lib/use-group-labels";
 import { useLabelDescriptions } from "@/shared/lib/use-label-descriptions";
+import { useScenarioCatalog } from "@/shared/lib/use-scenario-catalog";
 import { Tooltip } from "@/shared/components/ui/tooltip";
 import type { components } from "@/types/api.gen";
 import type { RunSelection } from "./use-analysis-data";
@@ -37,26 +37,6 @@ export const EMPTY_SELECTION: FilterRunSelection = {
   // dashboard saved from here carries no knob condition either way.
   knob: [],
 };
-
-function useScenarioNames() {
-  return useQuery({
-    queryKey: ["analysis-scenario-names"],
-    queryFn: async () => {
-      const { data } = await api.GET("/api/g/{group_slug}/scenarios");
-      return (data?.scenarios ?? []).map(scenario => scenario.scenario_name);
-    },
-  });
-}
-
-function useLabels() {
-  return useQuery({
-    queryKey: ["analysis-labels"],
-    queryFn: async () => {
-      const { data } = await api.GET("/api/g/{group_slug}/labels");
-      return data?.labels ?? [];
-    },
-  });
-}
 
 function toggled(values: string[], value: string): string[] {
   if (values.includes(value)) {
@@ -110,8 +90,8 @@ export function RunSelectionPanel({
   onChange: (selection: RunSelection) => void;
   runCount: number | null;
 }) {
-  const scenarios = useScenarioNames();
-  const labels = useLabels();
+  const scenarios = useScenarioCatalog();
+  const labels = useGroupLabels();
   const labelDescriptions = useLabelDescriptions();
 
   if (selection.kind === "explicit") {
@@ -146,7 +126,7 @@ export function RunSelectionPanel({
       <div>
         <p className="mb-1.5 text-xs font-medium text-muted-foreground">Scenario</p>
         <div className="flex flex-wrap gap-1.5">
-          {(scenarios.data ?? []).map(name => (
+          {(scenarios.data?.scenarios ?? []).map(({ scenario_name: name }) => (
             <Chip
               key={name}
               label={name}
