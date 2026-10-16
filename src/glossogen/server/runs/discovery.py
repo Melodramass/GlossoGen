@@ -28,6 +28,7 @@ from glossogen.models.event import (
 )
 from glossogen.replace_manifest import REPLACE_MANIFEST_FILENAME, boundary_round_of, rounds_after_of
 from glossogen.run_identity import compose_run_id
+from glossogen.run_labels_file import read_run_labels
 from glossogen.server.runs.evaluation_score_reader import (
     EvaluationReportScores,
     read_evaluation_scores,
@@ -350,19 +351,6 @@ def _timestamp_from_dir(dir_name: str) -> datetime:
     """
     epoch_str = dir_name.split("_")[0]
     return datetime.fromtimestamp(int(epoch_str), tz=UTC)
-
-
-def read_run_labels(run_dir: Path) -> list[str]:
-    """Read labels from labels.json if it exists, returning empty list otherwise."""
-    labels_path = run_dir / "labels.json"
-    if not labels_path.exists():
-        return []
-    try:
-        result: list[str] = orjson.loads(labels_path.read_bytes())
-        return result
-    except Exception:
-        logger.exception("Failed to read labels from %s", labels_path)
-        return []
 
 
 def _has_note(run_dir: Path) -> bool:

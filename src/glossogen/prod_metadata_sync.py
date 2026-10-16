@@ -22,11 +22,10 @@ Runs that are missing from the remote entirely are ignored here;
 """
 
 import asyncio
-import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import NamedTuple, cast
+from typing import NamedTuple
 
 import httpx
 
@@ -88,26 +87,6 @@ class _SyncPlan(NamedTuple):
     new_labels: list[str] | None
     push_eval: bool
     eval_reason: str
-
-
-def _local_labels(run_dir: Path) -> list[str]:
-    """Return the label list from ``labels.json`` or ``[]`` if missing/invalid."""
-    path = run_dir / "labels.json"
-    if not path.exists():
-        return []
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return []
-    if not isinstance(raw, list):
-        return []
-    raw_list = cast(list[object], raw)
-    out: list[str] = []
-    for value in raw_list:
-        if not isinstance(value, str):
-            return []
-        out.append(value)
-    return out
 
 
 async def fetch_remote_run_metadata(
@@ -397,7 +376,7 @@ async def _build_plans(
                 scenario_name=run.scenario_name,
                 run_dir_name=run.run_dir_name,
                 run_dir=run.run_dir,
-                local_labels=_local_labels(run_dir=run.run_dir),
+                local_labels=run.labels,
                 local_hash=local_hash,
                 remote=remote_meta,
             )

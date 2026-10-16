@@ -31,6 +31,7 @@ from glossogen.models.event import (
     ToolResultReceived,
 )
 from glossogen.run_detail_types import AgentDetail, ChannelMessage
+from glossogen.run_labels_file import read_run_labels
 from glossogen.server.runs.manifest_sources import (
     read_cross_run_replace_agent_source,
     read_fork_at_round_source,
@@ -483,7 +484,7 @@ async def load_run_detail(
         scenario_name=scenario_name, scenario_config=scenario_config, events=events
     )
 
-    labels = await _read_labels_async(run_dir=run_dir)
+    labels = await asyncio.to_thread(read_run_labels, run_dir=run_dir)
     note = await _read_note(run_dir=run_dir)
 
     # For forked / replace-agent runs, the displayed start time is when
@@ -546,18 +547,3 @@ async def _read_note(run_dir: Path) -> str | None:
         return None
     async with aiofiles.open(note_path, mode="r") as f:
         return await f.read()
-
-
-async def _read_labels_async(run_dir: Path) -> list[str]:
-    """Read labels.json from the run directory, returning empty list if missing."""
-    labels_path = run_dir / "labels.json"
-    if not labels_path.exists():
-        return []
-    try:
-        async with aiofiles.open(labels_path, mode="rb") as f:
-            raw_bytes = await f.read()
-        result: list[str] = orjson.loads(raw_bytes)
-        return result
-    except Exception:
-        logger.exception("Failed to read labels from %s", labels_path)
-        return []

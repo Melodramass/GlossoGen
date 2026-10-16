@@ -119,6 +119,22 @@ def test_an_unmirrored_descriptor_with_no_file_reads_as_unlabelled(tmp_path: Pat
     assert labels == []
 
 
+def test_an_unmirrored_descriptor_whose_file_is_not_a_list_reads_as_unlabelled(
+    tmp_path: Path,
+) -> None:
+    """A hand-edited ``labels.json`` holding an object never reaches a summary as labels."""
+    run_dir = tmp_path / "veyru" / "100"
+    run_dir.mkdir(parents=True)
+    (run_dir / "labels.json").write_bytes(orjson.dumps({"labels": ["baseline_oss"]}))
+
+    labels = descriptor_labels(
+        descriptor=descriptor(run_dir_name="100", labels=None),
+        runs_dir=tmp_path,
+    )
+
+    assert labels == []
+
+
 # --- what healing would rewrite ---------------------------------------------------
 
 

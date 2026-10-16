@@ -12,16 +12,15 @@ timestamp, so re-running this script is safe.
 """
 
 import asyncio
-import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
 
 import httpx
 
 from glossogen.oauth_client import Credentials, load_or_refresh_credentials
 from glossogen.remote_run_listing import fetch_remote_runs
+from glossogen.run_labels_file import load_run_labels
 from glossogen.server.runs.bundle_router import build_bundle_bytes
 from glossogen.server.runs.models import ImportBundleResponse
 
@@ -48,6 +47,7 @@ class LocalRun:
     scenario_name: str
     run_dir_name: str
     run_dir: Path
+    labels: list[str]
 
 
 @dataclass(frozen=True)
@@ -64,26 +64,6 @@ _RETRY_BASE_DELAY_SECONDS = 2.0
 _MAX_RETRIES = 3
 _LISTING_PAGE_SIZE = 500
 HTTP_TIMEOUT = httpx.Timeout(connect=30.0, read=600.0, write=600.0, pool=30.0)
-
-
-def _load_labels(run_dir: Path) -> list[str] | None:
-    """Return the label list from ``labels.json`` or ``None`` if missing/invalid."""
-    labels_path = run_dir / "labels.json"
-    if not labels_path.exists():
-        return None
-    try:
-        raw = json.loads(labels_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return None
-    if not isinstance(raw, list):
-        return None
-    raw_list = cast(list[object], raw)
-    result: list[str] = []
-    for value in raw_list:
-        if not isinstance(value, str):
-            return None
-        result.append(value)
-    return result
 
 
 def collect_local_runs(*, spec: PushSpec) -> list[LocalRun]:
@@ -108,7 +88,7 @@ def collect_local_runs(*, spec: PushSpec) -> list[LocalRun]:
         for run_dir in scenario_dir.iterdir():
             if not run_dir.is_dir():
                 continue
-            labels = _load_labels(run_dir=run_dir)
+            labels = load_run_labels(run_dir=run_dir)
             if labels is None:
                 continue
             label_set = set(labels)
@@ -122,6 +102,7 @@ def collect_local_runs(*, spec: PushSpec) -> list[LocalRun]:
                     scenario_name=scenario_name,
                     run_dir_name=run_dir.name,
                     run_dir=run_dir,
+                    labels=labels,
                 )
             )
     results.sort(key=lambda r: r.run_id)
