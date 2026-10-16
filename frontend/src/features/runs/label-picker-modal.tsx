@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2, Pencil, Plus, X } from "lucide-react";
 import { api } from "@/shared/lib/api-client";
+import { apiError } from "@/shared/lib/api-error";
 import { splitRunId } from "@/shared/lib/run-id";
 import { GROUP_LABELS_QUERY_KEY, useGroupLabels } from "@/shared/lib/use-group-labels";
 import { useLabelDescriptions } from "@/shared/lib/use-label-descriptions";
@@ -65,6 +66,9 @@ export function LabelPickerModal({
   onClose: () => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set(currentLabels));
+  // The labels the server last accepted. A toggle ticks its box before the PUT
+  // answers, so a refused PUT puts the boxes back to this set.
+  const savedLabels = useRef<string[]>(currentLabels);
   const [newLabel, setNewLabel] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [editingLabel, setEditingLabel] = useState<string | null>(null);
@@ -76,21 +80,31 @@ export function LabelPickerModal({
 
   const mutation = useMutation({
     mutationFn: async (labels: string[]) => {
-      await api.PUT("/api/g/{group_slug}/runs/{scenario}/{run_dir_name}/labels", {
+      const { error } = await api.PUT("/api/g/{group_slug}/runs/{scenario}/{run_dir_name}/labels", {
         params: { path: splitRunId(runId) },
         body: { labels },
       });
+      if (error) {
+        throw apiError(error, "Failed to save labels");
+      }
     },
-    onSuccess: () => {
+    onSuccess: (_data, labels) => {
+      savedLabels.current = labels;
       queryClient.invalidateQueries({ queryKey: ["runs"] });
       queryClient.invalidateQueries({ queryKey: ["run", runId] });
       queryClient.invalidateQueries({ queryKey: GROUP_LABELS_QUERY_KEY });
+    },
+    onError: () => {
+      setSelected(new Set(savedLabels.current));
     },
   });
 
   const describeMutation = useMutation({
     mutationFn: async (entry: { label: string; description: string }) => {
-      await api.PUT("/api/g/{group_slug}/labels/descriptions", { body: entry });
+      const { error } = await api.PUT("/api/g/{group_slug}/labels/descriptions", { body: entry });
+      if (error) {
+        throw apiError(error, "Failed to save label description");
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["label-descriptions"] });
@@ -99,14 +113,29 @@ export function LabelPickerModal({
 
   const deleteDescriptionMutation = useMutation({
     mutationFn: async (label: string) => {
-      await api.DELETE("/api/g/{group_slug}/labels/descriptions", {
+      const { error } = await api.DELETE("/api/g/{group_slug}/labels/descriptions", {
         params: { query: { label } },
       });
+      if (error) {
+        throw apiError(error, "Failed to delete label description");
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["label-descriptions"] });
     },
   });
+
+  /**
+   * Drop the error a previous save left on screen, so the line under the form
+   * speaks for the save being started. A save still in flight keeps its state.
+   */
+  function clearFailedSaves() {
+    for (const each of [mutation, describeMutation, deleteDescriptionMutation]) {
+      if (each.isError) {
+        each.reset();
+      }
+    }
+  }
 
   function startEditingDescription(label: string) {
     setEditingLabel(label);
@@ -118,6 +147,7 @@ export function LabelPickerModal({
       return;
     }
     const trimmed = draftDescription.trim();
+    clearFailedSaves();
     if (trimmed) {
       describeMutation.mutate({ label: editingLabel, description: trimmed });
     } else if (descriptions.has(editingLabel)) {
@@ -134,6 +164,7 @@ export function LabelPickerModal({
       next.add(label);
     }
     setSelected(next);
+    clearFailedSaves();
     mutation.mutate(Array.from(next).sort());
   }
 
@@ -145,6 +176,7 @@ export function LabelPickerModal({
     const next = new Set(selected);
     next.add(trimmed);
     setSelected(next);
+    clearFailedSaves();
     const trimmedDescription = newDescription.trim();
     if (trimmedDescription) {
       describeMutation.mutate({ label: trimmed, description: trimmedDescription });
@@ -165,6 +197,7 @@ export function LabelPickerModal({
   }, [onClose]);
 
   const allLabels = allLabelsData ?? [];
+  const saveError = mutation.error ?? describeMutation.error ?? deleteDescriptionMutation.error;
   const combined = Array.from(new Set([...allLabels, ...selected])).sort();
 
   return createPortal(
@@ -310,6 +343,10 @@ export function LabelPickerModal({
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Saving...
               </div>
+            ) : saveError ? (
+              <p role="alert" className="mt-1.5 text-[10px] text-destructive">
+                {saveError.message}
+              </p>
             ) : null}
           </div>
         </div>

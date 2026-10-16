@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { api } from "@/shared/lib/api-client";
+import { apiError } from "@/shared/lib/api-error";
 import { splitRunId } from "@/shared/lib/run-id";
 import { useScenarioCatalog } from "@/shared/lib/use-scenario-catalog";
 import { humanize } from "./format";
@@ -80,11 +81,7 @@ export function StartEvaluationModal({
         }
       );
       if (error) {
-        const detail =
-          typeof error === "object" && error !== null && "detail" in error
-            ? String((error as { detail: unknown }).detail)
-            : "Failed to start evaluation";
-        throw new Error(detail);
+        throw apiError(error, "Failed to start evaluation");
       }
     },
     onSuccess: () => {

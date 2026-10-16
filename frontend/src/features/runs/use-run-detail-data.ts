@@ -3,6 +3,7 @@
 import { useEffect, useMemo, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/shared/lib/api-client";
+import { apiError } from "@/shared/lib/api-error";
 import { useEventStream } from "@/shared/lib/use-event-stream";
 import { buildAgentColorMap, buildChannelColorMap } from "./agent-colors";
 import { deriveAgentInstances } from "./agent-instance";
@@ -53,7 +54,7 @@ export function useRunDetailData({
         signal,
       });
       if (error) {
-        throw new Error("Failed to fetch run detail");
+        throw apiError(error, "Failed to fetch run detail");
       }
       return data;
     },
@@ -78,7 +79,7 @@ export function useRunDetailData({
         params: { path: { scenario, run_dir_name: runDirName } },
       });
       if (error) {
-        throw new Error("Failed to stop simulation");
+        throw apiError(error, "Failed to stop simulation");
       }
     },
     onSuccess: () => {

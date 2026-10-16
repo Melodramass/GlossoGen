@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/shared/lib/api-client";
+import { apiError } from "@/shared/lib/api-error";
 
 /**
  * The scenarios the server offers, with their metrics and the judge models, from
@@ -11,7 +12,7 @@ export function useScenarioCatalog() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/g/{group_slug}/scenarios");
       if (error) {
-        throw new Error("Failed to fetch scenarios");
+        throw apiError(error, "Failed to fetch scenarios");
       }
       return data;
     },

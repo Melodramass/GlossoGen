@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/shared/lib/api-client";
+import { apiError } from "@/shared/lib/api-error";
 
 /** The query key every label list reads, and the one a label edit invalidates. */
 export const GROUP_LABELS_QUERY_KEY = ["all-labels"];
@@ -16,7 +17,7 @@ export function useGroupLabels() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/g/{group_slug}/labels");
       if (error) {
-        throw new Error("Failed to fetch labels");
+        throw apiError(error, "Failed to fetch labels");
       }
       return data.labels;
     },

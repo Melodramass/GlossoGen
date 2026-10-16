@@ -5,19 +5,23 @@ import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, X } from "lucide-react";
 import { api } from "@/shared/lib/api-client";
+import { apiError } from "@/shared/lib/api-error";
 import { splitRunId } from "@/shared/lib/run-id";
 import { ProseMarkdown } from "./prose-markdown";
 
 export function NoteViewModal({ runId, onClose }: { runId: string; onClose: () => void }) {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["run-note", runId],
     queryFn: async () => {
-      const { data: resp } = await api.GET(
+      const { data: resp, error } = await api.GET(
         "/api/g/{group_slug}/runs/{scenario}/{run_dir_name}/note",
         {
           params: { path: splitRunId(runId) },
         }
       );
+      if (error) {
+        throw apiError(error, "Failed to fetch note");
+      }
       return resp;
     },
   });
@@ -54,6 +58,8 @@ export function NoteViewModal({ runId, onClose }: { runId: string; onClose: () =
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
+            ) : error ? (
+              <p className="py-4 text-center text-xs text-destructive">{error.message}</p>
             ) : data?.content ? (
               <ProseMarkdown>{data.content}</ProseMarkdown>
             ) : (

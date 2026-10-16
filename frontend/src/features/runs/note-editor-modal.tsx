@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, X } from "lucide-react";
 import { api } from "@/shared/lib/api-client";
+import { apiError } from "@/shared/lib/api-error";
 import { splitRunId } from "@/shared/lib/run-id";
 
 export function NoteEditorModal({
@@ -26,7 +27,7 @@ export function NoteEditorModal({
         body: { content: text },
       });
       if (error) {
-        throw new Error(`Failed to save note (${JSON.stringify(error)})`);
+        throw apiError(error, "Failed to save note");
       }
     },
     onSuccess: () => {
