@@ -136,6 +136,11 @@ the commit log.
   one model whose old entry disagreed: it is now $1.75 / $14 per million input /
   output tokens, double the old figure. The models the pickers offer moved to
   `model_catalog.py`, without prices.
+- The Langfuse telemetry modules moved into a `glossogen.telemetry` package:
+  import `glossogen.telemetry.telemetry_settings`,
+  `glossogen.telemetry.telemetry_bootstrap` and
+  `glossogen.telemetry.telemetry_round_processor` instead of the same names at
+  the package root.
 
 ### Fixed
 - A scenario judge under a provider outside `JUDGE_PROVIDERS` (`judge_provider`,

@@ -129,8 +129,8 @@ from glossogen.scenario_target import ScenarioPathError, resolve_check_target
 from glossogen.server.runs.discovery import discover_runs
 from glossogen.server.runs.models import RunSummary
 from glossogen.simulation_server import start_simulation_server, stop_simulation_server
-from glossogen.telemetry_bootstrap import flush_telemetry, init_langfuse_telemetry
-from glossogen.telemetry_settings import load_telemetry_settings
+from glossogen.telemetry.telemetry_bootstrap import flush_telemetry, init_langfuse_telemetry
+from glossogen.telemetry.telemetry_settings import load_telemetry_settings
 from glossogen.thread_export.export_agent_thread import (
     ThreadExportFormat,
     export_agent_thread_from_run_dir,

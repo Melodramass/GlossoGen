@@ -98,6 +98,7 @@ make check-frontend    # frontend CI mode (prettier --check, no auto-fix)
   - `dashboard_store.py` + `postgres_dashboard_store.py` + `filesystem_dashboard_store.py` — one contract, two backings: Postgres when `DATABASE_URL` is set, JSON under `<runs-dir>/_dashboards/<group-id>/` when it is not, so single-tenant local mode keeps the feature. `dashboard_store_resolution.py` picks by `app.state.db_pool is None`, the same test run lookup uses. Names are unique per group, enforced by the index rather than by a check-then-insert
 - `src/glossogen/label_descriptions/` — a group's label glossary: what each label means, keyed on the exact label string, so it applies to every run carrying the label without touching any run directory. Labels themselves stay plain strings in `labels.json`. Same two-backing contract as dashboards: Postgres (`label_descriptions` table, `(group_id, label)` primary key) when `DATABASE_URL` is set, one JSON file per group under `<runs-dir>/_label_descriptions/` when it is not. Served by `server/runs/label_description_router.py` (`GET`/`PUT`/`DELETE /labels/descriptions`; the label travels in the body or a query parameter, never the path, because labels like `src=veyru/123` carry path separators). The CLI's `describe-label` / `list-label-descriptions` write and read the local group's file directly, no server needed. Frontend label chips show the description on hover via `use-label-descriptions.ts`
 - `src/glossogen/message_history_builder.py` — reconstructs pydantic-ai ModelMessage history from JSONL events for fork/resume
+- `src/glossogen/telemetry/` — Langfuse tracing of simulation agents: the settings read from the environment, the OpenTelemetry bootstrap the `glossogen run` path calls, and the span processor that stamps each generation with its round. See "Local Langfuse" below
 - `src/glossogen/llm/` — LLM provider abstraction + Anthropic/OpenAI/HuggingFace implementations
 - `src/glossogen/evaluation/` — generic metrics and evaluation infrastructure
   - `metric_core/` — the Metric contract + I/O types
@@ -393,7 +394,7 @@ make langfuse-logs   # tail the langfuse-web logs
 - Each run is one Langfuse **session** keyed by `run_id`; every agent's cycles trace under it,
   tagged with `agent_id` / `role_name` / `model` / `provider` / `scenario`.
 - Telemetry is initialized only in the `glossogen run` path (`init_langfuse_telemetry` in
-  [telemetry_bootstrap.py](src/glossogen/telemetry_bootstrap.py)), so `glossogen evaluate`'s
+  [telemetry/telemetry_bootstrap.py](src/glossogen/telemetry/telemetry_bootstrap.py)), so `glossogen evaluate`'s
   probe/judge LLM calls are not traced. If the stack is down or keys are unset, the run logs
   one warning and proceeds untraced. Telemetry never blocks a simulation.
 - Docker Desktop needs adequate resources for the full stack (Langfuse suggests ~4 cores /
