@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2, Pencil, Plus, X } from "lucide-react";
+import { Modal } from "@/shared/components/ui/modal";
 import { api } from "@/shared/lib/api-client";
 import { apiError } from "@/shared/lib/api-error";
 import { splitRunId } from "@/shared/lib/run-id";
@@ -186,172 +186,158 @@ export function LabelPickerModal({
     mutation.mutate(Array.from(next).sort());
   }
 
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
-
   const allLabels = allLabelsData ?? [];
   const saveError = mutation.error ?? describeMutation.error ?? deleteDescriptionMutation.error;
   const combined = Array.from(new Set([...allLabels, ...selected])).sort();
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50" onClick={onClose}>
-      <div className="flex min-h-full items-center justify-center p-4">
-        <div
-          className="flex w-full max-w-sm flex-col overflow-hidden rounded-xl border border-border bg-background shadow-xl"
-          onClick={e => e.stopPropagation()}
+  return (
+    <Modal
+      label={"Labels"}
+      width="sm"
+      panelClassName="flex flex-col overflow-hidden"
+      panelId={null}
+      onClose={onClose}
+    >
+      <div className="flex items-center justify-between border-b border-border px-5 py-2.5">
+        <span className="text-sm font-medium">Labels</span>
+        <button
+          aria-label="Close"
+          className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted"
+          onClick={onClose}
         >
-          <div className="flex items-center justify-between border-b border-border px-5 py-2.5">
-            <span className="text-sm font-medium">Labels</span>
-            <button
-              aria-label="Close"
-              className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted"
-              onClick={onClose}
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="max-h-64 overflow-y-auto px-5 py-2">
-            {combined.length === 0 ? (
-              <p className="py-3 text-center text-xs text-muted-foreground">
-                No labels yet. Create one below.
-              </p>
-            ) : null}
-            {combined.map(label => {
-              const isSelected = selected.has(label);
-              const color = labelColor(label);
-              const description = descriptions.get(label);
-              const isEditing = editingLabel === label;
-              return (
-                <div key={label} className="group rounded-md transition-colors hover:bg-muted">
-                  <div className="flex w-full items-center gap-2 px-2 py-1.5">
-                    <button
-                      type="button"
-                      className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs"
-                      onClick={() => toggleLabel(label)}
-                    >
-                      <span
-                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                          isSelected
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-border"
-                        }`}
-                      >
-                        {isSelected ? <Check className="h-3 w-3" /> : null}
-                      </span>
-                      <span
-                        className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${color.bg} ${color.text}`}
-                      >
-                        {label}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      title={description ? "Edit description" : "Add description"}
-                      aria-label={description ? "Edit description" : "Add description"}
-                      className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus:opacity-100 group-hover:opacity-100"
-                      onClick={() => startEditingDescription(label)}
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </button>
-                  </div>
-                  {isEditing ? (
-                    <form
-                      className="flex items-center gap-1.5 px-2 pb-1.5 pl-8"
-                      onSubmit={e => {
-                        e.preventDefault();
-                        saveDescription();
-                      }}
-                    >
-                      <input
-                        type="text"
-                        className="min-w-0 flex-1 rounded-md border border-border bg-muted/30 px-2 py-1 text-[11px] text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                        placeholder="What does this label mean?"
-                        value={draftDescription}
-                        onChange={e => setDraftDescription(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === "Escape") {
-                            e.stopPropagation();
-                            setEditingLabel(null);
-                          }
-                        }}
-                        autoFocus
-                      />
-                      <button
-                        type="submit"
-                        className="shrink-0 rounded-md bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                      >
-                        Save
-                      </button>
-                    </form>
-                  ) : description ? (
-                    <p
-                      className="truncate px-2 pb-1.5 pl-8 text-[10px] text-muted-foreground"
-                      title={description}
-                    >
-                      {description}
-                    </p>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-          <div className="border-t border-border px-5 py-2.5">
-            <form
-              className="space-y-1.5"
-              onSubmit={e => {
-                e.preventDefault();
-                addNewLabel();
-              }}
-            >
-              <input
-                type="text"
-                className="w-full rounded-md border border-border bg-muted/30 px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                placeholder="New label..."
-                value={newLabel}
-                onChange={e => setNewLabel(e.target.value)}
-                autoFocus
-              />
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  className="flex-1 rounded-md border border-border bg-muted/30 px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                  placeholder="Description (optional)..."
-                  value={newDescription}
-                  onChange={e => setNewDescription(e.target.value)}
-                />
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="max-h-64 overflow-y-auto px-5 py-2">
+        {combined.length === 0 ? (
+          <p className="py-3 text-center text-xs text-muted-foreground">
+            No labels yet. Create one below.
+          </p>
+        ) : null}
+        {combined.map(label => {
+          const isSelected = selected.has(label);
+          const color = labelColor(label);
+          const description = descriptions.get(label);
+          const isEditing = editingLabel === label;
+          return (
+            <div key={label} className="group rounded-md transition-colors hover:bg-muted">
+              <div className="flex w-full items-center gap-2 px-2 py-1.5">
                 <button
-                  type="submit"
-                  className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-                  disabled={!newLabel.trim()}
+                  type="button"
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs"
+                  onClick={() => toggleLabel(label)}
                 >
-                  <Plus className="h-3 w-3" />
-                  Add
+                  <span
+                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                      isSelected
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border"
+                    }`}
+                  >
+                    {isSelected ? <Check className="h-3 w-3" /> : null}
+                  </span>
+                  <span
+                    className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${color.bg} ${color.text}`}
+                  >
+                    {label}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  title={description ? "Edit description" : "Add description"}
+                  aria-label={description ? "Edit description" : "Add description"}
+                  className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus:opacity-100 group-hover:opacity-100"
+                  onClick={() => startEditingDescription(label)}
+                >
+                  <Pencil className="h-3 w-3" />
                 </button>
               </div>
-            </form>
-            {mutation.isPending ||
-            describeMutation.isPending ||
-            deleteDescriptionMutation.isPending ? (
-              <div className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Saving...
-              </div>
-            ) : saveError ? (
-              <p role="alert" className="mt-1.5 text-[10px] text-destructive">
-                {saveError.message}
-              </p>
-            ) : null}
-          </div>
-        </div>
+              {isEditing ? (
+                <form
+                  className="flex items-center gap-1.5 px-2 pb-1.5 pl-8"
+                  onSubmit={e => {
+                    e.preventDefault();
+                    saveDescription();
+                  }}
+                >
+                  <input
+                    type="text"
+                    className="min-w-0 flex-1 rounded-md border border-border bg-muted/30 px-2 py-1 text-[11px] text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    placeholder="What does this label mean?"
+                    value={draftDescription}
+                    onChange={e => setDraftDescription(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Escape") {
+                        e.stopPropagation();
+                        setEditingLabel(null);
+                      }
+                    }}
+                    autoFocus
+                  />
+                  <button
+                    type="submit"
+                    className="shrink-0 rounded-md bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                  >
+                    Save
+                  </button>
+                </form>
+              ) : description ? (
+                <p
+                  className="truncate px-2 pb-1.5 pl-8 text-[10px] text-muted-foreground"
+                  title={description}
+                >
+                  {description}
+                </p>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
-    </div>,
-    document.body
+      <div className="border-t border-border px-5 py-2.5">
+        <form
+          className="space-y-1.5"
+          onSubmit={e => {
+            e.preventDefault();
+            addNewLabel();
+          }}
+        >
+          <input
+            type="text"
+            className="w-full rounded-md border border-border bg-muted/30 px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            placeholder="New label..."
+            value={newLabel}
+            onChange={e => setNewLabel(e.target.value)}
+            autoFocus
+          />
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              className="flex-1 rounded-md border border-border bg-muted/30 px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              placeholder="Description (optional)..."
+              value={newDescription}
+              onChange={e => setNewDescription(e.target.value)}
+            />
+            <button
+              type="submit"
+              className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+              disabled={!newLabel.trim()}
+            >
+              <Plus className="h-3 w-3" />
+              Add
+            </button>
+          </div>
+        </form>
+        {mutation.isPending || describeMutation.isPending || deleteDescriptionMutation.isPending ? (
+          <div className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Saving...
+          </div>
+        ) : saveError ? (
+          <p role="alert" className="mt-1.5 text-[10px] text-destructive">
+            {saveError.message}
+          </p>
+        ) : null}
+      </div>
+    </Modal>
   );
 }

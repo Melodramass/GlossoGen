@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
-import { createPortal } from "react-dom";
+import { useMemo } from "react";
 import { Check, Hash, X } from "lucide-react";
+import { Modal } from "@/shared/components/ui/modal";
 import type { components } from "@/types/api.gen";
 import type { DisplayEntry } from "./display-entry";
 import { formatTime, humanize } from "./format";
@@ -161,126 +161,111 @@ export function RoundTimelineModal({
   const plugin = getScenarioPlugin(scenarioName);
   const RoundDetailPanel = plugin.RoundDetailPanel;
   const primaryChannelIdSet = useMemo(() => new Set(primaryChannelIds), [primaryChannelIds]);
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
-
   const rows = useMemo(
     () => buildTimelineRows(messages, primaryChannelIdSet, plugin, scenarioExtras),
     [messages, primaryChannelIdSet, plugin, scenarioExtras]
   );
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={onClose}
+  return (
+    <Modal
+      label={`Round ${roundNumber} timeline`}
+      width="3xl"
+      panelClassName="flex max-h-[85vh] flex-col overflow-hidden"
+      panelId="round-timeline-modal"
+      onClose={onClose}
     >
-      <div
-        id="round-timeline-modal"
-        className="mx-4 flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-background shadow-xl"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-border px-5 py-3">
-          <div className="flex items-center gap-2">
-            <Hash className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Round {roundNumber} timeline</span>
-            {roundEnding !== null ? (
-              <TriggerBadge trigger={roundEnding.trigger} plugin={plugin} />
-            ) : null}
-          </div>
-          <button
-            aria-label="Close"
-            className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted"
-            onClick={onClose}
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-5 py-4">
-          {RoundDetailPanel !== null ? (
-            <RoundDetailPanel
-              roundNumber={roundNumber}
-              extras={scenarioExtras}
-              roundResults={roundResults}
-            />
+      <div className="flex items-center justify-between border-b border-border px-5 py-3">
+        <div className="flex items-center gap-2">
+          <Hash className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Round {roundNumber} timeline</span>
+          {roundEnding !== null ? (
+            <TriggerBadge trigger={roundEnding.trigger} plugin={plugin} />
           ) : null}
-
-          <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Timeline
-          </div>
-          {rows.length === 0 ? (
-            <div className="py-6 text-center text-xs text-muted-foreground">
-              No link messages or judged tool calls recorded for this round.
-            </div>
-          ) : (
-            <ol className="relative space-y-3 border-l border-border pl-4">
-              {rows.map(row => {
-                let dotClass: string;
-                if (row.kind === "judged_tool" && row.verdictAccepted === true) {
-                  dotClass = "bg-emerald-500";
-                } else if (row.kind === "judged_tool" && row.verdictAccepted === false) {
-                  dotClass = "bg-rose-500";
-                } else {
-                  dotClass = "bg-muted-foreground";
-                }
-                return (
-                  <li key={row.key} className="relative">
-                    <span
-                      className={`absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-background ${dotClass}`}
-                    />
-                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                      <span className="font-mono">{formatTime(row.timestamp)}</span>
-                      <span className="font-medium text-foreground">{humanize(row.sender)}</span>
-                      {row.kind === "judged_tool" ? (
-                        <>
-                          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">
-                            {row.toolName}
-                          </span>
-                          {row.verdictAccepted !== null ? (
-                            <VerdictPill accepted={row.verdictAccepted} />
-                          ) : null}
-                        </>
-                      ) : (
-                        <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">
-                          #{row.channelId}
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-1 whitespace-pre-wrap break-words text-[13px] leading-relaxed">
-                      {row.text}
-                    </div>
-                    {row.kind === "judged_tool" &&
-                    (row.expected !== "" || row.explanation !== "") ? (
-                      <div className="mt-1.5 rounded-md border border-border/60 bg-muted/30 px-2.5 py-1.5 text-[11px] text-muted-foreground">
-                        {row.expected !== "" ? (
-                          <div>
-                            <span className="text-[10px] uppercase tracking-wide">expected</span>{" "}
-                            {row.expected}
-                          </div>
-                        ) : null}
-                        {row.explanation !== "" ? (
-                          <div className="mt-1">
-                            <span className="text-[10px] uppercase tracking-wide">verdict</span>{" "}
-                            {row.explanation}
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ol>
-          )}
         </div>
+        <button
+          aria-label="Close"
+          className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted"
+          onClick={onClose}
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
-    </div>,
-    document.body
+
+      <div className="flex-1 overflow-y-auto px-5 py-4">
+        {RoundDetailPanel !== null ? (
+          <RoundDetailPanel
+            roundNumber={roundNumber}
+            extras={scenarioExtras}
+            roundResults={roundResults}
+          />
+        ) : null}
+
+        <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          Timeline
+        </div>
+        {rows.length === 0 ? (
+          <div className="py-6 text-center text-xs text-muted-foreground">
+            No link messages or judged tool calls recorded for this round.
+          </div>
+        ) : (
+          <ol className="relative space-y-3 border-l border-border pl-4">
+            {rows.map(row => {
+              let dotClass: string;
+              if (row.kind === "judged_tool" && row.verdictAccepted === true) {
+                dotClass = "bg-emerald-500";
+              } else if (row.kind === "judged_tool" && row.verdictAccepted === false) {
+                dotClass = "bg-rose-500";
+              } else {
+                dotClass = "bg-muted-foreground";
+              }
+              return (
+                <li key={row.key} className="relative">
+                  <span
+                    className={`absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-background ${dotClass}`}
+                  />
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                    <span className="font-mono">{formatTime(row.timestamp)}</span>
+                    <span className="font-medium text-foreground">{humanize(row.sender)}</span>
+                    {row.kind === "judged_tool" ? (
+                      <>
+                        <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">
+                          {row.toolName}
+                        </span>
+                        {row.verdictAccepted !== null ? (
+                          <VerdictPill accepted={row.verdictAccepted} />
+                        ) : null}
+                      </>
+                    ) : (
+                      <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">
+                        #{row.channelId}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1 whitespace-pre-wrap break-words text-[13px] leading-relaxed">
+                    {row.text}
+                  </div>
+                  {row.kind === "judged_tool" && (row.expected !== "" || row.explanation !== "") ? (
+                    <div className="mt-1.5 rounded-md border border-border/60 bg-muted/30 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+                      {row.expected !== "" ? (
+                        <div>
+                          <span className="text-[10px] uppercase tracking-wide">expected</span>{" "}
+                          {row.expected}
+                        </div>
+                      ) : null}
+                      {row.explanation !== "" ? (
+                        <div className="mt-1">
+                          <span className="text-[10px] uppercase tracking-wide">verdict</span>{" "}
+                          {row.explanation}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </div>
+    </Modal>
   );
 }

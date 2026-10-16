@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
+import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Inbox, ListChecks, Loader2, X } from "lucide-react";
+import { Modal } from "@/shared/components/ui/modal";
 import { downloadAuthenticatedFile } from "@/shared/lib/api-client";
 import { cn } from "@/shared/lib/cn";
 import type { components } from "@/types/api.gen";
@@ -205,14 +205,6 @@ export function ExportRunsModal({ onClose }: { onClose: () => void }) {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [progress, setProgress] = useState<{ received: number; total: number | null } | null>(null);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   const [knownMissing, setKnownMissing] = useState<ReadonlySet<string>>(new Set());
 
   const selection: RunSelection = useMemo(() => {
@@ -403,373 +395,363 @@ export function ExportRunsModal({ onClose }: { onClose: () => void }) {
     );
   };
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={onClose}
-      role="presentation"
+  return (
+    <Modal
+      label="Export runs"
+      width="3xl"
+      panelClassName="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden"
+      panelId={null}
+      onClose={onClose}
     >
-      <div className="flex max-h-full w-full max-w-3xl justify-center">
-        <div
-          className="flex max-h-full w-full flex-col overflow-hidden rounded-xl border border-border bg-background shadow-xl"
-          onClick={e => e.stopPropagation()}
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-2.5">
+        <h2 className="text-sm font-semibold">Export runs</h2>
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
-          <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-2.5">
-            <h2 className="text-sm font-semibold">Export runs</h2>
-            <button
-              onClick={onClose}
-              aria-label="Close"
-              className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-            <section className="space-y-1.5">
-              <span className="text-xs font-medium">Runs</span>
-              <label className="flex cursor-pointer items-start gap-2 text-xs">
-                <input
-                  type="radio"
-                  checked={mode === "filters"}
-                  onChange={() => setMode("filters")}
-                  className="mt-0.5"
-                />
-                <span>
-                  All runs matching the current filters
-                  <span className="ml-1 text-muted-foreground">({matchingRunCount})</span>
-                  <span className="block text-[11px] text-muted-foreground">
-                    {describeFilters(filters)}
-                  </span>
-                </span>
-              </label>
-              {selectedRunIds.size > 0 ? (
-                <label className="flex cursor-pointer items-start gap-2 text-xs">
-                  <input
-                    type="radio"
-                    checked={mode === "explicit"}
-                    onChange={() => setMode("explicit")}
-                    className="mt-0.5"
-                  />
-                  <span>
-                    The runs you checked
-                    <span className="ml-1 text-muted-foreground">({selectedRunIds.size})</span>
-                  </span>
-                </label>
-              ) : (
-                <button
-                  type="button"
-                  onClick={startPicking}
-                  className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <ListChecks className="h-3.5 w-3.5" />
-                  Pick runs from the list instead
-                </button>
-              )}
-            </section>
-
-            <div className="flex gap-1 border-b border-border">
-              {(["csv", "raw"] as const).map(name => (
-                <button
-                  key={name}
-                  type="button"
-                  onClick={() => setTab(name)}
-                  className={cn(
-                    "-mb-px border-b-2 px-3 py-2 text-xs transition-colors",
-                    tab === name
-                      ? "border-foreground text-foreground"
-                      : "border-transparent text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {name === "csv" ? "CSV tables" : "Raw run folders"}
-                </button>
-              ))}
-            </div>
-
-            {previewError ? (
-              <p className="text-xs text-red-600 dark:text-red-400">
-                {previewError instanceof Error ? previewError.message : "Preview failed"}
-              </p>
-            ) : null}
-
-            {previewLoading ? (
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Reading the selection
-              </p>
-            ) : null}
-
-            {preview !== undefined && preview.run_count === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-6 text-xs text-muted-foreground">
-                <Inbox className="h-8 w-8" />
-                No runs match the current filters
-              </div>
-            ) : null}
-
-            {preview !== undefined && preview.run_count > 0 && overRunCap ? (
-              <ExportNotices
-                scenarioNames={preview.scenario_names}
-                inProgressCount={preview.in_progress_run_count}
-                runsWithoutReport={0}
-                missingRunIds={mode === "explicit" ? [...knownMissing] : []}
-                overRunCap={overRunCap}
-                runCount={runCount}
-                maxRunCount={preview.max_run_count}
-              />
-            ) : null}
-
-            {preview !== undefined && preview.run_count > 0 && !overRunCap ? (
-              <>
-                <ExportNotices
-                  scenarioNames={preview.scenario_names}
-                  inProgressCount={preview.in_progress_run_count}
-                  runsWithoutReport={preview.runs_without_report.length}
-                  missingRunIds={mode === "explicit" ? [...knownMissing] : []}
-                  overRunCap={overRunCap}
-                  runCount={runCount}
-                  maxRunCount={preview.max_run_count}
-                />
-
-                {tab === "raw" ? (
-                  <section className="space-y-2">
-                    <label className="flex cursor-pointer items-center gap-2 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={includeLogs}
-                        onChange={() => setIncludeLogs(!includeLogs)}
-                        className="rounded border-input"
-                      />
-                      Include debug and stdout logs
-                    </label>
-                    <label className="flex cursor-pointer items-center gap-2 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={includeAtif}
-                        onChange={() => setIncludeAtif(!includeAtif)}
-                        className="rounded border-input"
-                      />
-                      Include ATIF trajectories (one per agent)
-                    </label>
-                    <p className="text-[11px] text-muted-foreground">
-                      {rawEstimate === null
-                        ? "Sizing the run folders."
-                        : `About ${formatBytes(rawEstimate)} of run folders${
-                            includeLogs ? ", logs included" : ""
-                          }, before compression.`}
-                    </p>
-                    {overRawCap ? (
-                      <p className="text-[11px] text-amber-600 dark:text-amber-500">
-                        Larger than the {formatBytes(preview.max_raw_bytes)} limit. Narrow the
-                        selection.
-                      </p>
-                    ) : null}
-                  </section>
-                ) : (
-                  <>
-                    <section className="space-y-1.5">
-                      <span className="text-xs font-medium">Tables</span>
-                      {FRAME_DESCRIPTIONS.map(({ frame, title, detail }) => {
-                        const disabledReason = frameDisabledReason(frame);
-                        const enabled = disabledReason === null;
-                        return (
-                          <label
-                            key={frame}
-                            className={cn(
-                              "flex items-center gap-2 text-xs",
-                              enabled ? "cursor-pointer" : "opacity-60"
-                            )}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={frames.has(frame) && enabled}
-                              disabled={!enabled}
-                              onChange={() => toggleFrame(frame)}
-                              className="rounded border-input"
-                            />
-                            <span className="font-mono">{title}</span>
-                            <span className="text-muted-foreground">
-                              {enabled ? detail : `${detail}, but ${disabledReason}`}
-                            </span>
-                          </label>
-                        );
-                      })}
-                      <label className="flex cursor-pointer items-center gap-2 pt-1 text-xs">
-                        <input
-                          type="checkbox"
-                          checked={repeatRunColumns}
-                          onChange={() => setRepeatRunColumns(!repeatRunColumns)}
-                          className="rounded border-input"
-                        />
-                        Repeat run columns on the round, agent and message tables
-                      </label>
-                      <label className="flex cursor-pointer items-center gap-2 text-xs">
-                        <input
-                          type="checkbox"
-                          checked={includeMetricSummaries}
-                          onChange={() => setIncludeMetricSummaries(!includeMetricSummaries)}
-                          className="rounded border-input"
-                        />
-                        Include each metric&apos;s unit, summary, and per-observation notes
-                      </label>
-                    </section>
-
-                    {COLUMN_SECTIONS.map(({ group, title, empty }) => {
-                      const columns = columnsByGroup(group);
-                      const selectable = columns.filter(column => !column.always_included);
-                      const selectedCount = selectable.filter(column =>
-                        columnKeys.has(column.key)
-                      ).length;
-                      const open = expanded.has(group);
-                      return (
-                        <section key={group} className="space-y-1.5">
-                          <SectionHeader
-                            title={title}
-                            selectedCount={selectedCount}
-                            totalCount={selectable.length}
-                            expanded={open}
-                            onToggleExpanded={() => toggleExpanded(group)}
-                            onAll={() => {
-                              const next = new Set(columnKeys);
-                              selectable.forEach(column => next.add(column.key));
-                              setColumnKeys(next);
-                            }}
-                            onNone={() => {
-                              const next = new Set(columnKeys);
-                              selectable.forEach(column => next.delete(column.key));
-                              setColumnKeys(next);
-                            }}
-                          />
-                          {open ? (
-                            <ColumnCheckList
-                              columns={columns}
-                              runCount={runCount}
-                              selectedKeys={columnKeys}
-                              onToggle={key => toggle(columnKeys, setColumnKeys, key)}
-                              emptyMessage={empty}
-                            />
-                          ) : null}
-                        </section>
-                      );
-                    })}
-
-                    <section className="space-y-1.5">
-                      <SectionHeader
-                        title="Evaluators"
-                        selectedCount={metricNames.size}
-                        totalCount={preview.metrics.length}
-                        expanded={expanded.has("metrics")}
-                        onToggleExpanded={() => toggleExpanded("metrics")}
-                        onAll={() =>
-                          setMetricNames(new Set(preview.metrics.map(m => m.metric_name)))
-                        }
-                        onNone={() => setMetricNames(new Set())}
-                      />
-                      {expanded.has("metrics") ? (
-                        preview.metrics.length === 0 ? (
-                          <div className="rounded-md border border-input p-2 text-[11px] text-muted-foreground">
-                            No evaluation reports in this selection. Run an evaluation to get metric
-                            columns.
-                          </div>
-                        ) : (
-                          <div className="max-h-44 overflow-y-auto rounded-md border border-input p-2">
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-                              {preview.metrics.map(metric => (
-                                <CheckItem
-                                  key={metric.metric_name}
-                                  label={metric.metric_name}
-                                  suffix={
-                                    metric.runs_with_value < runCount
-                                      ? `${metric.runs_with_value}/${runCount}`
-                                      : null
-                                  }
-                                  checked={metricNames.has(metric.metric_name)}
-                                  disabled={false}
-                                  onChange={() =>
-                                    toggle(metricNames, setMetricNames, metric.metric_name)
-                                  }
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        )
-                      ) : null}
-                    </section>
-
-                    <section className="space-y-0.5 rounded-md border border-border bg-muted/30 px-3 py-2">
-                      <span className="text-xs font-medium">You will get</span>
-                      {frames.has("run_level") ? (
-                        <p className="text-[11px] text-muted-foreground">
-                          run_level.csv — {runCount} rows
-                        </p>
-                      ) : null}
-                      {frames.has("round_level") && frameEnabled("round_level") ? (
-                        <p className="text-[11px] text-muted-foreground">
-                          round_level.csv — about {roundRowsSelected} rows
-                        </p>
-                      ) : null}
-                      {frames.has("agent_level") && frameEnabled("agent_level") ? (
-                        <p className="text-[11px] text-muted-foreground">
-                          agent_level.csv — {agentRows} rows
-                        </p>
-                      ) : null}
-                      {frames.has("message_level") && frameEnabled("message_level") ? (
-                        <p className="text-[11px] text-muted-foreground">
-                          message_level.csv — about {messageRows} rows, read from every run&apos;s
-                          event log
-                        </p>
-                      ) : null}
-                      {frames.has("round_context") && frameEnabled("round_context") ? (
-                        <p className="text-[11px] text-muted-foreground">
-                          round_context.csv — about {roundContextRows} rows, read from every
-                          run&apos;s event log
-                        </p>
-                      ) : null}
-                      <p className="text-[11px] text-muted-foreground">
-                        {enabledFrames.length > 1
-                          ? "Delivered as a zip with a columns.csv legend"
-                          : "Delivered as a single CSV"}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        Tables over {formatBytes(preview.max_csv_bytes)} are refused. Turning off
-                        repeating the run columns is the biggest saving.
-                      </p>
-                    </section>
-                  </>
-                )}
-              </>
-            ) : null}
-
-            {exportMutation.error ? (
-              <p className="text-xs text-red-600 dark:text-red-400">
-                {exportMutation.error instanceof Error
-                  ? exportMutation.error.message
-                  : "Export failed"}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-5 py-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-border px-3 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => exportMutation.mutate()}
-              disabled={!canSubmit || exportMutation.isPending}
-              className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1 text-[12px] font-medium text-background transition-opacity hover:opacity-80 disabled:opacity-50"
-            >
-              {exportMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-              {submitLabel()}
-            </button>
-          </div>
-        </div>
+          <X className="h-4 w-4" />
+        </button>
       </div>
-    </div>,
-    document.body
+
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+        <section className="space-y-1.5">
+          <span className="text-xs font-medium">Runs</span>
+          <label className="flex cursor-pointer items-start gap-2 text-xs">
+            <input
+              type="radio"
+              checked={mode === "filters"}
+              onChange={() => setMode("filters")}
+              className="mt-0.5"
+            />
+            <span>
+              All runs matching the current filters
+              <span className="ml-1 text-muted-foreground">({matchingRunCount})</span>
+              <span className="block text-[11px] text-muted-foreground">
+                {describeFilters(filters)}
+              </span>
+            </span>
+          </label>
+          {selectedRunIds.size > 0 ? (
+            <label className="flex cursor-pointer items-start gap-2 text-xs">
+              <input
+                type="radio"
+                checked={mode === "explicit"}
+                onChange={() => setMode("explicit")}
+                className="mt-0.5"
+              />
+              <span>
+                The runs you checked
+                <span className="ml-1 text-muted-foreground">({selectedRunIds.size})</span>
+              </span>
+            </label>
+          ) : (
+            <button
+              type="button"
+              onClick={startPicking}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ListChecks className="h-3.5 w-3.5" />
+              Pick runs from the list instead
+            </button>
+          )}
+        </section>
+
+        <div className="flex gap-1 border-b border-border">
+          {(["csv", "raw"] as const).map(name => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => setTab(name)}
+              className={cn(
+                "-mb-px border-b-2 px-3 py-2 text-xs transition-colors",
+                tab === name
+                  ? "border-foreground text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {name === "csv" ? "CSV tables" : "Raw run folders"}
+            </button>
+          ))}
+        </div>
+
+        {previewError ? (
+          <p className="text-xs text-red-600 dark:text-red-400">
+            {previewError instanceof Error ? previewError.message : "Preview failed"}
+          </p>
+        ) : null}
+
+        {previewLoading ? (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Reading the selection
+          </p>
+        ) : null}
+
+        {preview !== undefined && preview.run_count === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-6 text-xs text-muted-foreground">
+            <Inbox className="h-8 w-8" />
+            No runs match the current filters
+          </div>
+        ) : null}
+
+        {preview !== undefined && preview.run_count > 0 && overRunCap ? (
+          <ExportNotices
+            scenarioNames={preview.scenario_names}
+            inProgressCount={preview.in_progress_run_count}
+            runsWithoutReport={0}
+            missingRunIds={mode === "explicit" ? [...knownMissing] : []}
+            overRunCap={overRunCap}
+            runCount={runCount}
+            maxRunCount={preview.max_run_count}
+          />
+        ) : null}
+
+        {preview !== undefined && preview.run_count > 0 && !overRunCap ? (
+          <>
+            <ExportNotices
+              scenarioNames={preview.scenario_names}
+              inProgressCount={preview.in_progress_run_count}
+              runsWithoutReport={preview.runs_without_report.length}
+              missingRunIds={mode === "explicit" ? [...knownMissing] : []}
+              overRunCap={overRunCap}
+              runCount={runCount}
+              maxRunCount={preview.max_run_count}
+            />
+
+            {tab === "raw" ? (
+              <section className="space-y-2">
+                <label className="flex cursor-pointer items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={includeLogs}
+                    onChange={() => setIncludeLogs(!includeLogs)}
+                    className="rounded border-input"
+                  />
+                  Include debug and stdout logs
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={includeAtif}
+                    onChange={() => setIncludeAtif(!includeAtif)}
+                    className="rounded border-input"
+                  />
+                  Include ATIF trajectories (one per agent)
+                </label>
+                <p className="text-[11px] text-muted-foreground">
+                  {rawEstimate === null
+                    ? "Sizing the run folders."
+                    : `About ${formatBytes(rawEstimate)} of run folders${
+                        includeLogs ? ", logs included" : ""
+                      }, before compression.`}
+                </p>
+                {overRawCap ? (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-500">
+                    Larger than the {formatBytes(preview.max_raw_bytes)} limit. Narrow the
+                    selection.
+                  </p>
+                ) : null}
+              </section>
+            ) : (
+              <>
+                <section className="space-y-1.5">
+                  <span className="text-xs font-medium">Tables</span>
+                  {FRAME_DESCRIPTIONS.map(({ frame, title, detail }) => {
+                    const disabledReason = frameDisabledReason(frame);
+                    const enabled = disabledReason === null;
+                    return (
+                      <label
+                        key={frame}
+                        className={cn(
+                          "flex items-center gap-2 text-xs",
+                          enabled ? "cursor-pointer" : "opacity-60"
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={frames.has(frame) && enabled}
+                          disabled={!enabled}
+                          onChange={() => toggleFrame(frame)}
+                          className="rounded border-input"
+                        />
+                        <span className="font-mono">{title}</span>
+                        <span className="text-muted-foreground">
+                          {enabled ? detail : `${detail}, but ${disabledReason}`}
+                        </span>
+                      </label>
+                    );
+                  })}
+                  <label className="flex cursor-pointer items-center gap-2 pt-1 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={repeatRunColumns}
+                      onChange={() => setRepeatRunColumns(!repeatRunColumns)}
+                      className="rounded border-input"
+                    />
+                    Repeat run columns on the round, agent and message tables
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={includeMetricSummaries}
+                      onChange={() => setIncludeMetricSummaries(!includeMetricSummaries)}
+                      className="rounded border-input"
+                    />
+                    Include each metric&apos;s unit, summary, and per-observation notes
+                  </label>
+                </section>
+
+                {COLUMN_SECTIONS.map(({ group, title, empty }) => {
+                  const columns = columnsByGroup(group);
+                  const selectable = columns.filter(column => !column.always_included);
+                  const selectedCount = selectable.filter(column =>
+                    columnKeys.has(column.key)
+                  ).length;
+                  const open = expanded.has(group);
+                  return (
+                    <section key={group} className="space-y-1.5">
+                      <SectionHeader
+                        title={title}
+                        selectedCount={selectedCount}
+                        totalCount={selectable.length}
+                        expanded={open}
+                        onToggleExpanded={() => toggleExpanded(group)}
+                        onAll={() => {
+                          const next = new Set(columnKeys);
+                          selectable.forEach(column => next.add(column.key));
+                          setColumnKeys(next);
+                        }}
+                        onNone={() => {
+                          const next = new Set(columnKeys);
+                          selectable.forEach(column => next.delete(column.key));
+                          setColumnKeys(next);
+                        }}
+                      />
+                      {open ? (
+                        <ColumnCheckList
+                          columns={columns}
+                          runCount={runCount}
+                          selectedKeys={columnKeys}
+                          onToggle={key => toggle(columnKeys, setColumnKeys, key)}
+                          emptyMessage={empty}
+                        />
+                      ) : null}
+                    </section>
+                  );
+                })}
+
+                <section className="space-y-1.5">
+                  <SectionHeader
+                    title="Evaluators"
+                    selectedCount={metricNames.size}
+                    totalCount={preview.metrics.length}
+                    expanded={expanded.has("metrics")}
+                    onToggleExpanded={() => toggleExpanded("metrics")}
+                    onAll={() => setMetricNames(new Set(preview.metrics.map(m => m.metric_name)))}
+                    onNone={() => setMetricNames(new Set())}
+                  />
+                  {expanded.has("metrics") ? (
+                    preview.metrics.length === 0 ? (
+                      <div className="rounded-md border border-input p-2 text-[11px] text-muted-foreground">
+                        No evaluation reports in this selection. Run an evaluation to get metric
+                        columns.
+                      </div>
+                    ) : (
+                      <div className="max-h-44 overflow-y-auto rounded-md border border-input p-2">
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                          {preview.metrics.map(metric => (
+                            <CheckItem
+                              key={metric.metric_name}
+                              label={metric.metric_name}
+                              suffix={
+                                metric.runs_with_value < runCount
+                                  ? `${metric.runs_with_value}/${runCount}`
+                                  : null
+                              }
+                              checked={metricNames.has(metric.metric_name)}
+                              disabled={false}
+                              onChange={() =>
+                                toggle(metricNames, setMetricNames, metric.metric_name)
+                              }
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  ) : null}
+                </section>
+
+                <section className="space-y-0.5 rounded-md border border-border bg-muted/30 px-3 py-2">
+                  <span className="text-xs font-medium">You will get</span>
+                  {frames.has("run_level") ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      run_level.csv — {runCount} rows
+                    </p>
+                  ) : null}
+                  {frames.has("round_level") && frameEnabled("round_level") ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      round_level.csv — about {roundRowsSelected} rows
+                    </p>
+                  ) : null}
+                  {frames.has("agent_level") && frameEnabled("agent_level") ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      agent_level.csv — {agentRows} rows
+                    </p>
+                  ) : null}
+                  {frames.has("message_level") && frameEnabled("message_level") ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      message_level.csv — about {messageRows} rows, read from every run&apos;s event
+                      log
+                    </p>
+                  ) : null}
+                  {frames.has("round_context") && frameEnabled("round_context") ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      round_context.csv — about {roundContextRows} rows, read from every run&apos;s
+                      event log
+                    </p>
+                  ) : null}
+                  <p className="text-[11px] text-muted-foreground">
+                    {enabledFrames.length > 1
+                      ? "Delivered as a zip with a columns.csv legend"
+                      : "Delivered as a single CSV"}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Tables over {formatBytes(preview.max_csv_bytes)} are refused. Turning off
+                    repeating the run columns is the biggest saving.
+                  </p>
+                </section>
+              </>
+            )}
+          </>
+        ) : null}
+
+        {exportMutation.error ? (
+          <p className="text-xs text-red-600 dark:text-red-400">
+            {exportMutation.error instanceof Error ? exportMutation.error.message : "Export failed"}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-5 py-3">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-md border border-border px-3 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => exportMutation.mutate()}
+          disabled={!canSubmit || exportMutation.isPending}
+          className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1 text-[12px] font-medium text-background transition-opacity hover:opacity-80 disabled:opacity-50"
+        >
+          {exportMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+          {submitLabel()}
+        </button>
+      </div>
+    </Modal>
   );
 }
 
