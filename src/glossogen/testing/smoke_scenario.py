@@ -36,7 +36,8 @@ from glossogen.runtime.communication_tools import (
 from glossogen.runtime.read_notifications_schema import READ_NOTIFICATIONS_TOOL_NAME
 from glossogen.runtime.scenario_tool import ScenarioTool
 from glossogen.runtime.scenario_world import ScenarioWorld
-from glossogen.scenario_protocol import PrimaryChannel, RoundResult, SimulationScenario
+from glossogen.scenario_base import PrimaryChannel, RoundResult
+from glossogen.scenario_protocol import SimulationScenario
 from glossogen.scenarios.base_knobs import BaseKnobs
 
 LINK_CHANNEL_ID = "link"

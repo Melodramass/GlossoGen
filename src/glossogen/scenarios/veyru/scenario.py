@@ -39,7 +39,9 @@ from glossogen.models.event import SimulationEvent
 from glossogen.runtime.round_end_trigger import RoundEndTrigger
 from glossogen.runtime.scenario_tool import ScenarioTool
 from glossogen.runtime.scenario_world import ScenarioWorld
-from glossogen.scenario_protocol import PrimaryChannel, RoundResult, SimulationScenario
+from glossogen.scenario_base import PrimaryChannel, RoundResult
+from glossogen.scenario_protocol import SimulationScenario
+from glossogen.scenario_run_detail_extension import ScenarioRunDetailExtension
 from glossogen.scenarios.channel_noise import apply_character_noise
 from glossogen.scenarios.veyru.case_event_conversion import case_started_event
 from glossogen.scenarios.veyru.evaluation.build_communication_rounds import (
@@ -76,6 +78,7 @@ from glossogen.scenarios.veyru.injection_rendering import (
     render_round_injection,
 )
 from glossogen.scenarios.veyru.knobs import VeyruKnobs
+from glossogen.scenarios.veyru.run_detail_extension import VeyruRunDetailExtension
 from glossogen.scenarios.veyru.team_declaration import (
     WORLD_DISPLAY_NAME,
     veyru_team_states,
@@ -154,6 +157,11 @@ class VeyruScenario(SimulationScenario):
         if intern_enabled:
             roles.append(AgentRole(agent_id=INTERN_ID, role_name=INTERN_ROLE))
         return roles
+
+    @classmethod
+    def run_detail_extension(cls) -> ScenarioRunDetailExtension:
+        """The case ground truth and judge verdicts the run page shows."""
+        return VeyruRunDetailExtension()
 
     @classmethod
     def knobs_model(cls) -> type[VeyruKnobs]:

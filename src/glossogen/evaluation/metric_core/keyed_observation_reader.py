@@ -16,6 +16,7 @@ from pathlib import Path
 from glossogen.evaluation.metric_core.keyed_observation import KeyedObservation
 from glossogen.evaluation.metric_core.metric_protocol import Metric
 from glossogen.evaluation.metric_core.metric_registry import available_metrics
+from glossogen.scenario_loader import find_scenario_class
 
 logger = logging.getLogger(__name__)
 
@@ -33,13 +34,17 @@ async def _read_one(
         return []
 
 
-async def read_keyed_observations(run_dir: Path) -> dict[str, list[KeyedObservation]]:
-    """Return every installed metric's keyed observations for one run, by metric name.
+async def read_keyed_observations(
+    run_dir: Path, scenario_name: str
+) -> dict[str, list[KeyedObservation]]:
+    """Return every applicable metric's keyed observations for one run, by metric name.
 
-    Metrics that wrote no sidecar contribute nothing, so the result carries only the
-    metrics this run actually has numbers for.
+    The metrics asked are the ones that can run on the run's scenario, its own
+    included. A run whose scenario is no longer installed is still asked for the
+    generic and installed ones. Metrics that wrote no sidecar contribute nothing,
+    so the result carries only the metrics this run actually has numbers for.
     """
-    metrics = available_metrics()
+    metrics = available_metrics(scenario_cls=find_scenario_class(name=scenario_name))
     results = await asyncio.gather(
         *(
             _read_one(name=name, metric_class=metric_class, run_dir=run_dir)

@@ -11,6 +11,7 @@ caller names a metric, and one unreadable file costs that run's numbers instead 
 the sweep's.
 """
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import orjson
@@ -18,6 +19,9 @@ import pytest
 
 from glossogen.evaluation.metric_core.keyed_observation import KeyedObservation
 from glossogen.evaluation.metric_core.keyed_observation_reader import read_keyed_observations
+from glossogen.evaluation.metric_core.measurement import Measurement
+from glossogen.evaluation.metric_core.metric_protocol import Metric
+from glossogen.evaluation.metric_core.metric_run_options import MetricRunOptions
 from glossogen.evaluation.metric_core.sidecar_reading import (
     key_text,
     read_json_sidecar,
@@ -47,6 +51,9 @@ from glossogen.evaluation.metrics.protocol_probe.protocol_probe_cutoff_trajector
 from glossogen.evaluation.metrics.protocol_probe.protocol_probe_replica_self_similarity_metric import (  # noqa: E501
     ProtocolProbeReplicaSelfSimilarityMetric,
 )
+from glossogen.llm.provider import LLMProvider
+from glossogen.models.agent_config import AgentConfig
+from glossogen.models.event import SimulationEvent
 from glossogen.run_analysis.aggregation import Aggregate
 from glossogen.run_analysis.analysis_field_catalog import build_field_catalog
 from glossogen.run_analysis.analysis_grain import AnalysisGrain
@@ -62,6 +69,8 @@ from glossogen.run_analysis.analysis_run_record import (
     load_analysis_records,
 )
 from glossogen.run_analysis.measure_resolution import MeasureSource
+from glossogen.scenario_base import ScenarioBase
+from glossogen.scenarios.signal_game.scenario import SignalGameScenario
 from tests.fakes.export_run_records import make_agent, make_record
 
 
@@ -264,13 +273,13 @@ async def test_the_reader_returns_only_the_metrics_this_run_has_files_for(
         payload={"scores": [score_row(category_id="a", confidence=0.5)]},
     )
 
-    found = await read_keyed_observations(run_dir=tmp_path)
+    found = await read_keyed_observations(run_dir=tmp_path, scenario_name="veyru")
 
     assert list(found) == ["communication_feature_presence"]
 
 
 async def test_a_run_with_no_sidecars_reads_as_nothing(tmp_path: Path) -> None:
-    assert await read_keyed_observations(run_dir=tmp_path) == {}
+    assert await read_keyed_observations(run_dir=tmp_path, scenario_name="veyru") == {}
 
 
 async def test_an_unreadable_sidecar_costs_that_metric_and_not_the_run(
@@ -285,9 +294,86 @@ async def test_an_unreadable_sidecar_costs_that_metric_and_not_the_run(
         payload={"labels": [label_row(text="still readable")]},
     )
 
-    found = await read_keyed_observations(run_dir=tmp_path)
+    found = await read_keyed_observations(run_dir=tmp_path, scenario_name="veyru")
 
     assert list(found) == ["communication_open_coding"]
+
+
+SCENARIO_SIDECAR = "scenario_sidecar.json"
+
+
+class ScenarioSidecarMetric(Metric):
+    """A scenario-scoped metric that reads one number back from a sidecar."""
+
+    name = "scenario_sidecar_metric"
+
+    async def compute(
+        self,
+        events: list[SimulationEvent],
+        agent_configs: list[AgentConfig],
+        scenario: ScenarioBase,
+        llm_provider: LLMProvider,
+        run_dir: Path,
+        options: MetricRunOptions,
+    ) -> list[Measurement]:
+        """Never run; only the read-back is under test."""
+        _ = events, agent_configs, scenario, llm_provider, run_dir, options
+        return []
+
+    async def read_keyed_observations(self, run_dir: Path) -> list[KeyedObservation]:
+        """Report one observation when the sidecar exists."""
+        if not (run_dir / SCENARIO_SIDECAR).exists():
+            return []
+        return [KeyedObservation(keys={"item": "only"}, value=1.0)]
+
+
+@pytest.fixture(name="signal_game_sidecar_metric")
+def signal_game_sidecar_metric_fixture(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make signal_game declare ``ScenarioSidecarMetric`` as its own."""
+
+    def declared(cls: type[SignalGameScenario]) -> Sequence[type[Metric]]:
+        """signal_game's metrics plus the sidecar one."""
+        _ = cls
+        return (ScenarioSidecarMetric,)
+
+    monkeypatch.setattr(SignalGameScenario, "scenario_metrics", classmethod(declared))
+
+
+@pytest.mark.usefixtures("signal_game_sidecar_metric")
+async def test_a_scenarios_own_metric_is_read_on_that_scenarios_runs(tmp_path: Path) -> None:
+    write(run_dir=tmp_path, name=SCENARIO_SIDECAR, payload={})
+
+    found = await read_keyed_observations(run_dir=tmp_path, scenario_name="signal_game")
+
+    assert found == {
+        ScenarioSidecarMetric.name: [KeyedObservation(keys={"item": "only"}, value=1.0)]
+    }
+
+
+@pytest.mark.usefixtures("signal_game_sidecar_metric")
+async def test_a_scenarios_own_metric_is_not_read_on_another_scenarios_runs(
+    tmp_path: Path,
+) -> None:
+    write(run_dir=tmp_path, name=SCENARIO_SIDECAR, payload={})
+
+    assert await read_keyed_observations(run_dir=tmp_path, scenario_name="veyru") == {}
+
+
+@pytest.mark.usefixtures("signal_game_sidecar_metric")
+async def test_a_run_whose_scenario_is_not_installed_still_reads_generic_sidecars(
+    tmp_path: Path,
+) -> None:
+    """Old runs outlive their scenario; their generic numbers still chart."""
+    write(run_dir=tmp_path, name=SCENARIO_SIDECAR, payload={})
+    write(
+        run_dir=tmp_path,
+        name="communication_feature_presence.json",
+        payload={"scores": [score_row(category_id="a", confidence=0.5)]},
+    )
+
+    found = await read_keyed_observations(run_dir=tmp_path, scenario_name="no_such_scenario")
+
+    assert list(found) == ["communication_feature_presence"]
 
 
 async def test_a_half_written_jsonl_keeps_the_rows_before_the_break(tmp_path: Path) -> None:

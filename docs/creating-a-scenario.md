@@ -499,24 +499,44 @@ is the worked example of the waiting, messaging, prompt and simulated-time surfa
 ### `evaluation/`
 
 Most scoring is scenario-agnostic, and `get_primary_channels()` being required
-means the language and throughput metrics come free. Add a metric here only for a
-domain signal that reduces to neither round success nor language phenomena, and
-see [Creating a metric](creating-a-metric.md) before you do: a generic metric
-reading a hook is preferred, and every scoring concept the platform has ended up
-expressible that way.
+means the language and throughput metrics come free. Add a metric of your own only
+for a domain signal that reduces to neither round success nor language phenomena,
+and see [Creating a metric](creating-a-metric.md) before you do: a generic metric
+reading a hook is preferred.
 
-### `run_detail_extension.py`
+A metric of your own is declared by the scenario class, wherever its module lives:
+
+```python
+@classmethod
+def scenario_metrics(cls) -> Sequence[type[Metric]]:
+    return (ExcessMovesMetric, LongestStreakMetric)
+```
+
+It is then offered and runnable for this scenario's runs and no other's, alongside
+the generic metrics. Its name must not repeat a generic metric's; `validate`
+checks. [signal_game](../src/glossogen/scenarios/signal_game/scenario.py) is the
+example.
+
+### Run-detail extension
 
 For per-round ground truth, judge metadata keyed by tool `call_id`, or custom SSE
-events on the run-detail API. The platform discovers the file at startup. The
-contract is
-[scenario_extension.py](../src/glossogen/server/runs/scenario_extension.py) and
-the canonical example
-[veyru/run_detail_extension.py](../src/glossogen/scenarios/veyru/run_detail_extension.py).
-Declare an extras model with a `Literal` scenario name, a
-`ScenarioRunDetailExtension` subclass naming it, and a `build_extras` that walks
-the events. Then regenerate the frontend types so the discriminated union picks
-up your variant:
+events on the run-detail API. The scenario class returns the extension:
+
+```python
+@classmethod
+def run_detail_extension(cls) -> ScenarioRunDetailExtension:
+    return VeyruRunDetailExtension()
+```
+
+The contract is
+[scenario_run_detail_extension.py](../src/glossogen/scenario_run_detail_extension.py)
+and the canonical example
+[veyru/run_detail_extension.py](../src/glossogen/scenarios/veyru/run_detail_extension.py),
+though the module can be named anything. Declare an extras model whose
+`scenario_name` is a `Literal` of your scenario's name (`validate` checks it), a
+`ScenarioRunDetailExtension` subclass naming that model, and a `build_extras` that
+walks the events. Then regenerate the frontend types so the discriminated union
+picks up your variant:
 
 ```bash
 make gen-api-types

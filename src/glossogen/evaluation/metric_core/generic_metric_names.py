@@ -1,8 +1,8 @@
 """Canonical list of generic metric names.
 
-Kept in a separate module to avoid circular imports between
-scenario_protocol and metric_registry. Both modules read from this
-list instead of depending on each other.
+Kept apart from ``metric_registry`` so that listing the metrics a scenario offers
+does not import every metric class, which costs about a second. A test asserts
+this list and the registry agree.
 """
 
 GENERIC_METRIC_NAMES: list[str] = [

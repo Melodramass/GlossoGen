@@ -14,19 +14,22 @@ holds for external packages is the last one here.
 import logging
 import sys
 from importlib.metadata import EntryPoint
+from typing import get_args
 
 import pytest
 
 from glossogen import scenario_entry_points
 from glossogen import scenario_submodule_discovery as discovery
 from glossogen.models.event_base import EventBase
+from glossogen.scenario_loader import iter_scenario_classes
 from glossogen.scenario_submodule_discovery import (
     ScenarioPackage,
     concrete_subclasses,
     import_scenario_submodules,
     scenario_packages,
 )
-from glossogen.server.runs.scenario_extension import ScenarioRunDetailExtension
+from glossogen.server.runs.scenario_extension import collect_scenario_extensions
+from tests.fakes.external_scenario.run_detail_extension import ExternalScenarioRunDetailExtension
 from tests.unit.test_scenario_loader import declare_in_groups
 
 FAKE_PACKAGE = "tests.fakes.external_scenario"
@@ -108,23 +111,47 @@ def test_an_external_events_module_is_imported_and_its_types_registered(
     assert "ExternalScenarioProbed" in discovered
 
 
-def test_an_external_run_detail_extension_is_discovered(
+def test_each_built_in_extension_is_collected_under_its_own_scenario(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The other submodule discovery is called with, covered for an external package.
+    """Keyed by the scenario that declared it, and only scenarios that declare one.
 
-    This one feeds the ``scenario_extras`` discriminated union on the run-detail
-    response, so an extension that is never imported leaves the scenario's own
+    The key and the payload's ``scenario_name`` discriminator must agree, or the
+    detail reader would build one scenario's extras and the union would validate
+    them as another's.
+    """
+    declare(monkeypatch)
+
+    extensions = collect_scenario_extensions()
+
+    declaring = {
+        name
+        for name, scenario_cls in iter_scenario_classes()
+        if scenario_cls.run_detail_extension() is not None
+    }
+    assert set(extensions) == declaring
+    assert {"veyru", "spot_the_difference"} <= declaring, "a shipped extension went missing"
+    assert "signal_game" not in extensions
+    for name, extension in extensions.items():
+        field = extension.extras_model_cls.model_fields["scenario_name"]
+        assert get_args(field.annotation) == (name,)
+
+
+def test_an_external_scenario_contributes_its_run_detail_extension(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An external scenario's ``run_detail_extension()`` is collected like a built-in's.
+
+    This feeds the ``scenario_extras`` discriminated union on the run-detail
+    response, so an extension that is never collected leaves the scenario's own
     data missing from the API with nothing logged.
     """
     declare(monkeypatch, external_entry_point())
-    monkeypatch.delitem(sys.modules, f"{FAKE_PACKAGE}.run_detail_extension", raising=False)
 
-    import_scenario_submodules(submodule_name="run_detail_extension")
+    extensions = collect_scenario_extensions()
 
-    assert f"{FAKE_PACKAGE}.run_detail_extension" in sys.modules
-    discovered = {cls.scenario_name for cls in concrete_subclasses(base=ScenarioRunDetailExtension)}
-    assert "external_scenario" in discovered
+    assert isinstance(extensions["external_scenario"], ExternalScenarioRunDetailExtension)
+    assert "veyru" in extensions, "a built-in extension went missing"
 
 
 def test_a_broken_external_events_module_is_tolerated(

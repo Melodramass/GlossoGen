@@ -8,17 +8,18 @@ from pydantic import BaseModel, Discriminator
 
 from glossogen.models.event import RunStatus
 from glossogen.models.thinking_part_record import ThinkingPartRecord
+from glossogen.run_detail_types import AgentDetail, ChannelMessage
+from glossogen.scenario_run_detail_extension import ScenarioRunExtrasBase
 from glossogen.server.response_models import LaunchStatus
-from glossogen.server.runs.run_detail_types import AgentDetail, ChannelMessage
-from glossogen.server.runs.scenario_extension import SCENARIO_RUN_EXTENSIONS, ScenarioRunExtrasBase
+from glossogen.server.runs.scenario_extension import SCENARIO_RUN_EXTENSIONS
 
 _SCENARIO_EXTRAS_TYPES: tuple[type[ScenarioRunExtrasBase], ...] = tuple(
     ext.extras_model_cls for ext in SCENARIO_RUN_EXTENSIONS.values()
 )
 
 # ``ScenarioRunExtras`` is a runtime-built discriminated union over every
-# ``ScenarioRunExtrasBase`` subclass advertised by a scenario's
-# ``run_detail_extension`` module. ``Union`` accepts a tuple at runtime;
+# ``ScenarioRunExtrasBase`` subclass a scenario's ``run_detail_extension()``
+# declares. ``Union`` accepts a tuple at runtime;
 # the ``Any`` cast hides this from the static type checker since the
 # tuple is only known at runtime. When no scenario advertises extras the
 # union falls back to the base class so the OpenAPI schema stays valid.

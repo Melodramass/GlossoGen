@@ -188,9 +188,9 @@ The auto-discovery works because:
 
 ### Scenario Run-Detail Extensions
 
-Scenarios that want to surface custom data on the run-detail API (per-round case ground truth, judge metadata keyed by tool `call_id`, scenario-specific SSE events) ship an optional `glossogen/scenarios/<name>/run_detail_extension.py` exporting a `ScenarioRunDetailExtension` subclass plus a `ScenarioRunExtrasBase` payload class.
+Scenarios that want to surface custom data on the run-detail API (per-round case ground truth, judge metadata keyed by tool `call_id`, scenario-specific SSE events) return a `ScenarioRunDetailExtension` from `SimulationScenario.run_detail_extension()`, with a `ScenarioRunExtrasBase` payload class whose `scenario_name` literal is the scenario's name. Both classes live in [scenario_run_detail_extension.py](src/glossogen/scenario_run_detail_extension.py), outside `glossogen.server`, because the scenario contract names them. The module defining a scenario's extension can sit anywhere; nothing looks for it by file name.
 
-The discovery pipeline at `glossogen/server/runs/scenario_extension.py` imports each scenario's `run_detail_extension` submodule when present, over the same package list event discovery uses, and instantiates every `ScenarioRunDetailExtension` it finds. The platform's [server/runs/models.py](src/glossogen/server/runs/models.py) builds `RunDetailResponse.scenario_extras` as a discriminated union over every discovered `ScenarioRunExtrasBase` subclass (discriminated by `scenario_name`), and the SSE event union is similarly extended by every extension's `sse_event_classes`. After the generic event walk, [server/runs/detail_reader.py](src/glossogen/server/runs/detail_reader.py) calls `extension.build_extras(events, agents_by_id, messages)` for the run's scenario and attaches the result.
+[server/runs/scenario_extension.py](src/glossogen/server/runs/scenario_extension.py) asks each loadable scenario class for its extension. The platform's [server/runs/models.py](src/glossogen/server/runs/models.py) builds `RunDetailResponse.scenario_extras` as a discriminated union over every declared `ScenarioRunExtrasBase` subclass (discriminated by `scenario_name`), and the SSE event union is similarly extended by every extension's `sse_event_classes`. After the generic event walk, [server/runs/detail_reader.py](src/glossogen/server/runs/detail_reader.py) calls `extension.build_extras(events, agents_by_id, messages)` for the run's scenario and attaches the result. `glossogen validate` checks the payload's `scenario_name` matches the scenario.
 
 Veyru is the canonical example; see [scenarios/veyru/run_detail_extension.py](src/glossogen/scenarios/veyru/run_detail_extension.py) for `VeyruRunExtras`, the FIFO `(agent_id, call_id)` matcher that builds `stabilize_metadata_by_call_id`, the observer-swap / intern-join / intern-takeover anchors, and the per-round `VeyruCaseSummary` projection.
 
@@ -234,14 +234,35 @@ writing a measurement under a name nobody asked for. A metric shipped here wins 
 name collision, so an installed package cannot change what `round_success` means
 and make two reports incomparable.
 
-The cycle shows up here too, in mirror image. `SimulationScenario.get_available_metric_names`
-decides which metrics `--metrics` and the REST evaluate endpoint accept, and a
-metric module imports the scenario contract, so the contract cannot import metric
-classes. It reads names only, from `metric_entry_points.external_metric_names()`,
-which touches metadata and imports nothing. The importing lives in
-`metric_registry.available_metrics()`, on the far side of the cycle, and only the
-evaluation runner calls it. `generic_metric_names.py` exists for the same reason,
-which is why the built-in metric names are listed there as well as in the registry.
+Which metrics apply to a scenario's runs is decided per scenario:
+`metric_registry.available_metrics(scenario_cls)` merges the generic metrics, the
+scenario's own `scenario_metrics()`, and the installed ones, and both the
+evaluation runner and the keyed-observation reader resolve through it. The API and
+`--metrics` validation read names only, through
+`scenario_metric_names.available_metric_names(scenario_cls)`, which takes installed
+metrics from `metric_entry_points.external_metric_names()` without importing them.
+`generic_metric_names.py` holds the generic names separately for the same reason:
+listing them does not import every metric class.
+
+### Scenario-declared parts and the contract split
+
+A scenario declares its own metrics and its run-detail extension by returning them
+from classmethods on `SimulationScenario`, so no platform module names a scenario
+and a scenario adds them without editing platform code. `scenario_registry.py` is
+the one place built-in scenarios are listed.
+
+Returning metric classes makes the contract import the metric contract, and a
+metric's `compute` takes the scenario, so the two would import each other. The
+contract is therefore split. `scenario_base.ScenarioBase` holds every hook the
+runtime and the metrics call; `Metric.compute` takes a `ScenarioBase`.
+`scenario_protocol.SimulationScenario` subclasses it and adds the declaring hooks,
+importing `metric_protocol` and `scenario_run_detail_extension`, which import only
+the base. Scenarios subclass `SimulationScenario`; code that only runs or scores a
+simulation types against `ScenarioBase`.
+
+Event types are the exception and stay found by file name, in each scenario's
+`events.py`: the event parser is built while `glossogen.models.event` is still
+importing, before any scenario class can load.
 
 One unusable external metric (fails to import, not a `Metric`, name disagrees) is
 logged and skipped so the rest still run and a report is still written.

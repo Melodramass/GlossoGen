@@ -6,11 +6,11 @@ caller can instantiate with ``cls()`` and then pass per-invocation
 ``MetricRunOptions`` into ``cls.compute(...)``.
 
 ``GENERIC_METRIC_REGISTRY`` holds the generic metrics shipped here, the ones
-every scenario advertises. ``SCENARIO_METRIC_REGISTRY`` holds the ones shipped
-here that apply to one scenario, which that scenario advertises by overriding
-``get_available_metric_names``. ``BUILT_IN_METRIC_REGISTRY`` is both.
-:func:`available_metrics` adds the ones other installed distributions declare;
-call that rather than reading a dict, unless you specifically mean a built-in set.
+every scenario offers. A metric that applies to one scenario is not listed here:
+that scenario returns it from ``scenario_metrics()``, so this module names no
+scenario. :func:`available_metrics` merges the generic metrics, the scenario's
+own, and the ones other installed distributions declare; call that rather than
+reading the dict, unless you specifically mean the generic set.
 """
 
 import logging
@@ -63,8 +63,7 @@ from glossogen.evaluation.metrics.round_success_after_resume_metric import (
 from glossogen.evaluation.metrics.round_success_metric import RoundSuccessMetric
 from glossogen.evaluation.metrics.shorthand_codes_metric import ShorthandCodesMetric
 from glossogen.evaluation.metrics.slang_emergence_metric import SlangEmergenceMetric
-from glossogen.scenarios.signal_game.evaluation.excess_moves_metric import ExcessMovesMetric
-from glossogen.scenarios.signal_game.evaluation.longest_streak_metric import LongestStreakMetric
+from glossogen.scenario_protocol import SimulationScenario
 
 logger = logging.getLogger(__name__)
 
@@ -98,38 +97,55 @@ _GENERIC_METRICS: list[type[Metric]] = [
     SlangEmergenceMetric,
 ]
 
-_SCENARIO_METRICS: list[type[Metric]] = [
-    ExcessMovesMetric,
-    LongestStreakMetric,
-]
-
 GENERIC_METRIC_REGISTRY: dict[str, type[Metric]] = {cls.name: cls for cls in _GENERIC_METRICS}
-SCENARIO_METRIC_REGISTRY: dict[str, type[Metric]] = {cls.name: cls for cls in _SCENARIO_METRICS}
-BUILT_IN_METRIC_REGISTRY: dict[str, type[Metric]] = (
-    GENERIC_METRIC_REGISTRY | SCENARIO_METRIC_REGISTRY
-)
 
 
-def available_metrics() -> dict[str, type[Metric]]:
-    """Return every metric that can be run, built-in and externally contributed.
+def available_metrics(scenario_cls: type[SimulationScenario] | None) -> dict[str, type[Metric]]:
+    """Return every metric that can be run on one scenario's runs.
 
-    A metric shipped here wins a name collision, so an installed package cannot
-    change what an existing metric name means: a report is keyed by metric name,
-    and letting it be redefined would make two runs' reports incomparable.
+    That is the generic metrics, the scenario's own ``scenario_metrics()``, and
+    the ones other installed distributions declare. ``scenario_cls`` is None for
+    a run whose scenario is no longer installed, which still has the generic and
+    installed metrics.
 
-    Importing external metric classes happens here. That is why the evaluation
-    runner calls this and the scenario contract does not: a metric module imports
-    the scenario contract, so the contract asks
-    :mod:`glossogen.evaluation.metric_core.metric_entry_points` for names only.
+    A generic metric wins a name collision, then the scenario's own, so an
+    installed package cannot change what an existing metric name means: a report
+    is keyed by metric name, and letting it be redefined would make two runs'
+    reports incomparable. ``validate`` refuses a scenario metric that repeats a
+    generic name, so that collision is logged here rather than raised.
+
+    Importing external metric classes happens here, which is why listings that
+    only need names call
+    :func:`glossogen.evaluation.metric_core.scenario_metric_names.available_metric_names`
+    instead.
 
     One unusable external metric is logged and skipped rather than failing the
     whole evaluation, so the metrics that do work still produce a report.
     """
-    merged = dict(BUILT_IN_METRIC_REGISTRY)
+    merged = dict(GENERIC_METRIC_REGISTRY)
+    if scenario_cls is not None:
+        for metric_cls in scenario_cls.scenario_metrics():
+            if metric_cls.name in GENERIC_METRIC_REGISTRY:
+                logger.error(
+                    "Scenario %r declares metric %r, which repeats a generic metric's name; "
+                    "ignoring the scenario's",
+                    scenario_cls.name(),
+                    metric_cls.name,
+                )
+                continue
+            if metric_cls.name in merged:
+                logger.error(
+                    "Scenario %r declares metric %r more than once; keeping the first",
+                    scenario_cls.name(),
+                    metric_cls.name,
+                )
+                continue
+            merged[metric_cls.name] = metric_cls
     for name, entry_point in external_metric_entry_points().items():
         if name in merged:
             logger.warning(
-                "Metric %r is already provided by glossogen; ignoring the one declared by %s",
+                "Metric %r is already provided by glossogen or the scenario; "
+                "ignoring the one declared by %s",
                 name,
                 entry_point.value,
             )

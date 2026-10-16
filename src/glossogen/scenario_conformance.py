@@ -25,11 +25,13 @@ import logging
 import os
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, get_args
 
 from pydantic_core import PydanticUndefined
 
+from glossogen.evaluation.metric_core.generic_metric_names import GENERIC_METRIC_NAMES
 from glossogen.evaluation.metric_core.metric_registry import available_metrics
+from glossogen.evaluation.metric_core.scenario_metric_names import available_metric_names
 from glossogen.models.agent_config import AgentConfig
 from glossogen.models.event import core_event_types, parser_for
 from glossogen.models.event_base import EventBase
@@ -525,9 +527,56 @@ def _advertised_metrics_are_registered(built: BuiltScenario) -> str | None:
     Compared against every runnable metric rather than only the built-in ones,
     because an installed metric package legitimately adds to both sides.
     """
-    unknown = set(type(built.scenario).get_available_metric_names()) - set(available_metrics())
+    scenario_cls = type(built.scenario)
+    offered = set(available_metric_names(scenario_cls=scenario_cls))
+    unknown = offered - set(available_metrics(scenario_cls=scenario_cls))
     if unknown:
         return f"advertises metrics that are not registered: {sorted(unknown)}"
+    return None
+
+
+def _scenario_metrics_are_well_formed(built: BuiltScenario) -> str | None:
+    """Each declared metric is concrete and has a name of its own.
+
+    A report is keyed by metric name, so a scenario metric repeating a generic
+    name would be ignored in favour of the generic one, and two of its own sharing
+    a name would leave one of them unreachable.
+    """
+    seen: set[str] = set()
+    for metric_cls in type(built.scenario).scenario_metrics():
+        if inspect.isabstract(metric_cls):
+            return f"scenario_metrics() returns {metric_cls.__qualname__}, which is abstract"
+        name = getattr(metric_cls, "name", "")
+        if not isinstance(name, str) or not name:
+            return f"{metric_cls.__qualname__} has no name"
+        if name in GENERIC_METRIC_NAMES:
+            return f"{metric_cls.__qualname__} repeats the generic metric name {name!r}"
+        if name in seen:
+            return f"two scenario metrics are named {name!r}"
+        seen.add(name)
+    return None
+
+
+def _run_detail_extension_names_the_scenario(built: BuiltScenario) -> str | None:
+    """The extras payload discriminates on this scenario's own name.
+
+    The run-detail response picks the payload model by the ``scenario_name``
+    literal, so an extras model naming another scenario would be validated as
+    that one's. The annotation is what discriminates, so it is read rather than
+    the default.
+    """
+    extension = type(built.scenario).run_detail_extension()
+    if extension is None:
+        return None
+    field = extension.extras_model_cls.model_fields.get("scenario_name")
+    if field is None:
+        return f"{extension.extras_model_cls.__qualname__} has no scenario_name field"
+    declared = get_args(field.annotation)
+    if declared != (built.name,):
+        return (
+            f"{extension.extras_model_cls.__qualname__}.scenario_name is "
+            f"{field.annotation!r}, not Literal[{built.name!r}]"
+        )
     return None
 
 
@@ -788,6 +837,8 @@ _CHECKS: tuple[tuple[str, Callable[[BuiltScenario], str | None]], ...] = (
     ("blocked channels are the declared ones", _blocked_channels_are_the_declared_ones),
     ("the API agrees on primary channels", _api_agrees_on_primary_channels),
     ("advertised metrics are registered", _advertised_metrics_are_registered),
+    ("scenario metrics are well formed", _scenario_metrics_are_well_formed),
+    ("the run-detail extension names the scenario", _run_detail_extension_names_the_scenario),
     ("display names fall back to ids", _display_names_fall_back_to_ids),
     ("the events module imports", _events_module_is_importable),
     ("events declare a literal event_type", _events_declare_a_literal_discriminator),

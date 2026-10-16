@@ -11,9 +11,11 @@ them to the platform.
 """
 
 import asyncio
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Literal, NamedTuple
 
+from glossogen.evaluation.metric_core.metric_protocol import Metric
 from glossogen.evaluation.metrics.communication.round_view import CommunicationRoundView
 from glossogen.model_catalog import Provider
 from glossogen.models.agent_config import AgentConfig, AgentRole
@@ -26,7 +28,8 @@ from glossogen.runtime.notification_payload import Wake
 from glossogen.runtime.scenario_tool import ScenarioTool
 from glossogen.runtime.wait_for import WaitFor
 from glossogen.runtime.wait_registry import WakeReason
-from glossogen.scenario_protocol import PrimaryChannel, RoundResult, SimulationScenario
+from glossogen.scenario_base import PrimaryChannel, RoundResult
+from glossogen.scenario_protocol import SimulationScenario
 from glossogen.scenarios.signal_game.board import (
     Square,
     colour_at,
@@ -138,12 +141,9 @@ class SignalGameScenario(SimulationScenario):
         return [AgentRole(agent_id=agent_id, role_name=agent_id) for agent_id in AGENT_IDS]
 
     @classmethod
-    def get_available_metric_names(cls) -> list[str]:
-        """Every generic metric, plus the metrics that only read signal_game runs."""
-        return sorted(
-            set(super().get_available_metric_names())
-            | {ExcessMovesMetric.name, LongestStreakMetric.name}
-        )
+    def scenario_metrics(cls) -> Sequence[type[Metric]]:
+        """The metrics that only read signal_game runs."""
+        return (ExcessMovesMetric, LongestStreakMetric)
 
     def __init__(self, knobs: SignalGameKnobs) -> None:
         self._knobs = knobs

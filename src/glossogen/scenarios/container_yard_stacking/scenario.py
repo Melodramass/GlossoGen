@@ -35,7 +35,9 @@ from glossogen.models.channel import Channel, ChannelTemplateEntry
 from glossogen.models.event import SimulationEvent
 from glossogen.runtime.scenario_tool import ScenarioTool
 from glossogen.runtime.scenario_world import ScenarioWorld
-from glossogen.scenario_protocol import PrimaryChannel, RoundResult, SimulationScenario
+from glossogen.scenario_base import PrimaryChannel, RoundResult
+from glossogen.scenario_protocol import SimulationScenario
+from glossogen.scenario_run_detail_extension import ScenarioRunDetailExtension
 from glossogen.scenarios.channel_noise import apply_character_noise
 from glossogen.scenarios.container_yard_stacking.case_event_conversion import case_started_event
 from glossogen.scenarios.container_yard_stacking.evaluation.build_communication_rounds import (
@@ -79,6 +81,9 @@ from glossogen.scenarios.container_yard_stacking.injection_rendering import (
     render_round_injection,
 )
 from glossogen.scenarios.container_yard_stacking.knobs import ContainerYardStackingKnobs
+from glossogen.scenarios.container_yard_stacking.run_detail_extension import (
+    ContainerYardRunDetailExtension,
+)
 from glossogen.scenarios.container_yard_stacking.team_declaration import container_yard_teams
 from glossogen.scenarios.container_yard_stacking.team_routing import team_id_for_agent
 from glossogen.scenarios.container_yard_stacking.tools import build_tools
@@ -120,6 +125,11 @@ class ContainerYardStackingScenario(SimulationScenario):
         if intern_enabled:
             roles.append(AgentRole(agent_id=INTERN_ID, role_name=INTERN_ROLE))
         return roles
+
+    @classmethod
+    def run_detail_extension(cls) -> ScenarioRunDetailExtension:
+        """The case ground truth and judge verdicts the run page shows."""
+        return ContainerYardRunDetailExtension()
 
     @classmethod
     def knobs_model(cls) -> type[ContainerYardStackingKnobs]:

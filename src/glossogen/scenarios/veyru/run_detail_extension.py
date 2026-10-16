@@ -5,10 +5,9 @@ materializes per-round case ground truth, the stabilization-judge
 verdicts keyed by tool ``call_id``, and the observer-swap / intern-join
 / intern-takeover timeline anchors.
 
-The platform discovers this module at startup via
-:func:`glossogen.server.runs.scenario_extension.discover_scenario_extensions`
-and wires :class:`VeyruRunExtras` into the discriminated-union
-``scenario_extras`` field on :class:`RunDetailResponse`.
+``VeyruScenario.run_detail_extension`` returns the extension, and the server
+wires :class:`VeyruRunExtras` into the discriminated-union ``scenario_extras``
+field on :class:`RunDetailResponse`.
 """
 
 from datetime import datetime
@@ -22,20 +21,20 @@ from glossogen.models.event import (
     SimulationEvent,
     ToolResultReceived,
 )
+from glossogen.run_detail_types import (
+    AgentDetail,
+    ChannelMessage,
+    JudgeGroundTruthMetadata,
+)
+from glossogen.scenario_run_detail_extension import (
+    ScenarioRunDetailExtension,
+    ScenarioRunExtrasBase,
+)
 from glossogen.scenarios.veyru.events import VeyruCaseStarted, VeyruStabilizationJudged
 from glossogen.scenarios.veyru.ids import (
     INTERN_JOIN_REASON,
     INTERN_TAKEOVER_REASON,
     OBSERVER_SWAP_REASON,
-)
-from glossogen.server.runs.run_detail_types import (
-    AgentDetail,
-    ChannelMessage,
-    JudgeGroundTruthMetadata,
-)
-from glossogen.server.runs.scenario_extension import (
-    ScenarioRunDetailExtension,
-    ScenarioRunExtrasBase,
 )
 
 OBSERVER_A_ID = "observer_a"
@@ -262,7 +261,6 @@ def _build_intern_anchor(
 class VeyruRunDetailExtension(ScenarioRunDetailExtension):
     """Veyru hook into :class:`RunDetailResponse.scenario_extras`."""
 
-    scenario_name: ClassVar[str] = "veyru"
     extras_model_cls: ClassVar[type[ScenarioRunExtrasBase]] = VeyruRunExtras
     sse_event_classes: ClassVar[tuple[type[BaseModel], ...]] = (SSEVeyruStabilizationJudged,)
 

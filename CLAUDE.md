@@ -26,9 +26,9 @@ make check-frontend    # frontend CI mode (prettier --check, no auto-fix)
   - `README.md` — scenario documentation
   - `scenario.py` — scenario class (channels, timing, tools, injections, turn logic, knobs schema)
   - `prompts/` — Jinja2 templates for agent system prompts and injection messages
-  - `evaluation/` — scenario-specific metrics (optional)
+  - `evaluation/` — scenario-specific metrics (optional), declared by the scenario class's `scenario_metrics()`
   - `events.py` — scenario-specific `EventBase` subclasses (auto-discovered)
-  - `run_detail_extension.py` — optional hook for surfacing scenario-specific data on the run-detail API
+  - `run_detail_extension.py` — optional extension surfacing scenario-specific data on the run-detail API, returned by the scenario class's `run_detail_extension()`
   - `scripts/` — one-off scripts that import directly from this scenario (smoke runners, probe-bank generators, etc.). Cross-scenario tools live in the repo-root `scripts/` instead.
 - `src/glossogen/runtime/` — autonomous mode runtime (shared state + coordination):
   - `simulation_state.py` — shared state: channels, sessions, locks, callbacks, world context, token counters, current round, injection delivery (`deliver_round_injections`, `deliver_postmortem_injections`, `has_postmortem_for_round`)
@@ -56,6 +56,10 @@ make check-frontend    # frontend CI mode (prettier --check, no auto-fix)
 - `src/glossogen/scenario_registry.py` — maps scenario name strings to the `SimulationScenario` classes shipped here; lives outside `glossogen.scenarios` package init so importing event-related modules doesn't trigger eager loading of every scenario
 - `src/glossogen/scenario_loader.py` — the only way anything resolves a scenario name. Checks `SCENARIO_REGISTRY`, then scenarios other installed distributions declared. `get_scenario_class` raises, `find_scenario_class` returns `None`, `available_scenario_names` lists without importing, `iter_scenario_classes` imports every one
 - `src/glossogen/scenario_entry_points.py` — reads the versioned `glossogen.scenarios.v<N>` entry-point group from installed metadata. Reading imports nothing, which is what lets event discovery cover external scenarios without re-entering the `models.event` import cycle
+- `src/glossogen/scenario_protocol.py` — `SimulationScenario`, the class every scenario subclasses. Adds to `ScenarioBase` the hooks through which a scenario declares its own parts: `scenario_metrics()` (metrics offered and runnable for its runs only) and `run_detail_extension()`. No platform module names a scenario's metrics or extension; `scenario_registry.py` is the one place built-in scenarios are listed
+- `src/glossogen/scenario_base.py` — `ScenarioBase`, every hook the runtime and the metrics call, plus `RoundResult`, `PrimaryChannel`, `ScenarioRuntimeHandle`. Split from `SimulationScenario` because `Metric.compute` takes the scenario while `scenario_metrics()` returns metric classes: metrics and helpers they import type against `ScenarioBase`, so the two contracts import in one direction
+- `src/glossogen/scenario_run_detail_extension.py` — `ScenarioRunDetailExtension` and `ScenarioRunExtrasBase`, the run-detail extension contract. Outside `server/` because the scenario contract names it
+- `src/glossogen/run_detail_types.py` — leaf DTOs (`AgentDetail`, `ChannelMessage`) shared by the server's run-detail models and scenario extensions
 - `src/glossogen/scenario_api.py` — `SCENARIO_API_VERSION`, the scenario contract's version. Bumped when a change to the contract cannot be caught by Python itself (a hook whose required behaviour changed while its signature did not); the loader refuses an external scenario declaring a different one
 - `src/glossogen/autonomous_supervisor.py` — autonomous mode orchestrator (supports resume via `RewindState`)
 - `src/glossogen/message_rewind.py` — reconstructs simulation state at any message for fork/resume
@@ -96,13 +100,14 @@ make check-frontend    # frontend CI mode (prettier --check, no auto-fix)
 - `src/glossogen/evaluation/` — generic metrics and evaluation infrastructure
   - `metric_core/` — the Metric contract + I/O types
     - `scored_channels.py` — `scored_channel_ids`: the channel ids a primary channel's metrics score, its own plus the direct channels it includes, read from `channel_created` events
-    - `metric_protocol.py` — `Metric` ABC; `compute(events, agent_configs, scenario, llm_provider, run_dir, options)` is the only entry point. Most metrics ignore `options`; metrics that need per-invocation flags (e.g. `protocol_probe`) read them off the passed `MetricRunOptions`.
+    - `metric_protocol.py` — `Metric` ABC; `compute(events, agent_configs, scenario, llm_provider, run_dir, options)` is the only entry point, with `scenario` typed `ScenarioBase`. Most metrics ignore `options`; metrics that need per-invocation flags (e.g. `protocol_probe`) read them off the passed `MetricRunOptions`.
     - `metric_run_options.py` — `MetricRunOptions` Pydantic model carrying per-invocation flags (`probe_round`, `probe_replicas`); built by the CLI from argparse and threaded into `run_scenario_evaluation(...)`.
-    - `metric_registry.py` — `GENERIC_METRIC_REGISTRY` maps the generic metric names shipped here to their classes, and `SCENARIO_METRIC_REGISTRY` the ones that apply to one scenario, which only that scenario advertises; `BUILT_IN_METRIC_REGISTRY` is both. `cls()` builds an instance and `cls.compute(..., options=options)` runs it. `available_metrics()` merges in metrics other installed distributions declare and is what the evaluation runner reads
-    - `metric_entry_points.py` — the `glossogen.metrics` entry-point group, by name only. It cannot import `Metric`: the scenario contract asks it which metrics to advertise, and a metric module imports the scenario contract, so importing classes here would close that cycle (the same reason `generic_metric_names.py` exists)
+    - `metric_registry.py` — `GENERIC_METRIC_REGISTRY` maps the generic metric names shipped here to their classes. `available_metrics(scenario_cls)` merges the generic metrics, the scenario's `scenario_metrics()` and installed ones (generic wins a name collision, then the scenario's) and is what the evaluation runner and the keyed-observation reader read; `scenario_cls=None` is a run whose scenario is no longer installed. `cls()` builds an instance and `cls.compute(..., options=options)` runs it
+    - `scenario_metric_names.py` — `available_metric_names(scenario_cls)`, the same set by name without importing installed metric classes; what the API, the MCP listing and the REST evaluate check offer
+    - `metric_entry_points.py` — the `glossogen.metrics` entry-point group, by name only, so listing names imports no installed metric
     - `measurement.py` — `Measurement`, `RoundObservation`, `AgentObservation`, and judge-side `RoundNote` Pydantic models
     - `keyed_observation.py` / `keyed_observation_reader.py` / `sidecar_reading.py` — the second half of the metric contract. A metric that writes numbers to a file beside its report (per category, per probe question, per message) implements `read_keyed_observations(run_dir)` to read them back, and the reader walks the registry so the analysis layer still names no metric. Reading is tolerant by design: a cohort spans months of metric versions, and one truncated file costs that run's numbers rather than the sweep. The numbers stay in the sidecar rather than moving into the report, because re-evaluating thousands of runs to relocate a number is not a migration worth paying for
-    - `generic_metric_names.py` — canonical name list (avoids circular imports with `scenario_protocol`)
+    - `generic_metric_names.py` — canonical generic name list, so a listing does not import every metric class; a test holds it equal to the registry
   - `reports/` — on-disk report shape
     - `evaluation_report.py` — `EvaluationReport` schema, plus `load_report` / `write_report` / `merge_evaluation_costs` helpers
     - `evaluation_cost.py` — `EvaluationTokenUsage`, `EvaluationCost`, and `compute_evaluation_cost`
@@ -166,8 +171,7 @@ make check-frontend    # frontend CI mode (prettier --check, no auto-fix)
   - `local_tenant.py` — canonical constants `LOCAL_USER_ID = "local-user"`, `LOCAL_GROUP_SLUG = "local"`, `LOCAL_GROUP_NAME = "Local"`
   - `run_registry.py` — standalone (own connection) variants used by the CLI / scripts that run outside the FastAPI lifespan
   - `migrations/` — alembic env + raw-SQL revisions
-  - `runs/scenario_extension.py` — `ScenarioRunDetailExtension` ABC + auto-discovery of every scenario's optional `run_detail_extension.py`; powers the discriminated-union `scenario_extras` field on `RunDetailResponse`
-  - `runs/run_detail_types.py` — leaf DTOs (`AgentDetail`, `ChannelMessage`) shared by `models.py` and scenario-side extensions so extensions can import them without re-entering `models.py` during its discovery-time import
+  - `runs/scenario_extension.py` — `SCENARIO_RUN_EXTENSIONS`, each loadable scenario's `run_detail_extension()` keyed by name; powers the discriminated-union `scenario_extras` field on `RunDetailResponse`
   - `mcp/browser.py` — MCP server mounted at `/mcp` for programmatic run browsing and launching (Claude Code, Cursor)
   - `mcp/oauth_provider.py` — OAuth 2.0 authorization server provider for MCP
   - `mcp/oauth_storage.py` — Postgres-backed storage for OAuth clients, codes, and tokens
@@ -1071,12 +1075,12 @@ Generic metrics (available to all scenarios):
 - `protocol_probe_agent_pair_similarity` — generic; agent × agent matrix per (question, cutoff). `score` = macro mean across groups; persisted to `protocol_probe_agent_pair_similarity.json`. Only meaningful in two-team / cross-team runs. **Returns `[]`** on single-team runs.
 - `protocol_probe_cutoff_trajectory` — generic; for each `(agent_id, question_id)` pair where the JSONL contains rows from ≥2 distinct `cutoff_round` values, computes the mean cross-replica similarity between each adjacent cutoff snapshot. `score` = macro mean across all adjacent-cutoff pairs; persisted to `protocol_probe_cutoff_trajectory.json`. **Returns `[]`** when the JSONL has only one cutoff value.
 
-Scenario-scoped metrics (in `SCENARIO_METRIC_REGISTRY`, advertised only by their scenario's `get_available_metric_names`; another scenario's run gets `[]`):
+Scenario-scoped metrics (returned by their scenario's `scenario_metrics()`, so offered and runnable for that scenario's runs only; `evaluate` on another scenario's run treats the name as unknown):
 
 - `excess_moves` — signal_game. Per round and player, the moves made minus the shortest path from the start to the square the player finished on (the inefficiency measure of de Bie et al. 2010): detours and oscillations, the costly movement that marks a move as a signal. `score` = mean over player-rounds; `per_round[].value` = the round's mean over the two players, with each player's move trace in the note; `per_agent[].value` = each player's mean over rounds. It does not tell intent from confusion.
 - `longest_streak` — signal_game. The most rounds the pair won in a row, the score Scott-Phillips, Kirby & Ritchie (2009) report ("points in succession"). `score` = the longest streak; `per_round[].value` = the streak standing after each round. A round missing from the log breaks a streak.
 
-Scenarios opt into most platform metrics by implementing the corresponding hooks on `SimulationScenario`. `judge_round_result` and `get_primary_channels` are **required** (abstract): every scenario must implement them, since round-success and primary-channel throughput/language metrics are core; the rest below are opt-in:
+Scenarios opt into most platform metrics by implementing the corresponding hooks on `ScenarioBase` (which `SimulationScenario` extends). `judge_round_result` and `get_primary_channels` are **required** (abstract): every scenario must implement them, since round-success and primary-channel throughput/language metrics are core; the rest below are opt-in:
 
 | Hook | Enables |
 |---|---|
@@ -1090,8 +1094,10 @@ Scenarios opt into most platform metrics by implementing the corresponding hooks
 | `get_protocol_explanation_config() -> ProtocolExplanationConfig \| None` | Tailors `protocol_explanation` with scenario per-role describe templates (optional; the metric runs with a generic prompt when this returns `None`) |
 | `restore_state_from_events(events)` | Accurate "previous round" injection context after fork / resume / replace-agent |
 | `get_replace_agent_blocked_tool_call_channels() -> frozenset[str]` | Strips scenario-private channel traffic (e.g. postmortem) from replaced agent's reconstructed history |
+| `scenario_metrics() -> Sequence[type[Metric]]` (on `SimulationScenario`) | The scenario's own metrics, offered for its runs only. Names must not repeat a generic metric's (`validate` checks) |
+| `run_detail_extension() -> ScenarioRunDetailExtension \| None` (on `SimulationScenario`) | Scenario data on the run-detail API and custom SSE events. The extras model's `scenario_name` literal must be the scenario's name (`validate` checks) |
 
-Every shared scoring concept (round-success, post-resume re-scoring, language emergence, protocol learning, protocol probing) is platform code that consumes scenario data through these hooks. Scenarios ship their domain-specific events + the hooks that surface them. A metric that only means something for one scenario lives in that scenario's `evaluation/`, is listed in `_SCENARIO_METRICS` in `metric_registry.py`, is advertised by that scenario's `get_available_metric_names`, and returns `[]` on any other scenario's run: signal_game's `excess_moves` is one.
+Every shared scoring concept (round-success, post-resume re-scoring, language emergence, protocol learning, protocol probing) is platform code that consumes scenario data through these hooks. Scenarios ship their domain-specific events + the hooks that surface them. A metric that only means something for one scenario lives in that scenario's `evaluation/` and is returned by that scenario's `scenario_metrics()`: signal_game's `excess_moves` is one. Nothing in the platform lists it.
 
 ## What `scripts/` is for
 

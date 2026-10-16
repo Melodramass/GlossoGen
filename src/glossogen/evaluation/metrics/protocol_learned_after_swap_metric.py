@@ -1,10 +1,10 @@
 """Metric that detects whether a newcomer learned the pre-established protocol.
 
 Generic platform metric. Delegates boundary detection to the scenario via
-``SimulationScenario.detect_protocol_boundary_window`` (which covers
+``ScenarioBase.detect_protocol_boundary_window`` (which covers
 intern takeover, two-team observer swap, and the generic scheduled-swap
 default) and pulls per-round transcripts from
-``SimulationScenario.build_communication_rounds`` so the prompt sees the
+``ScenarioBase.build_communication_rounds`` so the prompt sees the
 exact rows the open-coding / feature-presence pipeline uses.
 """
 
@@ -22,7 +22,7 @@ from glossogen.evaluation.prompts.prompt_renderer import render_evaluator_prompt
 from glossogen.llm.provider import LLMMessage, LLMProvider
 from glossogen.models.agent_config import AgentConfig
 from glossogen.models.event import SimulationEvent
-from glossogen.scenario_protocol import SimulationScenario
+from glossogen.scenario_base import ScenarioBase
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ class ProtocolLearnedAfterSwapMetric(Metric):
         self,
         events: list[SimulationEvent],
         agent_configs: list[AgentConfig],
-        scenario: SimulationScenario,
+        scenario: ScenarioBase,
         llm_provider: LLMProvider,
         run_dir: Path,
         options: MetricRunOptions,

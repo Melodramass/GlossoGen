@@ -11,6 +11,7 @@ That case belongs in the author's own test suite, where the class is in hand and
 identity can be compared.
 """
 
+from glossogen.scenario_entry_points import SCENARIO_ENTRY_POINT_GROUP
 from glossogen.scenario_loader import find_scenario_class
 from glossogen.scenario_protocol import SimulationScenario
 
@@ -26,7 +27,7 @@ def assert_scenario_is_registered(scenario_cls: type[SimulationScenario]) -> Non
     if resolved is None:
         raise AssertionError(
             f"nothing is registered under {name!r}. Declare it in the "
-            f"glossogen.scenarios.v1 entry-point group and reinstall the package."
+            f"{SCENARIO_ENTRY_POINT_GROUP} entry-point group and reinstall the package."
         )
     if resolved is not scenario_cls:
         raise AssertionError(
