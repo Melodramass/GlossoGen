@@ -12,6 +12,7 @@ import { getScenarioPlugin } from "./scenario-registry";
 type RunDetailResponse = components["schemas"]["RunDetailResponse"];
 type ScenarioExtras = NonNullable<RunDetailResponse["scenario_extras"]>;
 type RoundEnding = components["schemas"]["RoundEnding"];
+type RoundResult = components["schemas"]["RoundResult"];
 
 interface RoundTimelineModalProps {
   roundNumber: number;
@@ -23,6 +24,8 @@ interface RoundTimelineModalProps {
   primaryChannelIds: string[];
   scenarioExtras: ScenarioExtras | null;
   roundEnding: RoundEnding | null;
+  /** This round's per-team verdicts, handed to the scenario's round-detail panel. */
+  roundResults: RoundResult[];
   onClose: () => void;
 }
 
@@ -152,6 +155,7 @@ export function RoundTimelineModal({
   primaryChannelIds,
   scenarioExtras,
   roundEnding,
+  roundResults,
   onClose,
 }: RoundTimelineModalProps) {
   const plugin = getScenarioPlugin(scenarioName);
@@ -201,7 +205,11 @@ export function RoundTimelineModal({
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {RoundDetailPanel !== null ? (
-            <RoundDetailPanel roundNumber={roundNumber} extras={scenarioExtras} />
+            <RoundDetailPanel
+              roundNumber={roundNumber}
+              extras={scenarioExtras}
+              roundResults={roundResults}
+            />
           ) : null}
 
           <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">

@@ -1,0 +1,7 @@
+{% include "_previous_round_result.jinja" %}
+--- ROUND {{ round_number }} ---
+{% if round_time_budget_seconds > 0 %}Link budget this round: {{ round_time_budget_seconds }} characters total for your team (reach it and you cannot win this round).
+{% endif %}
+{{ board_header }} ({{ board_lines | length }} objects):
+{% for line in board_lines %}- {{ line }}
+{% endfor %}

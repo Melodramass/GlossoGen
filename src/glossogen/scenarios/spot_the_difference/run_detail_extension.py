@@ -1,18 +1,18 @@
 """spot_the_difference extension to the platform run-detail API.
 
-Materializes everything the round-detail panel needs from ``scenario_extras``
-alone: per-round case ground truth (both scenes and the planted differences),
-each team's ``submit_differences`` verdict (keyed by tool ``call_id`` and
-carrying its round), and the per-round-per-team outcome (success + reason).
-The frontend panel shows, per round, what differs between the two scenes, what
-each team submitted, and why each team passed or failed.
+Materializes the round-detail panel's scenario data: per-round case ground
+truth (both scenes and the planted differences) and each team's
+``submit_differences`` verdict (keyed by tool ``call_id`` and carrying its
+round). Each team's outcome is the platform's own ``round_results``. The
+frontend panel shows, per round, what differs between the two scenes, what each
+team submitted, and why each team passed or failed.
 """
 
 from typing import ClassVar, Literal
 
 from pydantic import BaseModel
 
-from glossogen.models.event import RoundResultRecorded, SimulationEvent, ToolResultReceived
+from glossogen.models.event import SimulationEvent, ToolResultReceived
 from glossogen.run_detail_types import (
     AgentDetail,
     ChannelMessage,
@@ -64,27 +64,12 @@ class SpotSubmissionMetadata(BaseModel):
     explanation: str
 
 
-class SpotTeamRoundResult(BaseModel):
-    """One team's outcome for one round (the correctness-gate + win/loss verdict).
-
-    ``team_id`` is ``null`` in single-team mode. ``reason`` is the human-readable
-    explanation written by ``judge_round_result`` (e.g. ``won, found 3/3, 465
-    chars`` / ``did not submit (found 0/3, 576 chars)``).
-    """
-
-    round_number: int
-    team_id: str | None
-    success: bool
-    reason: str
-
-
 class SpotTheDifferenceRunExtras(ScenarioRunExtrasBase):
     """Scenario-specific run-detail payload surfaced for spot_the_difference runs."""
 
     scenario_name: Literal["spot_the_difference"] = "spot_the_difference"
     cases: list[SpotTheDifferenceCaseSummary]
     submission_metadata_by_call_id: dict[str, SpotSubmissionMetadata]
-    team_results: list[SpotTeamRoundResult]
     judge_ground_truth_by_call_id: dict[str, JudgeGroundTruthMetadata]
 
 
@@ -120,23 +105,6 @@ def _build_submission_metadata(judged: DifferenceSubmissionJudged) -> SpotSubmis
         characters_at_submission=judged.characters_at_submission,
         explanation=judged.judge_explanation,
     )
-
-
-def _build_team_results(events: list[SimulationEvent]) -> list[SpotTeamRoundResult]:
-    """Materialize each ``RoundResultRecorded`` event as a per-team round outcome."""
-    results: list[SpotTeamRoundResult] = []
-    for event in events:
-        if not isinstance(event, RoundResultRecorded):
-            continue
-        results.append(
-            SpotTeamRoundResult(
-                round_number=event.round_number,
-                team_id=event.team_id,
-                success=event.success,
-                reason=event.reason,
-            )
-        )
-    return results
 
 
 def _build_call_id_map(events: list[SimulationEvent]) -> dict[str, SpotSubmissionMetadata]:
@@ -213,7 +181,6 @@ class SpotTheDifferenceRunDetailExtension(ScenarioRunDetailExtension):
         return SpotTheDifferenceRunExtras(
             cases=cases,
             submission_metadata_by_call_id=submission_metadata_by_call_id,
-            team_results=_build_team_results(events=events),
             judge_ground_truth_by_call_id=_build_judge_ground_truth_by_call_id(
                 cases=cases,
                 submission_metadata_by_call_id=submission_metadata_by_call_id,

@@ -1,0 +1,2138 @@
+{
+ "decisions": [
+  {
+   "round_number": 0,
+   "event_type": "simulation_started",
+   "scenario_name": "spot_the_intersection",
+   "scenario_description": "Each team has 4 viewers, each holding a private board of objects (a shape and a color in a cell of a 6x6 grid). Exactly one object is on every board of a team, and other objects are on some boards but not all, so the viewers talk on a shared link channel to find the one they all hold, and every member must submit it. Two teams compete on the same boards each round: among teams whose every member submits the correct object, the one that sent the fewest characters wins. Team B is simulated: only Team A plays, and Team B is reported as getting every round right in 0.8 times Team A's characters, rounded down. Team A is told nothing that a real Team B would not produce. The run lasts 2 rounds.",
+   "channel_ids": [
+    "link_a",
+    "postmortem_a"
+   ],
+   "scenario_config": {
+    "round_count": 2,
+    "max_round_duration_seconds": 8.0,
+    "model_overrides": {},
+    "postmortem_duration_seconds": 2.0,
+    "postmortem_enabled": true,
+    "postmortem_disabled_at_start": false,
+    "channel_noise_level": 0.0,
+    "noise_replacement_mode": "mask",
+    "replace_agent_default_channel_visibility": {
+     "postmortem": false,
+     "postmortem_a": false,
+     "postmortem_b": false
+    },
+    "scheduled_events": [],
+    "agent_max_tokens": 16384,
+    "compaction": {
+     "enabled": false,
+     "token_threshold": 50000
+    },
+    "round_time_budget_seconds": -1,
+    "seed": 42,
+    "team_size": 4,
+    "grid_size": 6,
+    "near_misses": true,
+    "decoy_count_values": [
+     1,
+     2,
+     3
+    ],
+    "decoy_count_weights": [
+     1,
+     1,
+     1
+    ],
+    "filler_count_values": [
+     2,
+     4,
+     6
+    ],
+    "filler_count_weights": [
+     1,
+     1,
+     1
+    ],
+    "two_teams": true,
+    "simulated_opponent_ratio": 0.8
+   },
+   "provider": "anthropic"
+  },
+  {
+   "round_number": 0,
+   "event_type": "agent_registered",
+   "agent_id": "viewer_a_1",
+   "role_name": "Viewer 1 (Team A)",
+   "system_prompt": "You are one of 4 viewers on a team in a spot-the-intersection game. Each viewer has a private board of objects. You see only your own board; your teammates see only theirs.\n\nEach object is a shape with a color, placed in one cell of a 6x6 grid. Columns are lettered A to F from left to right and rows are numbered 1 to 6 from top to bottom. Every board uses the same grid and the same cell names, and a cell holds at most one object.\n\nExactly ONE object is on every board in your team: the same shape, the same color, in the same cell. An object counts only if all three match on every board. Your team's task each round is to find it.\n\nYou cannot see your teammates' boards. The ONLY way to find the common object is to talk on the link channel.\n\nSUBMITTING: EVERY member of your team must call submit_object this round with the shape, color and cell of the common object. Your team gets the round right only when every member submits that same, correct object. If any member never submits, or submits a different object, your team loses the round. A submission cannot be changed.\n\n\nYou are competing against another team of 4 viewers who have the SAME boards as your team this round. Among teams whose members all submit the correct object, the team that sent the FEWEST characters on the link channel WINS the round. Be correct first, then be concise. Each round's result (win or loss, both teams' character counts) is reported to you at the start of the next round.\n\n\nACTION:\n- submit_object(shape, color, cell): submit the common object. One call per viewer per round.\n\nDISCUSSION PHASE:\nAfter each round there is a discussion phase in the team discussion channel (see the channel list below for its exact channel_id). Use it to agree on conventions for future rounds. Messages in the discussion channel do NOT count toward your character score.\n\nYou have access to the following communication channels. Use the exact channel_id when sending messages:\n- \"link (Team A)\" (channel_id: link_a)\n- \"team discussion (Team A)\" (channel_id: postmortem_a)",
+   "channel_ids": [
+    "link_a",
+    "postmortem_a"
+   ],
+   "tool_names": [
+    "get_channel_members",
+    "list_channels",
+    "read_channel",
+    "read_notifications",
+    "send_message",
+    "submit_object"
+   ],
+   "model": "scripted::viewer_a_1",
+   "provider": "anthropic",
+   "max_tokens": 16384,
+   "tool_definitions": [
+    {
+     "name": "get_channel_members",
+     "description": "See who is in a channel.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+       "channel_id": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "channel_id"
+      ],
+      "type": "object"
+     }
+    },
+    {
+     "name": "list_channels",
+     "description": "See which channels you have access to.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+     }
+    },
+    {
+     "name": "read_channel",
+     "description": "Read the last N messages from a channel. Each message includes the name of the agent who sent it, so you can always tell who said what without them identifying themselves, and an elapsed_seconds value giving the time it was sent as seconds since the simulation began.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+       "channel_id": {
+        "type": "string"
+       },
+       "last_n": {
+        "type": "integer"
+       }
+      },
+      "required": [
+       "channel_id",
+       "last_n"
+      ],
+      "type": "object"
+     }
+    },
+    {
+     "name": "read_notifications",
+     "description": "Wait for activity, then return it: new messages, events, or status. wait_for='any' (the default) returns the next notification, or no_activity after a timeout. wait_for='message' suspends you until a teammate's message arrives or the next round's briefing does. wait_for='next_round' declares you finished with this round and suspends you until the next briefing. timeout_s wakes you after that many seconds. Must be called on its own, not alongside another tool call: issue any other tool calls first, see their results, then call read_notifications. The response includes a pending_count field indicating how many additional notifications are still queued. If pending_count > 0, call read_notifications again after handling the current one to drain the queue.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+       "wait_for": {
+        "default": "any",
+        "enum": [
+         "any",
+         "message",
+         "next_round"
+        ],
+        "title": "Wait For",
+        "type": "string"
+       },
+       "timeout_s": {
+        "anyOf": [
+         {
+          "minimum": 0,
+          "type": "number"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Timeout S"
+       }
+      },
+      "title": "read_notificationsArguments",
+      "type": "object"
+     }
+    },
+    {
+     "name": "send_message",
+     "description": "Send a message to a channel. Every member of the channel sees it attributed to you by name, so you do not need to sign your messages or state who you are. If new messages arrived since your last read_channel call, the send is held and the new messages are returned so you can decide what to do. Set force=true to send regardless of new messages.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+       "channel_id": {
+        "type": "string"
+       },
+       "text": {
+        "type": "string"
+       },
+       "force": {
+        "type": "boolean"
+       }
+      },
+      "required": [
+       "channel_id",
+       "text",
+       "force"
+      ],
+      "type": "object"
+     }
+    },
+    {
+     "name": "submit_object",
+     "description": "Submit the object you believe is on every board of your team: its shape, its color, and its cell, named by column letter and row number (for example C4). Every member of your team must submit, and your team is correct only when every member submits that same, correct object. One call per viewer per round; it cannot be changed.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+       "shape": {
+        "enum": [
+         "circle",
+         "square",
+         "triangle",
+         "star"
+        ],
+        "type": "string"
+       },
+       "color": {
+        "enum": [
+         "red",
+         "blue",
+         "green",
+         "yellow"
+        ],
+        "type": "string"
+       },
+       "cell": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "shape",
+       "color",
+       "cell"
+      ],
+      "type": "object"
+     }
+    }
+   ]
+  },
+  {
+   "round_number": 0,
+   "event_type": "agent_registered",
+   "agent_id": "viewer_a_2",
+   "role_name": "Viewer 2 (Team A)",
+   "system_prompt": "You are one of 4 viewers on a team in a spot-the-intersection game. Each viewer has a private board of objects. You see only your own board; your teammates see only theirs.\n\nEach object is a shape with a color, placed in one cell of a 6x6 grid. Columns are lettered A to F from left to right and rows are numbered 1 to 6 from top to bottom. Every board uses the same grid and the same cell names, and a cell holds at most one object.\n\nExactly ONE object is on every board in your team: the same shape, the same color, in the same cell. An object counts only if all three match on every board. Your team's task each round is to find it.\n\nYou cannot see your teammates' boards. The ONLY way to find the common object is to talk on the link channel.\n\nSUBMITTING: EVERY member of your team must call submit_object this round with the shape, color and cell of the common object. Your team gets the round right only when every member submits that same, correct object. If any member never submits, or submits a different object, your team loses the round. A submission cannot be changed.\n\n\nYou are competing against another team of 4 viewers who have the SAME boards as your team this round. Among teams whose members all submit the correct object, the team that sent the FEWEST characters on the link channel WINS the round. Be correct first, then be concise. Each round's result (win or loss, both teams' character counts) is reported to you at the start of the next round.\n\n\nACTION:\n- submit_object(shape, color, cell): submit the common object. One call per viewer per round.\n\nDISCUSSION PHASE:\nAfter each round there is a discussion phase in the team discussion channel (see the channel list below for its exact channel_id). Use it to agree on conventions for future rounds. Messages in the discussion channel do NOT count toward your character score.\n\nYou have access to the following communication channels. Use the exact channel_id when sending messages:\n- \"link (Team A)\" (channel_id: link_a)\n- \"team discussion (Team A)\" (channel_id: postmortem_a)",
+   "channel_ids": [
+    "link_a",
+    "postmortem_a"
+   ],
+   "tool_names": [
+    "get_channel_members",
+    "list_channels",
+    "read_channel",
+    "read_notifications",
+    "send_message",
+    "submit_object"
+   ],
+   "model": "scripted::viewer_a_2",
+   "provider": "anthropic",
+   "max_tokens": 16384,
+   "tool_definitions": [
+    {
+     "name": "get_channel_members",
+     "description": "See who is in a channel.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+       "channel_id": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "channel_id"
+      ],
+      "type": "object"
+     }
+    },
+    {
+     "name": "list_channels",
+     "description": "See which channels you have access to.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+     }
+    },
+    {
+     "name": "read_channel",
+     "description": "Read the last N messages from a channel. Each message includes the name of the agent who sent it, so you can always tell who said what without them identifying themselves, and an elapsed_seconds value giving the time it was sent as seconds since the simulation began.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+       "channel_id": {
+        "type": "string"
+       },
+       "last_n": {
+        "type": "integer"
+       }
+      },
+      "required": [
+       "channel_id",
+       "last_n"
+      ],
+      "type": "object"
+     }
+    },
+    {
+     "name": "read_notifications",
+     "description": "Wait for activity, then return it: new messages, events, or status. wait_for='any' (the default) returns the next notification, or no_activity after a timeout. wait_for='message' suspends you until a teammate's message arrives or the next round's briefing does. wait_for='next_round' declares you finished with this round and suspends you until the next briefing. timeout_s wakes you after that many seconds. Must be called on its own, not alongside another tool call: issue any other tool calls first, see their results, then call read_notifications. The response includes a pending_count field indicating how many additional notifications are still queued. If pending_count > 0, call read_notifications again after handling the current one to drain the queue.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+       "wait_for": {
+        "default": "any",
+        "enum": [
+         "any",
+         "message",
+         "next_round"
+        ],
+        "title": "Wait For",
+        "type": "string"
+       },
+       "timeout_s": {
+        "anyOf": [
+         {
+          "minimum": 0,
+          "type": "number"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Timeout S"
+       }
+      },
+      "title": "read_notificationsArguments",
+      "type": "object"
+     }
+    },
+    {
+     "name": "send_message",
+     "description": "Send a message to a channel. Every member of the channel sees it attributed to you by name, so you do not need to sign your messages or state who you are. If new messages arrived since your last read_channel call, the send is held and the new messages are returned so you can decide what to do. Set force=true to send regardless of new messages.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+       "channel_id": {
+        "type": "string"
+       },
+       "text": {
+        "type": "string"
+       },
+       "force": {
+        "type": "boolean"
+       }
+      },
+      "required": [
+       "channel_id",
+       "text",
+       "force"
+      ],
+      "type": "object"
+     }
+    },
+    {
+     "name": "submit_object",
+     "description": "Submit the object you believe is on every board of your team: its shape, its color, and its cell, named by column letter and row number (for example C4). Every member of your team must submit, and your team is correct only when every member submits that same, correct object. One call per viewer per round; it cannot be changed.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+       "shape": {
+        "enum": [
+         "circle",
+         "square",
+         "triangle",
+         "star"
+        ],
+        "type": "string"
+       },
+       "color": {
+        "enum": [
+         "red",
+         "blue",
+         "green",
+         "yellow"
+        ],
+        "type": "string"
+       },
+       "cell": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "shape",
+       "color",
+       "cell"
+      ],
+      "type": "object"
+     }
+    }
+   ]
+  },
+  {
+   "round_number": 0,
+   "event_type": "agent_registered",
+   "agent_id": "viewer_a_3",
+   "role_name": "Viewer 3 (Team A)",
+   "system_prompt": "You are one of 4 viewers on a team in a spot-the-intersection game. Each viewer has a private board of objects. You see only your own board; your teammates see only theirs.\n\nEach object is a shape with a color, placed in one cell of a 6x6 grid. Columns are lettered A to F from left to right and rows are numbered 1 to 6 from top to bottom. Every board uses the same grid and the same cell names, and a cell holds at most one object.\n\nExactly ONE object is on every board in your team: the same shape, the same color, in the same cell. An object counts only if all three match on every board. Your team's task each round is to find it.\n\nYou cannot see your teammates' boards. The ONLY way to find the common object is to talk on the link channel.\n\nSUBMITTING: EVERY member of your team must call submit_object this round with the shape, color and cell of the common object. Your team gets the round right only when every member submits that same, correct object. If any member never submits, or submits a different object, your team loses the round. A submission cannot be changed.\n\n\nYou are competing against another team of 4 viewers who have the SAME boards as your team this round. Among teams whose members all submit the correct object, the team that sent the FEWEST characters on the link channel WINS the round. Be correct first, then be concise. Each round's result (win or loss, both teams' character counts) is reported to you at the start of the next round.\n\n\nACTION:\n- submit_object(shape, color, cell): submit the common object. One call per viewer per round.\n\nDISCUSSION PHASE:\nAfter each round there is a discussion phase in the team discussion channel (see the channel list below for its exact channel_id). Use it to agree on conventions for future rounds. Messages in the discussion channel do NOT count toward your character score.\n\nYou have access to the following communication channels. Use the exact channel_id when sending messages:\n- \"link (Team A)\" (channel_id: link_a)\n- \"team discussion (Team A)\" (channel_id: postmortem_a)",
+   "channel_ids": [
+    "link_a",
+    "postmortem_a"
+   ],
+   "tool_names": [
+    "get_channel_members",
+    "list_channels",
+    "read_channel",
+    "read_notifications",
+    "send_message",
+    "submit_object"
+   ],
+   "model": "scripted::viewer_a_3",
+   "provider": "anthropic",
+   "max_tokens": 16384,
+   "tool_definitions": [
+    {
+     "name": "get_channel_members",
+     "description": "See who is in a channel.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+       "channel_id": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "channel_id"
+      ],
+      "type": "object"
+     }
+    },
+    {
+     "name": "list_channels",
+     "description": "See which channels you have access to.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+     }
+    },
+    {
+     "name": "read_channel",
+     "description": "Read the last N messages from a channel. Each message includes the name of the agent who sent it, so you can always tell who said what without them identifying themselves, and an elapsed_seconds value giving the time it was sent as seconds since the simulation began.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+       "channel_id": {
+        "type": "string"
+       },
+       "last_n": {
+        "type": "integer"
+       }
+      },
+      "required": [
+       "channel_id",
+       "last_n"
+      ],
+      "type": "object"
+     }
+    },
+    {
+     "name": "read_notifications",
+     "description": "Wait for activity, then return it: new messages, events, or status. wait_for='any' (the default) returns the next notification, or no_activity after a timeout. wait_for='message' suspends you until a teammate's message arrives or the next round's briefing does. wait_for='next_round' declares you finished with this round and suspends you until the next briefing. timeout_s wakes you after that many seconds. Must be called on its own, not alongside another tool call: issue any other tool calls first, see their results, then call read_notifications. The response includes a pending_count field indicating how many additional notifications are still queued. If pending_count > 0, call read_notifications again after handling the current one to drain the queue.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+       "wait_for": {
+        "default": "any",
+        "enum": [
+         "any",
+         "message",
+         "next_round"
+        ],
+        "title": "Wait For",
+        "type": "string"
+       },
+       "timeout_s": {
+        "anyOf": [
+         {
+          "minimum": 0,
+          "type": "number"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Timeout S"
+       }
+      },
+      "title": "read_notificationsArguments",
+      "type": "object"
+     }
+    },
+    {
+     "name": "send_message",
+     "description": "Send a message to a channel. Every member of the channel sees it attributed to you by name, so you do not need to sign your messages or state who you are. If new messages arrived since your last read_channel call, the send is held and the new messages are returned so you can decide what to do. Set force=true to send regardless of new messages.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+       "channel_id": {
+        "type": "string"
+       },
+       "text": {
+        "type": "string"
+       },
+       "force": {
+        "type": "boolean"
+       }
+      },
+      "required": [
+       "channel_id",
+       "text",
+       "force"
+      ],
+      "type": "object"
+     }
+    },
+    {
+     "name": "submit_object",
+     "description": "Submit the object you believe is on every board of your team: its shape, its color, and its cell, named by column letter and row number (for example C4). Every member of your team must submit, and your team is correct only when every member submits that same, correct object. One call per viewer per round; it cannot be changed.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+       "shape": {
+        "enum": [
+         "circle",
+         "square",
+         "triangle",
+         "star"
+        ],
+        "type": "string"
+       },
+       "color": {
+        "enum": [
+         "red",
+         "blue",
+         "green",
+         "yellow"
+        ],
+        "type": "string"
+       },
+       "cell": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "shape",
+       "color",
+       "cell"
+      ],
+      "type": "object"
+     }
+    }
+   ]
+  },
+  {
+   "round_number": 0,
+   "event_type": "agent_registered",
+   "agent_id": "viewer_a_4",
+   "role_name": "Viewer 4 (Team A)",
+   "system_prompt": "You are one of 4 viewers on a team in a spot-the-intersection game. Each viewer has a private board of objects. You see only your own board; your teammates see only theirs.\n\nEach object is a shape with a color, placed in one cell of a 6x6 grid. Columns are lettered A to F from left to right and rows are numbered 1 to 6 from top to bottom. Every board uses the same grid and the same cell names, and a cell holds at most one object.\n\nExactly ONE object is on every board in your team: the same shape, the same color, in the same cell. An object counts only if all three match on every board. Your team's task each round is to find it.\n\nYou cannot see your teammates' boards. The ONLY way to find the common object is to talk on the link channel.\n\nSUBMITTING: EVERY member of your team must call submit_object this round with the shape, color and cell of the common object. Your team gets the round right only when every member submits that same, correct object. If any member never submits, or submits a different object, your team loses the round. A submission cannot be changed.\n\n\nYou are competing against another team of 4 viewers who have the SAME boards as your team this round. Among teams whose members all submit the correct object, the team that sent the FEWEST characters on the link channel WINS the round. Be correct first, then be concise. Each round's result (win or loss, both teams' character counts) is reported to you at the start of the next round.\n\n\nACTION:\n- submit_object(shape, color, cell): submit the common object. One call per viewer per round.\n\nDISCUSSION PHASE:\nAfter each round there is a discussion phase in the team discussion channel (see the channel list below for its exact channel_id). Use it to agree on conventions for future rounds. Messages in the discussion channel do NOT count toward your character score.\n\nYou have access to the following communication channels. Use the exact channel_id when sending messages:\n- \"link (Team A)\" (channel_id: link_a)\n- \"team discussion (Team A)\" (channel_id: postmortem_a)",
+   "channel_ids": [
+    "link_a",
+    "postmortem_a"
+   ],
+   "tool_names": [
+    "get_channel_members",
+    "list_channels",
+    "read_channel",
+    "read_notifications",
+    "send_message",
+    "submit_object"
+   ],
+   "model": "scripted::viewer_a_4",
+   "provider": "anthropic",
+   "max_tokens": 16384,
+   "tool_definitions": [
+    {
+     "name": "get_channel_members",
+     "description": "See who is in a channel.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+       "channel_id": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "channel_id"
+      ],
+      "type": "object"
+     }
+    },
+    {
+     "name": "list_channels",
+     "description": "See which channels you have access to.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+     }
+    },
+    {
+     "name": "read_channel",
+     "description": "Read the last N messages from a channel. Each message includes the name of the agent who sent it, so you can always tell who said what without them identifying themselves, and an elapsed_seconds value giving the time it was sent as seconds since the simulation began.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+       "channel_id": {
+        "type": "string"
+       },
+       "last_n": {
+        "type": "integer"
+       }
+      },
+      "required": [
+       "channel_id",
+       "last_n"
+      ],
+      "type": "object"
+     }
+    },
+    {
+     "name": "read_notifications",
+     "description": "Wait for activity, then return it: new messages, events, or status. wait_for='any' (the default) returns the next notification, or no_activity after a timeout. wait_for='message' suspends you until a teammate's message arrives or the next round's briefing does. wait_for='next_round' declares you finished with this round and suspends you until the next briefing. timeout_s wakes you after that many seconds. Must be called on its own, not alongside another tool call: issue any other tool calls first, see their results, then call read_notifications. The response includes a pending_count field indicating how many additional notifications are still queued. If pending_count > 0, call read_notifications again after handling the current one to drain the queue.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+       "wait_for": {
+        "default": "any",
+        "enum": [
+         "any",
+         "message",
+         "next_round"
+        ],
+        "title": "Wait For",
+        "type": "string"
+       },
+       "timeout_s": {
+        "anyOf": [
+         {
+          "minimum": 0,
+          "type": "number"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "default": null,
+        "title": "Timeout S"
+       }
+      },
+      "title": "read_notificationsArguments",
+      "type": "object"
+     }
+    },
+    {
+     "name": "send_message",
+     "description": "Send a message to a channel. Every member of the channel sees it attributed to you by name, so you do not need to sign your messages or state who you are. If new messages arrived since your last read_channel call, the send is held and the new messages are returned so you can decide what to do. Set force=true to send regardless of new messages.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+       "channel_id": {
+        "type": "string"
+       },
+       "text": {
+        "type": "string"
+       },
+       "force": {
+        "type": "boolean"
+       }
+      },
+      "required": [
+       "channel_id",
+       "text",
+       "force"
+      ],
+      "type": "object"
+     }
+    },
+    {
+     "name": "submit_object",
+     "description": "Submit the object you believe is on every board of your team: its shape, its color, and its cell, named by column letter and row number (for example C4). Every member of your team must submit, and your team is correct only when every member submits that same, correct object. One call per viewer per round; it cannot be changed.",
+     "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+       "shape": {
+        "enum": [
+         "circle",
+         "square",
+         "triangle",
+         "star"
+        ],
+        "type": "string"
+       },
+       "color": {
+        "enum": [
+         "red",
+         "blue",
+         "green",
+         "yellow"
+        ],
+        "type": "string"
+       },
+       "cell": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "shape",
+       "color",
+       "cell"
+      ],
+      "type": "object"
+     }
+    }
+   ]
+  },
+  {
+   "round_number": 1,
+   "event_type": "round_advanced",
+   "trigger": "simulation_start"
+  },
+  {
+   "round_number": 1,
+   "event_type": "spot_the_intersection_round_started",
+   "team_size": 4,
+   "grid_size": 6,
+   "board_size": 18,
+   "decoy_count": 3,
+   "filler_count": 6,
+   "round_time_budget_seconds": -1,
+   "answer_line": "red star at A3",
+   "boards": [
+    [
+     "green triangle at D4",
+     "red star at A3",
+     "blue square at B5",
+     "blue square at B4",
+     "blue circle at B6",
+     "yellow circle at B3",
+     "blue triangle at C1",
+     "red square at B2",
+     "green star at E5",
+     "yellow circle at A6",
+     "yellow circle at F3",
+     "red star at E4",
+     "blue square at F4",
+     "red circle at F6",
+     "blue triangle at C2",
+     "red square at F1",
+     "red circle at E3",
+     "green circle at F2"
+    ],
+    [
+     "green star at F1",
+     "green star at B1",
+     "yellow circle at B6",
+     "red triangle at F6",
+     "blue triangle at C1",
+     "red square at D2",
+     "blue square at F4",
+     "red square at C3",
+     "red triangle at A1",
+     "yellow circle at B3",
+     "blue star at A2",
+     "green star at E2",
+     "blue triangle at C2",
+     "blue circle at B4",
+     "red star at A3",
+     "yellow star at D6",
+     "red square at D3",
+     "red star at E4"
+    ],
+    [
+     "red triangle at A1",
+     "red triangle at D2",
+     "green star at E4",
+     "red star at A3",
+     "yellow circle at B3",
+     "blue square at A2",
+     "blue star at B4",
+     "red square at F5",
+     "red star at E3",
+     "yellow star at C2",
+     "yellow circle at B6",
+     "red circle at A4",
+     "red circle at F6",
+     "red circle at D1",
+     "green square at B2",
+     "yellow square at F4",
+     "green star at C1",
+     "yellow square at C4"
+    ],
+    [
+     "yellow star at A5",
+     "yellow square at D1",
+     "red square at E1",
+     "blue triangle at B4",
+     "blue triangle at C1",
+     "red circle at C6",
+     "yellow circle at B6",
+     "blue star at E4",
+     "red circle at D5",
+     "red circle at F6",
+     "red star at A3",
+     "red triangle at A1",
+     "green star at A2",
+     "red circle at B5",
+     "yellow triangle at B3",
+     "green square at B1",
+     "red square at A4",
+     "blue square at F4"
+    ]
+   ],
+   "objects": [
+    {
+     "kind": "answer",
+     "shape": "star",
+     "color": "red",
+     "cell": "A3",
+     "seat_numbers": [
+      1,
+      2,
+      3,
+      4
+     ]
+    },
+    {
+     "kind": "near_miss",
+     "shape": "circle",
+     "color": "yellow",
+     "cell": "B6",
+     "seat_numbers": [
+      2,
+      3,
+      4
+     ]
+    },
+    {
+     "kind": "stand_in",
+     "shape": "circle",
+     "color": "blue",
+     "cell": "B6",
+     "seat_numbers": [
+      1
+     ]
+    },
+    {
+     "kind": "near_miss",
+     "shape": "circle",
+     "color": "red",
+     "cell": "F6",
+     "seat_numbers": [
+      1,
+      3,
+      4
+     ]
+    },
+    {
+     "kind": "stand_in",
+     "shape": "triangle",
+     "color": "red",
+     "cell": "F6",
+     "seat_numbers": [
+      2
+     ]
+    },
+    {
+     "kind": "near_miss",
+     "shape": "square",
+     "color": "blue",
+     "cell": "F4",
+     "seat_numbers": [
+      1,
+      2,
+      4
+     ]
+    },
+    {
+     "kind": "stand_in",
+     "shape": "square",
+     "color": "yellow",
+     "cell": "F4",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "near_miss",
+     "shape": "circle",
+     "color": "yellow",
+     "cell": "B3",
+     "seat_numbers": [
+      1,
+      2,
+      3
+     ]
+    },
+    {
+     "kind": "stand_in",
+     "shape": "triangle",
+     "color": "yellow",
+     "cell": "B3",
+     "seat_numbers": [
+      4
+     ]
+    },
+    {
+     "kind": "cell_twin",
+     "shape": "star",
+     "color": "red",
+     "cell": "E4",
+     "seat_numbers": [
+      1,
+      2
+     ]
+    },
+    {
+     "kind": "cell_twin",
+     "shape": "star",
+     "color": "green",
+     "cell": "E4",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "cell_twin",
+     "shape": "star",
+     "color": "blue",
+     "cell": "E4",
+     "seat_numbers": [
+      4
+     ]
+    },
+    {
+     "kind": "cell_twin",
+     "shape": "square",
+     "color": "blue",
+     "cell": "B4",
+     "seat_numbers": [
+      1
+     ]
+    },
+    {
+     "kind": "cell_twin",
+     "shape": "circle",
+     "color": "blue",
+     "cell": "B4",
+     "seat_numbers": [
+      2
+     ]
+    },
+    {
+     "kind": "cell_twin",
+     "shape": "star",
+     "color": "blue",
+     "cell": "B4",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "cell_twin",
+     "shape": "triangle",
+     "color": "blue",
+     "cell": "B4",
+     "seat_numbers": [
+      4
+     ]
+    },
+    {
+     "kind": "look_twin",
+     "shape": "star",
+     "color": "green",
+     "cell": "E5",
+     "seat_numbers": [
+      1
+     ]
+    },
+    {
+     "kind": "look_twin",
+     "shape": "star",
+     "color": "green",
+     "cell": "B1",
+     "seat_numbers": [
+      2
+     ]
+    },
+    {
+     "kind": "look_twin",
+     "shape": "star",
+     "color": "green",
+     "cell": "C1",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "look_twin",
+     "shape": "star",
+     "color": "green",
+     "cell": "A2",
+     "seat_numbers": [
+      4
+     ]
+    },
+    {
+     "kind": "look_twin",
+     "shape": "square",
+     "color": "red",
+     "cell": "B2",
+     "seat_numbers": [
+      1
+     ]
+    },
+    {
+     "kind": "look_twin",
+     "shape": "square",
+     "color": "red",
+     "cell": "D3",
+     "seat_numbers": [
+      2
+     ]
+    },
+    {
+     "kind": "look_twin",
+     "shape": "square",
+     "color": "red",
+     "cell": "F5",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "look_twin",
+     "shape": "square",
+     "color": "red",
+     "cell": "E1",
+     "seat_numbers": [
+      4
+     ]
+    },
+    {
+     "kind": "decoy",
+     "shape": "triangle",
+     "color": "red",
+     "cell": "A1",
+     "seat_numbers": [
+      2,
+      3,
+      4
+     ]
+    },
+    {
+     "kind": "decoy",
+     "shape": "triangle",
+     "color": "blue",
+     "cell": "C2",
+     "seat_numbers": [
+      1,
+      2
+     ]
+    },
+    {
+     "kind": "decoy",
+     "shape": "triangle",
+     "color": "blue",
+     "cell": "C1",
+     "seat_numbers": [
+      1,
+      2,
+      4
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "circle",
+     "color": "red",
+     "cell": "E3",
+     "seat_numbers": [
+      1
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "square",
+     "color": "red",
+     "cell": "F1",
+     "seat_numbers": [
+      1
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "circle",
+     "color": "yellow",
+     "cell": "F3",
+     "seat_numbers": [
+      1
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "circle",
+     "color": "green",
+     "cell": "F2",
+     "seat_numbers": [
+      1
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "triangle",
+     "color": "green",
+     "cell": "D4",
+     "seat_numbers": [
+      1
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "square",
+     "color": "blue",
+     "cell": "B5",
+     "seat_numbers": [
+      1
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "circle",
+     "color": "yellow",
+     "cell": "A6",
+     "seat_numbers": [
+      1
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "star",
+     "color": "blue",
+     "cell": "A2",
+     "seat_numbers": [
+      2
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "star",
+     "color": "yellow",
+     "cell": "D6",
+     "seat_numbers": [
+      2
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "star",
+     "color": "green",
+     "cell": "E2",
+     "seat_numbers": [
+      2
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "square",
+     "color": "red",
+     "cell": "D2",
+     "seat_numbers": [
+      2
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "star",
+     "color": "green",
+     "cell": "F1",
+     "seat_numbers": [
+      2
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "square",
+     "color": "red",
+     "cell": "C3",
+     "seat_numbers": [
+      2
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "star",
+     "color": "yellow",
+     "cell": "C2",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "circle",
+     "color": "red",
+     "cell": "D1",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "square",
+     "color": "blue",
+     "cell": "A2",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "triangle",
+     "color": "red",
+     "cell": "D2",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "star",
+     "color": "red",
+     "cell": "E3",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "square",
+     "color": "yellow",
+     "cell": "C4",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "circle",
+     "color": "red",
+     "cell": "A4",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "square",
+     "color": "green",
+     "cell": "B2",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "square",
+     "color": "red",
+     "cell": "A4",
+     "seat_numbers": [
+      4
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "square",
+     "color": "green",
+     "cell": "B1",
+     "seat_numbers": [
+      4
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "circle",
+     "color": "red",
+     "cell": "C6",
+     "seat_numbers": [
+      4
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "circle",
+     "color": "red",
+     "cell": "D5",
+     "seat_numbers": [
+      4
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "circle",
+     "color": "red",
+     "cell": "B5",
+     "seat_numbers": [
+      4
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "square",
+     "color": "yellow",
+     "cell": "D1",
+     "seat_numbers": [
+      4
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "star",
+     "color": "yellow",
+     "cell": "A5",
+     "seat_numbers": [
+      4
+     ]
+    }
+   ],
+   "certificate": {
+    "candidates_without_seat": [
+     3,
+     2,
+     3,
+     2
+    ],
+    "shared_cells": 8,
+    "shared_looks": 5,
+    "shared_shapes_and_cells": 4,
+    "shared_colors_and_cells": 4,
+    "dump_object_mentions": 72,
+    "sequential_filter_object_mentions": 27,
+    "generation_attempts": 1
+   }
+  },
+  {
+   "round_number": 1,
+   "event_type": "injection_delivered",
+   "agent_id": "viewer_a_1",
+   "text": "--- ROUND 1 ---\n\nYOUR BOARD (18 objects):\n- green triangle at D4\n- red star at A3\n- blue square at B5\n- blue square at B4\n- blue circle at B6\n- yellow circle at B3\n- blue triangle at C1\n- red square at B2\n- green star at E5\n- yellow circle at A6\n- yellow circle at F3\n- red star at E4\n- blue square at F4\n- red circle at F6\n- blue triangle at C2\n- red square at F1\n- red circle at E3\n- green circle at F2"
+  },
+  {
+   "round_number": 1,
+   "event_type": "injection_delivered",
+   "agent_id": "viewer_a_2",
+   "text": "--- ROUND 1 ---\n\nYOUR BOARD (18 objects):\n- green star at F1\n- green star at B1\n- yellow circle at B6\n- red triangle at F6\n- blue triangle at C1\n- red square at D2\n- blue square at F4\n- red square at C3\n- red triangle at A1\n- yellow circle at B3\n- blue star at A2\n- green star at E2\n- blue triangle at C2\n- blue circle at B4\n- red star at A3\n- yellow star at D6\n- red square at D3\n- red star at E4"
+  },
+  {
+   "round_number": 1,
+   "event_type": "injection_delivered",
+   "agent_id": "viewer_a_3",
+   "text": "--- ROUND 1 ---\n\nYOUR BOARD (18 objects):\n- red triangle at A1\n- red triangle at D2\n- green star at E4\n- red star at A3\n- yellow circle at B3\n- blue square at A2\n- blue star at B4\n- red square at F5\n- red star at E3\n- yellow star at C2\n- yellow circle at B6\n- red circle at A4\n- red circle at F6\n- red circle at D1\n- green square at B2\n- yellow square at F4\n- green star at C1\n- yellow square at C4"
+  },
+  {
+   "round_number": 1,
+   "event_type": "injection_delivered",
+   "agent_id": "viewer_a_4",
+   "text": "--- ROUND 1 ---\n\nYOUR BOARD (18 objects):\n- yellow star at A5\n- yellow square at D1\n- red square at E1\n- blue triangle at B4\n- blue triangle at C1\n- red circle at C6\n- yellow circle at B6\n- blue star at E4\n- red circle at D5\n- red circle at F6\n- red star at A3\n- red triangle at A1\n- green star at A2\n- red circle at B5\n- yellow triangle at B3\n- green square at B1\n- red square at A4\n- blue square at F4"
+  },
+  {
+   "round_number": 1,
+   "event_type": "agent_connected",
+   "agent_id": "viewer_a_1",
+   "role_name": "Viewer 1 (Team A)",
+   "model": "scripted::viewer_a_1"
+  },
+  {
+   "round_number": 1,
+   "event_type": "agent_connected",
+   "agent_id": "viewer_a_2",
+   "role_name": "Viewer 2 (Team A)",
+   "model": "scripted::viewer_a_2"
+  },
+  {
+   "round_number": 1,
+   "event_type": "agent_connected",
+   "agent_id": "viewer_a_3",
+   "role_name": "Viewer 3 (Team A)",
+   "model": "scripted::viewer_a_3"
+  },
+  {
+   "round_number": 1,
+   "event_type": "agent_connected",
+   "agent_id": "viewer_a_4",
+   "role_name": "Viewer 4 (Team A)",
+   "model": "scripted::viewer_a_4"
+  },
+  {
+   "round_number": 1,
+   "event_type": "round_ended",
+   "trigger": "all_agents_idle"
+  },
+  {
+   "round_number": 1,
+   "event_type": "round_result_recorded",
+   "success": false,
+   "team_id": "team_a",
+   "reason": "only 0/4 members submitted (0/4 submitted the answer, 80 chars, simulated opponent 64 chars)"
+  },
+  {
+   "round_number": 1,
+   "event_type": "postmortem_started"
+  },
+  {
+   "round_number": 1,
+   "event_type": "injection_delivered",
+   "agent_id": "viewer_a_1",
+   "text": "--- ROUND 1 DISCUSSION PHASE ---\nResult: your team did NOT finish: only 0 of 4 members submitted. Your team used 80 characters; the other team got it right in 64 characters.\n\nThe team discussion channel is now open. Messages here do not count toward your character score. Use this time to agree on how your team will find the common object in future rounds."
+  },
+  {
+   "round_number": 1,
+   "event_type": "injection_delivered",
+   "agent_id": "viewer_a_2",
+   "text": "--- ROUND 1 DISCUSSION PHASE ---\nResult: your team did NOT finish: only 0 of 4 members submitted. Your team used 80 characters; the other team got it right in 64 characters.\n\nThe team discussion channel is now open. Messages here do not count toward your character score. Use this time to agree on how your team will find the common object in future rounds."
+  },
+  {
+   "round_number": 1,
+   "event_type": "injection_delivered",
+   "agent_id": "viewer_a_3",
+   "text": "--- ROUND 1 DISCUSSION PHASE ---\nResult: your team did NOT finish: only 0 of 4 members submitted. Your team used 80 characters; the other team got it right in 64 characters.\n\nThe team discussion channel is now open. Messages here do not count toward your character score. Use this time to agree on how your team will find the common object in future rounds."
+  },
+  {
+   "round_number": 1,
+   "event_type": "injection_delivered",
+   "agent_id": "viewer_a_4",
+   "text": "--- ROUND 1 DISCUSSION PHASE ---\nResult: your team did NOT finish: only 0 of 4 members submitted. Your team used 80 characters; the other team got it right in 64 characters.\n\nThe team discussion channel is now open. Messages here do not count toward your character score. Use this time to agree on how your team will find the common object in future rounds."
+  },
+  {
+   "round_number": 1,
+   "event_type": "postmortem_ended",
+   "trigger": "all_agents_idle"
+  },
+  {
+   "round_number": 2,
+   "event_type": "round_advanced",
+   "trigger": "all_agents_idle"
+  },
+  {
+   "round_number": 2,
+   "event_type": "spot_the_intersection_round_started",
+   "team_size": 4,
+   "grid_size": 6,
+   "board_size": 15,
+   "decoy_count": 2,
+   "filler_count": 4,
+   "round_time_budget_seconds": -1,
+   "answer_line": "green star at A2",
+   "boards": [
+    [
+     "blue star at F3",
+     "red circle at B5",
+     "green star at A2",
+     "blue triangle at D6",
+     "red square at E5",
+     "red circle at D4",
+     "red star at C4",
+     "red square at C3",
+     "blue square at A4",
+     "green circle at F6",
+     "red circle at D1",
+     "red square at D3",
+     "yellow triangle at E3",
+     "red star at B3",
+     "green triangle at C2"
+    ],
+    [
+     "red square at D3",
+     "yellow star at B6",
+     "green star at A4",
+     "yellow star at B3",
+     "red square at C5",
+     "blue square at D6",
+     "red circle at B5",
+     "yellow square at E3",
+     "green square at E2",
+     "red square at C2",
+     "red star at D1",
+     "red circle at E6",
+     "green triangle at B1",
+     "yellow star at C4",
+     "green star at A2"
+    ],
+    [
+     "green square at D3",
+     "red star at B3",
+     "yellow star at C4",
+     "red square at F6",
+     "red star at E4",
+     "green circle at B1",
+     "red circle at B5",
+     "red square at E2",
+     "yellow triangle at C1",
+     "blue triangle at D6",
+     "yellow triangle at E3",
+     "red square at A5",
+     "red square at D1",
+     "blue square at E1",
+     "green star at A2"
+    ],
+    [
+     "yellow triangle at E3",
+     "red square at D3",
+     "blue triangle at D6",
+     "yellow circle at D5",
+     "yellow triangle at C3",
+     "green star at A2",
+     "red star at B5",
+     "red star at D1",
+     "blue triangle at C5",
+     "red square at E5",
+     "yellow star at B3",
+     "yellow square at B6",
+     "blue star at F3",
+     "yellow star at C4",
+     "blue square at F2"
+    ]
+   ],
+   "objects": [
+    {
+     "kind": "answer",
+     "shape": "star",
+     "color": "green",
+     "cell": "A2",
+     "seat_numbers": [
+      1,
+      2,
+      3,
+      4
+     ]
+    },
+    {
+     "kind": "near_miss",
+     "shape": "star",
+     "color": "yellow",
+     "cell": "C4",
+     "seat_numbers": [
+      2,
+      3,
+      4
+     ]
+    },
+    {
+     "kind": "stand_in",
+     "shape": "star",
+     "color": "red",
+     "cell": "C4",
+     "seat_numbers": [
+      1
+     ]
+    },
+    {
+     "kind": "near_miss",
+     "shape": "triangle",
+     "color": "yellow",
+     "cell": "E3",
+     "seat_numbers": [
+      1,
+      3,
+      4
+     ]
+    },
+    {
+     "kind": "stand_in",
+     "shape": "square",
+     "color": "yellow",
+     "cell": "E3",
+     "seat_numbers": [
+      2
+     ]
+    },
+    {
+     "kind": "near_miss",
+     "shape": "square",
+     "color": "red",
+     "cell": "D3",
+     "seat_numbers": [
+      1,
+      2,
+      4
+     ]
+    },
+    {
+     "kind": "stand_in",
+     "shape": "square",
+     "color": "green",
+     "cell": "D3",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "near_miss",
+     "shape": "circle",
+     "color": "red",
+     "cell": "B5",
+     "seat_numbers": [
+      1,
+      2,
+      3
+     ]
+    },
+    {
+     "kind": "stand_in",
+     "shape": "star",
+     "color": "red",
+     "cell": "B5",
+     "seat_numbers": [
+      4
+     ]
+    },
+    {
+     "kind": "cell_twin",
+     "shape": "star",
+     "color": "red",
+     "cell": "B3",
+     "seat_numbers": [
+      1,
+      3
+     ]
+    },
+    {
+     "kind": "cell_twin",
+     "shape": "star",
+     "color": "yellow",
+     "cell": "B3",
+     "seat_numbers": [
+      2,
+      4
+     ]
+    },
+    {
+     "kind": "cell_twin",
+     "shape": "circle",
+     "color": "red",
+     "cell": "D1",
+     "seat_numbers": [
+      1
+     ]
+    },
+    {
+     "kind": "cell_twin",
+     "shape": "star",
+     "color": "red",
+     "cell": "D1",
+     "seat_numbers": [
+      2,
+      4
+     ]
+    },
+    {
+     "kind": "cell_twin",
+     "shape": "square",
+     "color": "red",
+     "cell": "D1",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "look_twin",
+     "shape": "square",
+     "color": "red",
+     "cell": "E5",
+     "seat_numbers": [
+      1,
+      4
+     ]
+    },
+    {
+     "kind": "look_twin",
+     "shape": "square",
+     "color": "red",
+     "cell": "C5",
+     "seat_numbers": [
+      2
+     ]
+    },
+    {
+     "kind": "look_twin",
+     "shape": "square",
+     "color": "red",
+     "cell": "F6",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "look_twin",
+     "shape": "square",
+     "color": "blue",
+     "cell": "A4",
+     "seat_numbers": [
+      1
+     ]
+    },
+    {
+     "kind": "look_twin",
+     "shape": "square",
+     "color": "blue",
+     "cell": "D6",
+     "seat_numbers": [
+      2
+     ]
+    },
+    {
+     "kind": "look_twin",
+     "shape": "square",
+     "color": "blue",
+     "cell": "E1",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "look_twin",
+     "shape": "square",
+     "color": "blue",
+     "cell": "F2",
+     "seat_numbers": [
+      4
+     ]
+    },
+    {
+     "kind": "decoy",
+     "shape": "triangle",
+     "color": "blue",
+     "cell": "D6",
+     "seat_numbers": [
+      1,
+      3,
+      4
+     ]
+    },
+    {
+     "kind": "decoy",
+     "shape": "star",
+     "color": "blue",
+     "cell": "F3",
+     "seat_numbers": [
+      1,
+      4
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "circle",
+     "color": "green",
+     "cell": "F6",
+     "seat_numbers": [
+      1
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "circle",
+     "color": "red",
+     "cell": "D4",
+     "seat_numbers": [
+      1
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "triangle",
+     "color": "green",
+     "cell": "C2",
+     "seat_numbers": [
+      1
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "square",
+     "color": "red",
+     "cell": "C3",
+     "seat_numbers": [
+      1
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "star",
+     "color": "green",
+     "cell": "A4",
+     "seat_numbers": [
+      2
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "triangle",
+     "color": "green",
+     "cell": "B1",
+     "seat_numbers": [
+      2
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "square",
+     "color": "red",
+     "cell": "C2",
+     "seat_numbers": [
+      2
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "star",
+     "color": "yellow",
+     "cell": "B6",
+     "seat_numbers": [
+      2
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "circle",
+     "color": "red",
+     "cell": "E6",
+     "seat_numbers": [
+      2
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "square",
+     "color": "green",
+     "cell": "E2",
+     "seat_numbers": [
+      2
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "square",
+     "color": "red",
+     "cell": "E2",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "star",
+     "color": "red",
+     "cell": "E4",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "square",
+     "color": "red",
+     "cell": "A5",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "circle",
+     "color": "green",
+     "cell": "B1",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "triangle",
+     "color": "yellow",
+     "cell": "C1",
+     "seat_numbers": [
+      3
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "circle",
+     "color": "yellow",
+     "cell": "D5",
+     "seat_numbers": [
+      4
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "triangle",
+     "color": "blue",
+     "cell": "C5",
+     "seat_numbers": [
+      4
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "triangle",
+     "color": "yellow",
+     "cell": "C3",
+     "seat_numbers": [
+      4
+     ]
+    },
+    {
+     "kind": "filler",
+     "shape": "square",
+     "color": "yellow",
+     "cell": "B6",
+     "seat_numbers": [
+      4
+     ]
+    }
+   ],
+   "certificate": {
+    "candidates_without_seat": [
+     2,
+     3,
+     2,
+     2
+    ],
+    "shared_cells": 8,
+    "shared_looks": 4,
+    "shared_shapes_and_cells": 4,
+    "shared_colors_and_cells": 5,
+    "dump_object_mentions": 60,
+    "sequential_filter_object_mentions": 21,
+    "generation_attempts": 1
+   }
+  },
+  {
+   "round_number": 2,
+   "event_type": "injection_delivered",
+   "agent_id": "viewer_a_1",
+   "text": "--- PREVIOUS ROUND RESULT ---\nRound 1: your team did NOT finish: only 0 of 4 members submitted. Your team used 80 characters; the other team got it right in 64 characters.\n\n--- ROUND 2 ---\n\nYOUR BOARD (15 objects):\n- blue star at F3\n- red circle at B5\n- green star at A2\n- blue triangle at D6\n- red square at E5\n- red circle at D4\n- red star at C4\n- red square at C3\n- blue square at A4\n- green circle at F6\n- red circle at D1\n- red square at D3\n- yellow triangle at E3\n- red star at B3\n- green triangle at C2"
+  },
+  {
+   "round_number": 2,
+   "event_type": "injection_delivered",
+   "agent_id": "viewer_a_2",
+   "text": "--- PREVIOUS ROUND RESULT ---\nRound 1: your team did NOT finish: only 0 of 4 members submitted. Your team used 80 characters; the other team got it right in 64 characters.\n\n--- ROUND 2 ---\n\nYOUR BOARD (15 objects):\n- red square at D3\n- yellow star at B6\n- green star at A4\n- yellow star at B3\n- red square at C5\n- blue square at D6\n- red circle at B5\n- yellow square at E3\n- green square at E2\n- red square at C2\n- red star at D1\n- red circle at E6\n- green triangle at B1\n- yellow star at C4\n- green star at A2"
+  },
+  {
+   "round_number": 2,
+   "event_type": "injection_delivered",
+   "agent_id": "viewer_a_3",
+   "text": "--- PREVIOUS ROUND RESULT ---\nRound 1: your team did NOT finish: only 0 of 4 members submitted. Your team used 80 characters; the other team got it right in 64 characters.\n\n--- ROUND 2 ---\n\nYOUR BOARD (15 objects):\n- green square at D3\n- red star at B3\n- yellow star at C4\n- red square at F6\n- red star at E4\n- green circle at B1\n- red circle at B5\n- red square at E2\n- yellow triangle at C1\n- blue triangle at D6\n- yellow triangle at E3\n- red square at A5\n- red square at D1\n- blue square at E1\n- green star at A2"
+  },
+  {
+   "round_number": 2,
+   "event_type": "injection_delivered",
+   "agent_id": "viewer_a_4",
+   "text": "--- PREVIOUS ROUND RESULT ---\nRound 1: your team did NOT finish: only 0 of 4 members submitted. Your team used 80 characters; the other team got it right in 64 characters.\n\n--- ROUND 2 ---\n\nYOUR BOARD (15 objects):\n- yellow triangle at E3\n- red square at D3\n- blue triangle at D6\n- yellow circle at D5\n- yellow triangle at C3\n- green star at A2\n- red star at B5\n- red star at D1\n- blue triangle at C5\n- red square at E5\n- yellow star at B3\n- yellow square at B6\n- blue star at F3\n- yellow star at C4\n- blue square at F2"
+  },
+  {
+   "round_number": 2,
+   "event_type": "round_ended",
+   "trigger": "all_agents_idle"
+  },
+  {
+   "round_number": 2,
+   "event_type": "round_result_recorded",
+   "success": false,
+   "team_id": "team_a",
+   "reason": "only 0/4 members submitted (0/4 submitted the answer, 80 chars, simulated opponent 64 chars)"
+  },
+  {
+   "round_number": 2,
+   "event_type": "postmortem_started"
+  },
+  {
+   "round_number": 2,
+   "event_type": "injection_delivered",
+   "agent_id": "viewer_a_1",
+   "text": "--- ROUND 2 DISCUSSION PHASE ---\nResult: your team did NOT finish: only 0 of 4 members submitted. Your team used 80 characters; the other team got it right in 64 characters.\n\nThe team discussion channel is now open. Messages here do not count toward your character score. Use this time to agree on how your team will find the common object in future rounds."
+  },
+  {
+   "round_number": 2,
+   "event_type": "injection_delivered",
+   "agent_id": "viewer_a_2",
+   "text": "--- ROUND 2 DISCUSSION PHASE ---\nResult: your team did NOT finish: only 0 of 4 members submitted. Your team used 80 characters; the other team got it right in 64 characters.\n\nThe team discussion channel is now open. Messages here do not count toward your character score. Use this time to agree on how your team will find the common object in future rounds."
+  },
+  {
+   "round_number": 2,
+   "event_type": "injection_delivered",
+   "agent_id": "viewer_a_3",
+   "text": "--- ROUND 2 DISCUSSION PHASE ---\nResult: your team did NOT finish: only 0 of 4 members submitted. Your team used 80 characters; the other team got it right in 64 characters.\n\nThe team discussion channel is now open. Messages here do not count toward your character score. Use this time to agree on how your team will find the common object in future rounds."
+  },
+  {
+   "round_number": 2,
+   "event_type": "injection_delivered",
+   "agent_id": "viewer_a_4",
+   "text": "--- ROUND 2 DISCUSSION PHASE ---\nResult: your team did NOT finish: only 0 of 4 members submitted. Your team used 80 characters; the other team got it right in 64 characters.\n\nThe team discussion channel is now open. Messages here do not count toward your character score. Use this time to agree on how your team will find the common object in future rounds."
+  },
+  {
+   "round_number": 2,
+   "event_type": "postmortem_ended",
+   "trigger": "all_agents_idle"
+  },
+  {
+   "round_number": 2,
+   "event_type": "simulation_ended",
+   "reason": "scenario_complete",
+   "total_messages": 8,
+   "total_cost_usd": 0.0
+  }
+ ],
+ "messages_by_sender": {
+  "viewer_a_1": [
+   {
+    "channel_id": "link_a",
+    "sender_agent_id": "viewer_a_1",
+    "sender_display_name": "viewer_a_1",
+    "text": "viewer_a_1 reporting",
+    "round_number": 1
+   },
+   {
+    "channel_id": "link_a",
+    "sender_agent_id": "viewer_a_1",
+    "sender_display_name": "viewer_a_1",
+    "text": "viewer_a_1 reporting",
+    "round_number": 2
+   }
+  ],
+  "viewer_a_2": [
+   {
+    "channel_id": "link_a",
+    "sender_agent_id": "viewer_a_2",
+    "sender_display_name": "viewer_a_2",
+    "text": "viewer_a_2 reporting",
+    "round_number": 1
+   },
+   {
+    "channel_id": "link_a",
+    "sender_agent_id": "viewer_a_2",
+    "sender_display_name": "viewer_a_2",
+    "text": "viewer_a_2 reporting",
+    "round_number": 2
+   }
+  ],
+  "viewer_a_3": [
+   {
+    "channel_id": "link_a",
+    "sender_agent_id": "viewer_a_3",
+    "sender_display_name": "viewer_a_3",
+    "text": "viewer_a_3 reporting",
+    "round_number": 1
+   },
+   {
+    "channel_id": "link_a",
+    "sender_agent_id": "viewer_a_3",
+    "sender_display_name": "viewer_a_3",
+    "text": "viewer_a_3 reporting",
+    "round_number": 2
+   }
+  ],
+  "viewer_a_4": [
+   {
+    "channel_id": "link_a",
+    "sender_agent_id": "viewer_a_4",
+    "sender_display_name": "viewer_a_4",
+    "text": "viewer_a_4 reporting",
+    "round_number": 1
+   },
+   {
+    "channel_id": "link_a",
+    "sender_agent_id": "viewer_a_4",
+    "sender_display_name": "viewer_a_4",
+    "text": "viewer_a_4 reporting",
+    "round_number": 2
+   }
+  ]
+ },
+ "deliveries_by_recipient": {
+  "viewer_a_1": [
+   {
+    "round_number": 1,
+    "event_type": "world_event_delivered",
+    "agent_id": "viewer_a_1",
+    "text": "ROUND RESULT. Your team did not finish: only N of N members submitted, and every member must submit."
+   },
+   {
+    "round_number": 2,
+    "event_type": "world_event_delivered",
+    "agent_id": "viewer_a_1",
+    "text": "ROUND RESULT. Your team did not finish: only N of N members submitted, and every member must submit."
+   }
+  ],
+  "viewer_a_2": [
+   {
+    "round_number": 1,
+    "event_type": "world_event_delivered",
+    "agent_id": "viewer_a_2",
+    "text": "ROUND RESULT. Your team did not finish: only N of N members submitted, and every member must submit."
+   },
+   {
+    "round_number": 2,
+    "event_type": "world_event_delivered",
+    "agent_id": "viewer_a_2",
+    "text": "ROUND RESULT. Your team did not finish: only N of N members submitted, and every member must submit."
+   }
+  ],
+  "viewer_a_3": [
+   {
+    "round_number": 1,
+    "event_type": "world_event_delivered",
+    "agent_id": "viewer_a_3",
+    "text": "ROUND RESULT. Your team did not finish: only N of N members submitted, and every member must submit."
+   },
+   {
+    "round_number": 2,
+    "event_type": "world_event_delivered",
+    "agent_id": "viewer_a_3",
+    "text": "ROUND RESULT. Your team did not finish: only N of N members submitted, and every member must submit."
+   }
+  ],
+  "viewer_a_4": [
+   {
+    "round_number": 1,
+    "event_type": "world_event_delivered",
+    "agent_id": "viewer_a_4",
+    "text": "ROUND RESULT. Your team did not finish: only N of N members submitted, and every member must submit."
+   },
+   {
+    "round_number": 2,
+    "event_type": "world_event_delivered",
+    "agent_id": "viewer_a_4",
+    "text": "ROUND RESULT. Your team did not finish: only N of N members submitted, and every member must submit."
+   }
+  ]
+ }
+}

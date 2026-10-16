@@ -530,6 +530,7 @@ export function ChatPane({
           primaryChannelIds={primaryChannelIds}
           scenarioExtras={scenarioExtras}
           roundEnding={endingByRound.get(timelineRound) ?? null}
+          roundResults={resultsByRound.get(timelineRound) ?? []}
           onClose={() => setTimelineRound(null)}
         />
       ) : null}

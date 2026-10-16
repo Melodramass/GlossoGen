@@ -1,0 +1,4 @@
+{% if previous_outcome is not none %}
+--- PREVIOUS ROUND RESULT ---
+Round {{ previous_outcome.round_number }}: {% include "_outcome_summary.jinja" %}
+{% endif %}

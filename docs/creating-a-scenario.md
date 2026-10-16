@@ -553,9 +553,11 @@ contract is
 [scenario-plugin.ts](../frontend/src/features/runs/scenario-plugin.ts), the
 canonical example
 [veyru/plugin.tsx](../frontend/src/features/runs/veyru/plugin.tsx), and every
-slot is optional. Plug-ins are compiled into the bundle, so this surface exists
-only for a scenario living in this repo. An unknown name resolves to the default
-plug-in rather than failing. Without a plug-in, the run viewer still splits a
+slot is optional. A round-detail panel receives the round's `round_results`
+beside your extras, so the extras need not repeat each team's verdict. Plug-ins
+are compiled into the bundle, so this surface exists only for a scenario living
+in this repo. An unknown name resolves to the default plug-in rather than
+failing. Without a plug-in, the run viewer still splits a
 `read_notifications` result from its call and wires the two together, and
 renders a payload whose `type` the platform does not define field by field.
 

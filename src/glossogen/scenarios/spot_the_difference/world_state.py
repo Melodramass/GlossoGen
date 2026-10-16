@@ -15,6 +15,8 @@ full set of differences (see :mod:`difference_judge.combine_team_verdict`).
 from dataclasses import dataclass, field
 from typing import NamedTuple
 
+from glossogen.engine.fewest_characters_winner import fewest_characters_winners
+
 
 class DiffOutcome(NamedTuple):
     """Result of one round for one team.
@@ -157,13 +159,13 @@ def build_round_outcomes(
     the eligible team with the fewest characters; ties make every tied team a
     winner.
     """
-    eligible = {team_id: snap for team_id, snap in snapshots.items() if _is_eligible(snapshot=snap)}
-    winners: set[str] = set()
-    if eligible:
-        min_characters = min(snap.characters for snap in eligible.values())
-        winners = {
-            team_id for team_id, snap in eligible.items() if snap.characters == min_characters
+    winners = fewest_characters_winners(
+        characters_by_eligible_team_id={
+            team_id: snap.characters
+            for team_id, snap in snapshots.items()
+            if _is_eligible(snapshot=snap)
         }
+    )
     team_ids = list(snapshots.keys())
     outcomes: dict[str, DiffOutcome] = {}
     for team_id, snap in snapshots.items():

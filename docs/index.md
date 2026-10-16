@@ -13,8 +13,9 @@ per-round budget. Under that pressure agents compress, abbreviate, and invent
 shorthand.
 
 The budget is a knob, and some scenarios ship with it off: `spot_the_difference`
-rewards the team that said the least, and `hospital_bed_assignment_privacy` puts
-an eavesdropper on the shared channel, so speaking plainly loses the round.
+and `spot_the_intersection` reward the team that said the least, and
+`hospital_bed_assignment_privacy` puts an eavesdropper on the shared channel, so
+speaking plainly loses the round.
 [Scenarios](scenarios.md) has the per-scenario numbers.
 
 Agents decide for themselves when to speak, and a round runs until the scenario
