@@ -47,8 +47,9 @@ class GuesserHitRate(NamedTuple):
     def z_score(self) -> float:
         """How many standard errors the rate sits above chance.
 
-        With no spread at all, which a guesser right on every board of every
-        round produces, any excess over chance is infinitely significant.
+        The spread is zero only when every round shows the same excess, as a
+        guesser right on every board of equal-sized boards does; any excess
+        over chance is then infinitely significant.
         """
         excess = self.rate - self.chance
         if self.standard_error == 0:
@@ -132,7 +133,13 @@ GUESSERS: tuple[_Guesser, ...] = (
 
 
 def single_board_hit_rates(rounds: Sequence[RoundBoards]) -> list[GuesserHitRate]:
-    """Run every guesser on every board of ``rounds``, read back from its lines."""
+    """Run every guesser on every board of ``rounds``, read back from its lines.
+
+    Raises ``ValueError`` for fewer than two rounds: the standard error is
+    clustered by round, and one round gives it no spread to measure.
+    """
+    if len(rounds) < 2:
+        raise ValueError(f"the leak check needs at least two rounds (got {len(rounds)})")
     tallies: dict[str, list[_RoundTally]] = {guesser.name: [] for guesser in GUESSERS}
     for round_boards in rounds:
         answer = round_boards.certificate.answer
@@ -160,9 +167,7 @@ def _hit_rate(guesser: str, tallies: Sequence[_RoundTally]) -> GuesserHitRate:
     squared = sum(
         (tally.hits - tally.expected_hits - excess * tally.boards) ** 2 for tally in tallies
     )
-    standard_error = 0.0
-    if len(tallies) > 1:
-        standard_error = math.sqrt(squared * len(tallies) / (len(tallies) - 1)) / boards
+    standard_error = math.sqrt(squared * len(tallies) / (len(tallies) - 1)) / boards
     return GuesserHitRate(
         guesser=guesser,
         hits=hits,

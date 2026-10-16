@@ -168,8 +168,11 @@ each team's link, `communication_*` via `build_communication_rounds`, and the
 `get_protocol_explanation_config`.
 
 `protocol_probe` asks each viewer what it would send first for each board in
-`protocol_probe_questions.json`: three 6×6 boards the default preset generates,
-at its smallest, middle and largest board sizes. A run on another grid is probed
+`protocol_probe_questions.json`: seat 1's board of rounds 9, 6 and 10 of seed 3
+under the default preset, holding 12, 15 and 18 objects (the preset's smallest,
+middle and largest board sizes). The presets play seed 42, so a viewer has not
+been sent these boards in a run on them. `test_protocol_probe_questions.py` holds
+the file to those generated boards. A run on another grid is probed
 with the same boards, so on a grid smaller than 6×6 some of their cells lie off
 the run's grid.
 

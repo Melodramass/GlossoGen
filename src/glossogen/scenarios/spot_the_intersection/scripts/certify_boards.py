@@ -126,7 +126,12 @@ def sweep_configuration(
         problems.append(f"{recertified} round(s) failed re-certification")
     worst_guesser = ""
     worst_z_score = -math.inf
-    for hit_rate in single_board_hit_rates(rounds=rounds):
+    hit_rates = []
+    if len(rounds) < 2:
+        problems.append(f"{len(rounds)} round(s) generated; the leak check needs two")
+    else:
+        hit_rates = single_board_hit_rates(rounds=rounds)
+    for hit_rate in hit_rates:
         if hit_rate.z_score > worst_z_score:
             worst_guesser = hit_rate.guesser
             worst_z_score = hit_rate.z_score

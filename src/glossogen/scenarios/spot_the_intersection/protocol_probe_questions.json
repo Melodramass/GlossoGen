@@ -3,21 +3,21 @@
     "id": "viewer_00_smallest",
     "agent_role_filter": "viewer",
     "inputs": {
-      "my_board": "- yellow square at D5\n- red square at E3\n- red circle at D3\n- green circle at B5\n- yellow triangle at B6\n- blue square at C1\n- blue square at E6\n- yellow triangle at F2\n- green star at B1\n- blue square at E1\n- red triangle at F3\n- green square at B2"
+      "my_board": "- green square at E2\n- yellow square at E6\n- blue star at C6\n- green triangle at A6\n- yellow circle at F6\n- red triangle at E5\n- red circle at F5\n- green square at C1\n- red square at F4\n- red circle at D5\n- red triangle at B4\n- blue star at C3"
     }
   },
   {
     "id": "viewer_01_middle",
     "agent_role_filter": "viewer",
     "inputs": {
-      "my_board": "- blue circle at B4\n- green circle at B5\n- blue square at E1\n- red square at E3\n- green square at B2\n- blue circle at A6\n- green star at F4\n- red triangle at F3\n- yellow triangle at F2\n- yellow square at D5\n- red circle at D3\n- green star at B1\n- yellow star at D6\n- yellow triangle at B6\n- blue square at E6"
+      "my_board": "- blue triangle at A2\n- red star at D6\n- blue circle at F1\n- yellow star at F3\n- blue circle at C5\n- green star at C3\n- red circle at E4\n- red circle at A4\n- blue circle at B5\n- green square at E1\n- red circle at E3\n- green square at B2\n- blue square at D5\n- green triangle at D2\n- blue triangle at F6"
     }
   },
   {
     "id": "viewer_02_largest",
     "agent_role_filter": "viewer",
     "inputs": {
-      "my_board": "- yellow circle at A5\n- red square at E3\n- green star at B1\n- blue square at A4\n- yellow square at D5\n- red circle at D3\n- red star at A6\n- green square at B2\n- yellow star at B3\n- green circle at B5\n- blue square at E1\n- blue circle at F4\n- red triangle at F3\n- blue square at C3\n- green square at D2\n- yellow triangle at B6\n- blue square at E6\n- yellow square at C4"
+      "my_board": "- red star at A2\n- yellow circle at F1\n- yellow square at D2\n- blue star at C2\n- yellow circle at B3\n- green triangle at E2\n- green square at F4\n- green triangle at F5\n- blue circle at C6\n- green star at D3\n- red triangle at B6\n- blue star at D5\n- blue square at E4\n- yellow triangle at B4\n- green circle at D4\n- red circle at F2\n- yellow circle at A1\n- green circle at E1"
     }
   }
 ]

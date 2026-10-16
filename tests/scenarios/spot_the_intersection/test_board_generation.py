@@ -180,3 +180,12 @@ def test_a_round_that_cannot_certify_raises_instead_of_being_played() -> None:
 
     with pytest.raises(BoardGenerationError):
         generate_round(seed=42, round_number=1, settings=settings)
+
+
+def test_the_leak_check_refuses_a_single_round() -> None:
+    """One round leaves the clustered standard error nothing to measure."""
+    settings = settings_for(team_size=4, grid_size=6)
+    rounds = generate_rounds(seed=7, round_count=1, settings=settings)
+
+    with pytest.raises(ValueError, match="at least two rounds"):
+        single_board_hit_rates(rounds=rounds)
