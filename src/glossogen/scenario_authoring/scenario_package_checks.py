@@ -1,9 +1,9 @@
 """Checks on a scenario's package that only mean something before it is installed.
 
-:mod:`glossogen.scenario_conformance` checks a built scenario, which says nothing
-about the distribution around it. These are the other half, and every one of them
-is a failure that installation either hides or converts into something harder to
-read:
+:mod:`glossogen.scenario_authoring.scenario_conformance` checks a built scenario,
+which says nothing about the distribution around it. These are the other half, and
+every one of them is a failure that installation either hides or converts into
+something harder to read:
 
 ``package-data`` that omits the prompts installs a wheel that renders nothing,
 while the editable install the author is testing against works fine. An
@@ -23,7 +23,7 @@ import re
 from pathlib import Path
 from typing import NamedTuple, cast
 
-from glossogen.scenario_conformance import CheckOutcome
+from glossogen.scenario_authoring.scenario_conformance import CheckOutcome
 from glossogen.scenario_entry_points import SCENARIO_ENTRY_POINT_GROUP
 from glossogen.scenario_loader import find_scenario_class
 from glossogen.scenario_path_loader import (

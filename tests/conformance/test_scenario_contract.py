@@ -1,6 +1,6 @@
 """Every registered scenario, against every knobs preset it ships.
 
-The checks themselves live in `glossogen.scenario_conformance`, because a
+The checks themselves live in `glossogen.scenario_authoring.scenario_conformance`, because a
 scenario can ship from any distribution and this suite does not: an author
 outside this repository runs the same rules through
 `glossogen validate <name>`. What is left here is running them over the
@@ -10,7 +10,7 @@ rule applies to every existing one.
 
 import pytest
 
-from glossogen.scenario_conformance import CheckOutcome, check_scenario, failures
+from glossogen.scenario_authoring.scenario_conformance import CheckOutcome, check_scenario, failures
 from glossogen.scenario_loader import get_scenario_class
 from glossogen.scenario_registry import SCENARIO_REGISTRY
 

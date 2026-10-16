@@ -21,7 +21,7 @@ from glossogen.models.event import (
     SimulationStarted,
 )
 from glossogen.models.event_base import EventBase
-from glossogen.replace_agent import (
+from glossogen.run_derivation.replace_agent import (
     resolve_fork_boundary,
     resolve_knob_round_count,
     resolve_rounds_after,

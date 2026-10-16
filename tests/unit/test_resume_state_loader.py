@@ -20,10 +20,6 @@ from typing import Literal
 import orjson
 import pytest
 
-from glossogen.cross_run_replace_manifest import (
-    CROSS_RUN_REPLACE_MANIFEST_FILENAME,
-    CrossRunReplaceManifest,
-)
 from glossogen.message_rewind import RewindState
 from glossogen.models.event import (
     AgentRegistered,
@@ -47,6 +43,10 @@ from glossogen.resume_state_loader import (
     classify_fork_progress,
     load_resume_state,
     read_replace_manifest_info,
+)
+from glossogen.run_derivation.cross_run_replace_manifest import (
+    CROSS_RUN_REPLACE_MANIFEST_FILENAME,
+    CrossRunReplaceManifest,
 )
 from glossogen.runtime.scheduled_events import ChannelVisibilityFromRound, ChannelVisibilityFull
 from tests.fakes.replace_manifests import write_replace_manifest

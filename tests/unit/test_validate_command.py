@@ -17,8 +17,8 @@ from pathlib import Path
 import pytest
 
 from glossogen.cli import main
+from glossogen.scenario_authoring.scenario_scaffold import write_scenario_package
 from glossogen.scenario_entry_points import SCENARIO_ENTRY_POINT_GROUP
-from glossogen.scenario_scaffold import write_scenario_package
 from tests.fakes.installed_entry_points import declare_in_groups
 
 SCENARIO = "reactor_purge"

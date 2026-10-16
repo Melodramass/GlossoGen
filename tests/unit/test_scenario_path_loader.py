@@ -12,17 +12,17 @@ from pathlib import Path
 
 import pytest
 
-from glossogen.scenario_conformance import CheckOutcome, check_scenario, failures
+from glossogen.scenario_authoring.scenario_conformance import CheckOutcome, check_scenario, failures
+from glossogen.scenario_authoring.scenario_package_checks import check_scenario_package
+from glossogen.scenario_authoring.scenario_scaffold import write_scenario_package
 from glossogen.scenario_entry_points import SCENARIO_ENTRY_POINT_GROUP
 from glossogen.scenario_loader import find_scenario_class
-from glossogen.scenario_package_checks import check_scenario_package
 from glossogen.scenario_path_loader import (
     PYPROJECT_NAME,
     ScenarioPathError,
     load_scenario_from_path,
     registered_for_checks,
 )
-from glossogen.scenario_scaffold import write_scenario_package
 
 REF = "v9.9.9"
 SCENARIO = "reactor_purge"

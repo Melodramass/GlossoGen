@@ -18,7 +18,11 @@ from glossogen.label_descriptions.filesystem_label_description_store import (
 )
 from glossogen.label_descriptions.label_description_models import LabelDescription
 from glossogen.oauth_client import Credentials
-from glossogen.prod_metadata_sync import MetadataSyncTally, plan_glossary_sync, sync_glossary
+from glossogen.prod_sync.prod_metadata_sync import (
+    MetadataSyncTally,
+    plan_glossary_sync,
+    sync_glossary,
+)
 
 
 def test_the_plan_carries_entries_the_remote_is_missing_or_records_differently() -> None:

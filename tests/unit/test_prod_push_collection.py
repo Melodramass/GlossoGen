@@ -7,7 +7,7 @@ the same list the filter accepted rather than reading the file a second time.
 
 from pathlib import Path
 
-from glossogen.prod_push import PushSpec, collect_local_runs
+from glossogen.prod_sync.prod_push import PushSpec, collect_local_runs
 
 
 def _spec(runs_dir: Path, labels: frozenset[str]) -> PushSpec:

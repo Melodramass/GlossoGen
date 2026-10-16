@@ -21,9 +21,9 @@ import pytest
 from glossogen import scenario_loader
 from glossogen.models.event import RoundResultRecorded
 from glossogen.models.event_base import EventBase
-from glossogen.scenario_conformance import check_scenario, failures
+from glossogen.scenario_authoring.scenario_conformance import check_scenario, failures
+from glossogen.scenario_authoring.scenario_scaffold import write_scenario_package
 from glossogen.scenario_protocol import SimulationScenario
-from glossogen.scenario_scaffold import write_scenario_package
 from glossogen.testing import (
     assert_no_agent_crashed,
     assert_round_loop_completed,

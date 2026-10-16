@@ -15,13 +15,13 @@ from pathlib import Path
 
 import pytest
 
-from glossogen.cross_run_replace_manifest import (
+from glossogen.models.event import AgentSwappedMidRun, SimulationEvent
+from glossogen.run_derivation.cross_run_replace_manifest import (
     CROSS_RUN_REPLACE_MANIFEST_FILENAME,
     IMPORTED_HISTORY_SOURCE_FILENAME,
     CrossRunReplaceManifest,
 )
-from glossogen.models.event import AgentSwappedMidRun, SimulationEvent
-from glossogen.replace_agent import (
+from glossogen.run_derivation.replace_agent import (
     refuse_boundary_with_swapped_seats,
     refuse_source_b_with_mixed_seat,
     refuse_source_b_with_swapped_seat,

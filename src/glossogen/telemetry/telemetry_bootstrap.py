@@ -19,8 +19,11 @@ from opentelemetry import trace as otel_trace
 from opentelemetry.sdk.trace import TracerProvider
 from pydantic_ai import Agent, InstrumentationSettings
 
-from glossogen.telemetry_round_processor import RoundStampingSpanProcessor, current_round_source
-from glossogen.telemetry_settings import TelemetrySettings
+from glossogen.telemetry.telemetry_round_processor import (
+    RoundStampingSpanProcessor,
+    current_round_source,
+)
+from glossogen.telemetry.telemetry_settings import TelemetrySettings
 
 logger = logging.getLogger(__name__)
 
