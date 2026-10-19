@@ -43,9 +43,13 @@ from glossogen.runtime.read_notifications_schema import READ_NOTIFICATIONS_DESCR
 from glossogen.runtime.scenario_tool import ScenarioTool
 from glossogen.runtime.scenario_world import ScenarioWorld
 from glossogen.runtime.wait_registry import DEFAULT_ANY_TIMEOUT_SECONDS, ParkedWait
+
 from glossogen.scenarios.base_knobs import BaseKnobs
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_SCENARIO_TOOL_TIMEOUT_SECONDS = 120.0
+"""Default cap on a scenario tool call; see ``ScenarioBase.scenario_tool_timeout_s``."""
 
 SendMessageExecutor = Callable[..., Awaitable[SendReceipt]]
 """The function behind the ``send_message`` tool; see ``send_message_executor``."""
@@ -643,6 +647,16 @@ class ScenarioBase(ABC):
         _ = agent_id
         handle = asyncio.get_running_loop().call_later(timeout_s, fire)
         return handle.cancel
+
+    def scenario_tool_timeout_s(self, tool_name: str) -> float | None:
+        """Wall-clock seconds after which a call of the scenario tool ``tool_name`` is cancelled.
+
+        The default caps every scenario tool, so a stalled call (a judge HTTP
+        request that hangs) is cancelled and the agent told. None lets the call
+        run to completion, for a tool that waits on simulated time.
+        """
+        _ = tool_name
+        return DEFAULT_SCENARIO_TOOL_TIMEOUT_SECONDS
 
     def offers_depot_wait(self) -> bool:
         """Whether agents may call ``read_notifications(wait_for="depot", items=...)``.

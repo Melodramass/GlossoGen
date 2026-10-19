@@ -258,6 +258,13 @@ class TextcraftSharedWorkspaceScenario(SimulationScenario):
             return super().clock_now_s()
         return self._clock.time()
 
+    def scenario_tool_timeout_s(self, tool_name: str) -> float | None:
+        """A timed craft waits on virtual time, which waits on every teammate's request,
+        so ``act`` is not cut off by wall-clock time when crafts take time."""
+        if tool_name == "act" and self._knobs.craft_duration_s > 0:
+            return None
+        return super().scenario_tool_timeout_s(tool_name=tool_name)
+
     def offers_depot_wait(self) -> bool:
         """Every arm may wait for depot items or recipe unlocks."""
         return True

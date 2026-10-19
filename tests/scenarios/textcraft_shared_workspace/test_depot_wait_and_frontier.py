@@ -248,3 +248,14 @@ async def test_the_depot_wait_is_in_the_recorded_schema(monkeypatch: pytest.Monk
     schema = definitions["read_notifications"].input_schema
     assert "depot" in schema["properties"]["wait_for"]["enum"]
     assert "items" in schema["properties"]
+
+
+async def test_a_timed_act_is_not_cut_off_by_wall_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    wired = await wire(monkeypatch=monkeypatch, overrides={})
+    scenario = wired.scenario
+    assert scenario.scenario_tool_timeout_s(tool_name="act") is not None
+    timed = await wire(
+        monkeypatch=monkeypatch, overrides={"virtual_clock": True, "craft_duration_s": 30.0}
+    )
+    assert timed.scenario.scenario_tool_timeout_s(tool_name="act") is None
+    assert timed.scenario.scenario_tool_timeout_s(tool_name="observe") is not None
