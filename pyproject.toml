@@ -30,7 +30,7 @@ dependencies = [
     "psycopg[binary]>=3.3.6",
     "psycopg-pool>=3.3.3",
     "alembic>=1.20.0",
-    "langfuse>=4.17.0",
+    "langfuse>=5.0.2",
     "genai-prices>=0.1.13",
 ]
 
