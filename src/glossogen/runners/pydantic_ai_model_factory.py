@@ -66,6 +66,9 @@ def build_pydantic_ai_model(model: str, provider: Provider) -> str | OpenAIChatM
 SELF_HOSTED_TOOL_CALL_END = "</tool_call>"
 """The closing tag of a tool call in the Hermes and Qwen chat templates vLLM serves."""
 
+SELF_HOSTED_REPETITION_DETECTION = {"max_pattern_size": 4, "min_pattern_size": 1, "min_count": 32}
+"""vLLM stops a response whose tail repeats a 1- to 4-token pattern 32 times."""
+
 
 def default_pydantic_ai_settings(provider: Provider, model: str) -> ModelSettings:
     """Return the per-provider default ``ModelSettings`` used by both the runner and probes.
@@ -120,9 +123,15 @@ def agent_model_settings(
             # parallel_tool_calls; a model that keeps generating after its call
             # runs to max_tokens while the parser discards the rest. Stopping on
             # the closing tag, kept in the output so the parser still sees it,
-            # ends the response at its one call.
+            # ends the response at its one call. Qwen3.5 also sometimes fills a
+            # call to a tool without parameters with tabs until max_tokens;
+            # vLLM's repetition detection ends such a run after a few dozen
+            # repeats.
             settings["stop_sequences"] = [SELF_HOSTED_TOOL_CALL_END]
-            settings["extra_body"] = {"include_stop_str_in_output": True}
+            settings["extra_body"] = {
+                "include_stop_str_in_output": True,
+                "repetition_detection": SELF_HOSTED_REPETITION_DETECTION,
+            }
     return settings
 
 

@@ -96,7 +96,10 @@ def test_one_call_per_response_stops_a_self_hosted_reply_at_the_end_of_its_call(
     )
 
     assert settings.get("stop_sequences") == ["</tool_call>"]
-    assert settings.get("extra_body") == {"include_stop_str_in_output": True}
+    assert settings.get("extra_body") == {
+        "include_stop_str_in_output": True,
+        "repetition_detection": {"max_pattern_size": 4, "min_pattern_size": 1, "min_count": 32},
+    }
 
 
 def test_parallel_self_hosted_replies_get_no_stop_sequence() -> None:
