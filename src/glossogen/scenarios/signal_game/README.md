@@ -79,8 +79,8 @@ wording beyond "coordinate" is this scenario's.
 
 | Tool | What it does |
 |---|---|
-| `move(directions)` | 1 to 10 steps, each `up`, `down`, `left` or `right`, applied in order. Each step spends one move; returns the board |
-| `end_round()` | Fixes the player's square; returns the board |
+| `move(directions, reasoning)` | 1 to 10 steps, each `up`, `down`, `left` or `right`, applied in order. Each step spends one move; returns the board. `reasoning`, offered only under `move_reasoning`, is one sentence on why the player moves this way. It is logged on every step's `signal_game_move_made` and never shown to the partner |
+| `end_round(reasoning)` | Fixes the player's square; returns the board. `reasoning`, offered only under `move_reasoning`, is one sentence on why the player finishes there, logged on `signal_game_player_finished` and never shown to the partner |
 | `read_notifications()` | At startup and after a round changes, the briefing. Mid-round, waits until the partner acts and returns the board |
 | `read_notifications(wait_for="next_round")` | After `end_round`, waits for the next briefing |
 
@@ -123,6 +123,7 @@ the other platform knobs. The scenario adds:
 | `colour_count` | Colours drawn from, at most the squares in a grid | 4 |
 | `moves_per_round` | Moves per player per round, at most 1000 | 200 |
 | `partner_colours_visible` | Show each player the partner's colours too | `false` |
+| `move_reasoning` | `move` and `end_round` take a `reasoning`: one sentence, logged and never shown to the partner. Off, `move` takes only `directions` and `end_round` nothing | `true` |
 | `seed` | The grids and start squares | 42 |
 
 `knobs_default` also sets `round_count` 10 and `max_round_duration_seconds` 600. The
@@ -186,8 +187,8 @@ with both grids and the final squares as the ground truth, so
 | Event | Holds |
 |---|---|
 | `signal_game_round_started` | Both grids, each player's start square, the move budget, whether colours are shared |
-| `signal_game_move_made` | Player, direction, from and to squares, sequence number, moves used |
-| `signal_game_player_finished` | Player, final square and colour, moves used |
+| `signal_game_move_made` | Player, direction, from and to squares, sequence number, moves used, and the call's `reasoning` (absent in runs from before `move` took one) |
+| `signal_game_player_finished` | Player, final square and colour, moves used, and the call's `reasoning` (absent in runs from before `end_round` took one) |
 | `signal_game_round_resolved` | Final squares and colours, moves used, success, trigger |
 
 `restore_state_from_events` seeds resolved rounds, so the first briefing after a fork

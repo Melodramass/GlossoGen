@@ -34,7 +34,12 @@ class SignalGameRoundStarted(EventBase):
 
 
 class SignalGameMoveMade(EventBase):
-    """One accepted move. ``sequence`` orders both players' moves within the round."""
+    """One accepted move. ``sequence`` orders both players' moves within the round.
+
+    ``reasoning`` is the sentence the player gave with the move call, the same on
+    every step of that call, and never shown to the partner. None when the run's
+    ``move_reasoning`` is off, and in runs recorded before ``move`` took one.
+    """
 
     event_type: Literal["signal_game_move_made"] = "signal_game_move_made"
     round_number: int
@@ -44,10 +49,16 @@ class SignalGameMoveMade(EventBase):
     from_square: tuple[int, int]
     to_square: tuple[int, int]
     moves_used: int
+    reasoning: str | None = None
 
 
 class SignalGamePlayerFinished(EventBase):
-    """A player called end_round; its square is final for the round."""
+    """A player called end_round; its square is final for the round.
+
+    ``reasoning`` is the sentence the player gave with end_round, never shown to the
+    partner. None when the run's ``move_reasoning`` is off, and in runs recorded
+    before end_round took one.
+    """
 
     event_type: Literal["signal_game_player_finished"] = "signal_game_player_finished"
     round_number: int
@@ -55,6 +66,7 @@ class SignalGamePlayerFinished(EventBase):
     square: tuple[int, int]
     colour: str
     moves_used: int
+    reasoning: str | None = None
 
 
 class SignalGameRoundResolved(EventBase):
