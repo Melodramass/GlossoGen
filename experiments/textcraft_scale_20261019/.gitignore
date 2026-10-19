@@ -1,0 +1,6 @@
+jobs/
+plan.json
+*.log
+slurm/
+smoke_*/
+aborted_*/
