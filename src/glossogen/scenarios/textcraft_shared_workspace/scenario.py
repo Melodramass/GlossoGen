@@ -265,6 +265,10 @@ class TextcraftSharedWorkspaceScenario(SimulationScenario):
             return None
         return super().scenario_tool_timeout_s(tool_name=tool_name)
 
+    def allows_parallel_tool_calls(self) -> bool:
+        """One tool call per response: each act is chosen after seeing the previous result."""
+        return False
+
     def offers_depot_wait(self) -> bool:
         """Every arm may wait for depot items or recipe unlocks."""
         return True

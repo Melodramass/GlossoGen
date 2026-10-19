@@ -86,3 +86,22 @@ def test_allowing_parallel_tool_calls_leaves_the_provider_default_alone() -> Non
     )
 
     assert "parallel_tool_calls" not in settings
+
+
+def test_one_call_per_response_stops_a_self_hosted_reply_at_the_end_of_its_call() -> None:
+    """vLLM ignores parallel_tool_calls for when to stop, so the closing tag is a stop
+    sequence, kept in the output for the tool-call parser."""
+    settings = agent_model_settings(
+        provider=Provider.SELF_HOSTED, model="m", parallel_tool_calls=False
+    )
+
+    assert settings.get("stop_sequences") == ["</tool_call>"]
+    assert settings.get("extra_body") == {"include_stop_str_in_output": True}
+
+
+def test_parallel_self_hosted_replies_get_no_stop_sequence() -> None:
+    settings = agent_model_settings(
+        provider=Provider.SELF_HOSTED, model="m", parallel_tool_calls=True
+    )
+
+    assert "stop_sequences" not in settings

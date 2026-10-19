@@ -63,6 +63,10 @@ def build_pydantic_ai_model(model: str, provider: Provider) -> str | OpenAIChatM
     return f"{spec.pydantic_ai_prefix}:{model}"
 
 
+SELF_HOSTED_TOOL_CALL_END = "</tool_call>"
+"""The closing tag of a tool call in the Hermes and Qwen chat templates vLLM serves."""
+
+
 def default_pydantic_ai_settings(provider: Provider, model: str) -> ModelSettings:
     """Return the per-provider default ``ModelSettings`` used by both the runner and probes.
 
@@ -111,6 +115,14 @@ def agent_model_settings(
     settings = default_pydantic_ai_settings(provider=provider, model=model)
     if not parallel_tool_calls:
         settings["parallel_tool_calls"] = False
+        if provider == Provider.SELF_HOSTED:
+            # vLLM does not stop at the end of a tool call because of
+            # parallel_tool_calls; a model that keeps generating after its call
+            # runs to max_tokens while the parser discards the rest. Stopping on
+            # the closing tag, kept in the output so the parser still sees it,
+            # ends the response at its one call.
+            settings["stop_sequences"] = [SELF_HOSTED_TOOL_CALL_END]
+            settings["extra_body"] = {"include_stop_str_in_output": True}
     return settings
 
 
