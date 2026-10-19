@@ -10,6 +10,7 @@ from glossogen.models.event import ToolResultReceived
 from glossogen.runners.pydantic_ai_model_factory import agent_model_settings
 from glossogen.scenarios.signal_game.events import (
     SignalGameMoveMade,
+    SignalGamePlayerFinished,
     SignalGameRoundResolved,
     SignalGameRoundStarted,
 )
@@ -20,7 +21,7 @@ from glossogen.scenarios.signal_game.ids import (
     PLAYER_B,
 )
 from glossogen.testing.scenario_runtime import assert_round_loop_completed
-from glossogen.testing.scripted_agent import ScriptedTurn
+from glossogen.testing.scripted_agent import ScriptedTurn, ToolTurn
 from glossogen.testing.simulation_harness import SimulationResult
 from tests.scenarios.signal_game.signal_game_play import (
     ONE_ROUND,
@@ -159,6 +160,114 @@ async def test_the_partner_sees_every_move_once_and_in_order(
         "right",
         "up",
     ]
+
+
+async def test_the_reasoning_is_logged_and_never_shown_to_the_partner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A move's reasoning lands on each of its steps, and end_round's on the finish."""
+    reasoning = "Bouncing left and right to mark my colour."
+    end_reasoning = "Back on my start square, which is the colour I signalled."
+    scenario = build(preset_name="knobs_default", overrides=ONE_ROUND)
+    scripts: dict[str, list[ScriptedTurn]] = {
+        PLAYER_A: [
+            read(),
+            ToolTurn(
+                tool_name="move", args={"directions": ["left", "right"], "reasoning": reasoning}
+            ),
+            ToolTurn(tool_name="end_round", args={"reasoning": end_reasoning}),
+            wait_for_next_round(),
+        ],
+        PLAYER_B: [read(), read(), read(), end_round(), wait_for_next_round()],
+    }
+    result = await play(
+        scenario=scenario, scripts=scripts, tmp_path=tmp_path, monkeypatch=monkeypatch
+    )
+
+    assert [move.reasoning for move in result.of_type(event_type=SignalGameMoveMade)] == [
+        reasoning,
+        reasoning,
+    ]
+    finishes = {
+        finish.agent_id: finish.reasoning
+        for finish in result.of_type(event_type=SignalGamePlayerFinished)
+    }
+    assert finishes[PLAYER_A] == end_reasoning
+    seen = "\n".join(
+        results_for(result=result, agent_id=PLAYER_B, tool_name="read_notifications")
+        + results_for(result=result, agent_id=PLAYER_B, tool_name="end_round")
+    )
+    assert "#3 end_round" in seen
+    assert reasoning not in seen
+    assert end_reasoning not in seen
+
+
+async def test_a_move_without_reasoning_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    scenario = build(preset_name="knobs_default", overrides=ONE_ROUND)
+    scripts: dict[str, list[ScriptedTurn]] = {
+        PLAYER_A: [
+            read(),
+            ToolTurn(tool_name="move", args={"directions": ["left"], "reasoning": " "}),
+            end_round(),
+            wait_for_next_round(),
+        ],
+        PLAYER_B: [read(), end_round(), wait_for_next_round()],
+    }
+    result = await play(
+        scenario=scenario, scripts=scripts, tmp_path=tmp_path, monkeypatch=monkeypatch
+    )
+
+    [refusal] = results_for(result=result, agent_id=PLAYER_A, tool_name="move")
+    assert "reasoning" in refusal
+    assert result.of_type(event_type=SignalGameMoveMade) == []
+
+
+async def test_an_end_round_without_reasoning_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    scenario = build(preset_name="knobs_default", overrides=ONE_ROUND)
+    scripts: dict[str, list[ScriptedTurn]] = {
+        PLAYER_A: [
+            read(),
+            ToolTurn(tool_name="end_round", args={"reasoning": " "}),
+            end_round(),
+            wait_for_next_round(),
+        ],
+        PLAYER_B: [read(), end_round(), wait_for_next_round()],
+    }
+    result = await play(
+        scenario=scenario, scripts=scripts, tmp_path=tmp_path, monkeypatch=monkeypatch
+    )
+
+    refusal, finished = results_for(result=result, agent_id=PLAYER_A, tool_name="end_round")
+    assert "reasoning" in refusal
+    assert "You finished round 1" in finished
+
+
+async def test_without_move_reasoning_neither_tool_takes_a_reasoning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    scenario = build(preset_name="knobs_default", overrides={**ONE_ROUND, "move_reasoning": False})
+    scripts: dict[str, list[ScriptedTurn]] = {
+        PLAYER_A: [
+            read(),
+            ToolTurn(tool_name="move", args={"directions": ["left"]}),
+            ToolTurn(tool_name="end_round", args={}),
+            wait_for_next_round(),
+        ],
+        PLAYER_B: [read(), ToolTurn(tool_name="end_round", args={}), wait_for_next_round()],
+    }
+    result = await play(
+        scenario=scenario, scripts=scripts, tmp_path=tmp_path, monkeypatch=monkeypatch
+    )
+
+    [step] = result.of_type(event_type=SignalGameMoveMade)
+    assert step.direction == "left"
+    assert step.reasoning is None
+    finishes = result.of_type(event_type=SignalGamePlayerFinished)
+    assert [finish.reasoning for finish in finishes] == [None, None]
 
 
 async def test_a_move_off_the_grid_is_refused_and_spends_nothing(

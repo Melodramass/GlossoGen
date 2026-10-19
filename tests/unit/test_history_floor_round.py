@@ -35,7 +35,7 @@ _AGENT = "player"
 
 def _move_turn(round_number: int, call_id: str, timestamp: datetime) -> list[SimulationEvent]:
     """One LLM cycle in ``round_number`` making a single ``move`` call."""
-    arguments: dict[str, object] = {"directions": ["up"]}
+    arguments: dict[str, object] = {"directions": ["up"], "reasoning": "Scripted move."}
     events: list[SimulationEvent] = [
         ToolCallInvoked(
             round_number=round_number,

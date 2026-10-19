@@ -88,9 +88,17 @@ MOVE_DESCRIPTION = (
     "the sequence there: the steps before it stand. Returns the board and your partner's "
     "actions since you last looked."
 )
+MOVE_WITH_REASONING_DESCRIPTION = (
+    f"{MOVE_DESCRIPTION} reasoning is one sentence on why you are moving this way; your "
+    "partner never sees it."
+)
 END_ROUND_DESCRIPTION = (
     "Finish this round on the square you are on. Your square cannot change after this. "
     "Returns the board."
+)
+END_ROUND_WITH_REASONING_DESCRIPTION = (
+    f"{END_ROUND_DESCRIPTION} reasoning is one sentence on why you are finishing on this "
+    "square; your partner never sees it."
 )
 READ_NOTIFICATIONS_DESCRIPTION = (
     "read_notifications() returns your round briefing at startup and after a round changes; "
@@ -238,7 +246,10 @@ class SignalGameScenario(SimulationScenario):
         return RunnerPrompts(
             system_suffix=self._renderer.render(
                 template_name=PROTOCOL_SUFFIX_TEMPLATE,
-                template_variables={"max_moves_per_call": MAX_MOVES_PER_CALL},
+                template_variables={
+                    "max_moves_per_call": MAX_MOVES_PER_CALL,
+                    "move_reasoning": self._knobs.move_reasoning,
+                },
             ),
             initial=self._renderer.render(
                 template_name=PROTOCOL_INITIAL_TEMPLATE, template_variables={}
@@ -470,9 +481,23 @@ class SignalGameScenario(SimulationScenario):
         return build_communication_rounds(events=events)
 
     def get_tools(self) -> list[ScenarioTool]:
-        """``move`` and ``end_round``."""
+        """``move`` and ``end_round``; under ``move_reasoning`` each takes a ``reasoning``."""
+
+        async def move_with_reasoning(
+            agent_id: str, directions: list[Direction], reasoning: str
+        ) -> str:
+            if not reasoning.strip():
+                raise ValueError("Give one sentence of reasoning for this move. Nothing was moved.")
+            return await apply_move(
+                agent_id=agent_id, directions=directions, reasoning=reasoning.strip()
+            )
 
         async def move(agent_id: str, directions: list[Direction]) -> str:
+            return await apply_move(agent_id=agent_id, directions=directions, reasoning=None)
+
+        async def apply_move(
+            agent_id: str, directions: list[Direction], reasoning: str | None
+        ) -> str:
             if not 1 <= len(directions) <= MAX_MOVES_PER_CALL:
                 raise ValueError(
                     f"Give between 1 and {MAX_MOVES_PER_CALL} directions. Nothing was moved."
@@ -480,7 +505,10 @@ class SignalGameScenario(SimulationScenario):
             round_number = self._open_round_for(agent_id=agent_id)
             async with self._lock:
                 steps, stopped = await self._apply_steps(
-                    agent_id=agent_id, round_number=round_number, directions=directions
+                    agent_id=agent_id,
+                    round_number=round_number,
+                    directions=directions,
+                    reasoning=reasoning,
                 )
                 if not steps:
                     raise ValueError(stopped)
@@ -505,7 +533,18 @@ class SignalGameScenario(SimulationScenario):
             self._wake_partner_of(agent_id=agent_id)
             return view
 
+        async def end_round_with_reasoning(agent_id: str, reasoning: str) -> str:
+            if not reasoning.strip():
+                raise ValueError(
+                    "Give one sentence of reasoning for ending the round. The round was not "
+                    "ended."
+                )
+            return await finish_round(agent_id=agent_id, reasoning=reasoning.strip())
+
         async def end_round(agent_id: str) -> str:
+            return await finish_round(agent_id=agent_id, reasoning=None)
+
+        async def finish_round(agent_id: str, reasoning: str | None) -> str:
             round_number = self._open_round_for(agent_id=agent_id)
             async with self._lock:
                 entry = self._world.end(agent_id=agent_id)
@@ -518,6 +557,7 @@ class SignalGameScenario(SimulationScenario):
                         colour=colour_at(grid=grid, square=entry.square),
                         moves_used=self._knobs.moves_per_round
                         - self._world.moves_left(agent_id=agent_id),
+                        reasoning=reasoning,
                     )
                 )
                 view = self._board_view(
@@ -530,6 +570,19 @@ class SignalGameScenario(SimulationScenario):
             self._wake_partner_of(agent_id=agent_id)
             return view
 
+        if self._knobs.move_reasoning:
+            return [
+                ScenarioTool(
+                    name=MOVE_TOOL,
+                    description=MOVE_WITH_REASONING_DESCRIPTION,
+                    executor=move_with_reasoning,
+                ),
+                ScenarioTool(
+                    name=END_ROUND_TOOL,
+                    description=END_ROUND_WITH_REASONING_DESCRIPTION,
+                    executor=end_round_with_reasoning,
+                ),
+            ]
         return [
             ScenarioTool(name=MOVE_TOOL, description=MOVE_DESCRIPTION, executor=move),
             ScenarioTool(
@@ -538,9 +591,16 @@ class SignalGameScenario(SimulationScenario):
         ]
 
     async def _apply_steps(
-        self, agent_id: str, round_number: int, directions: list[Direction]
+        self,
+        agent_id: str,
+        round_number: int,
+        directions: list[Direction],
+        reasoning: str | None,
     ) -> tuple[list[LoggedAction], str | None]:
         """Apply ``directions`` in order, logging each step, until one is refused.
+
+        Every step of the call is logged with the call's ``reasoning``, None when
+        ``move_reasoning`` is off.
 
         Returns the steps that stood and the refusal that stopped the rest, or
         None when every step stood. The caller holds the lock, so the partner
@@ -563,6 +623,7 @@ class SignalGameScenario(SimulationScenario):
                     to_square=(entry.square.row, entry.square.col),
                     moves_used=self._knobs.moves_per_round
                     - self._world.moves_left(agent_id=agent_id),
+                    reasoning=reasoning,
                 )
             )
         return steps, None

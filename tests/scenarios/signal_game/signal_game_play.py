@@ -33,11 +33,13 @@ def wait_for_next_round() -> ToolTurn:
 
 
 def move(directions: list[str]) -> ToolTurn:
-    return ToolTurn(tool_name="move", args={"directions": directions})
+    return ToolTurn(
+        tool_name="move", args={"directions": directions, "reasoning": "Scripted move."}
+    )
 
 
 def end_round() -> ToolTurn:
-    return ToolTurn(tool_name="end_round", args={})
+    return ToolTurn(tool_name="end_round", args={"reasoning": "Scripted end."})
 
 
 async def play(

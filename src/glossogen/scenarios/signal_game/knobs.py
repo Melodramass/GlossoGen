@@ -16,12 +16,15 @@ class SignalGameKnobs(BaseKnobs):
     caps the moves one player makes in a round.
     ``partner_colours_visible`` shows each player the partner's colours too,
     which removes the private information and is the control condition.
+    ``move_reasoning`` makes every ``move`` and ``end_round`` call carry one
+    sentence on why the player acts that way, logged and never shown to the partner.
     """
 
     grid_size: int = Field(ge=2, le=5)
     colour_count: int = Field(ge=2, le=len(PALETTE))
     moves_per_round: int = Field(ge=1, le=1000)
     partner_colours_visible: bool
+    move_reasoning: bool
     seed: int
 
     @model_validator(mode="after")

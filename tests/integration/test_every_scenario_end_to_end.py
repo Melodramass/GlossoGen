@@ -97,12 +97,12 @@ async def play_signal_game(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> S
     )
     assert isinstance(scenario, SignalGameScenario)
     read = ToolTurn(tool_name="read_notifications", args={})
-    end_round = ToolTurn(tool_name="end_round", args={})
+    end_round = ToolTurn(tool_name="end_round", args={"reasoning": "Scripted end."})
     wait = ToolTurn(tool_name="read_notifications", args={"wait_for": "next_round"})
     scripts: dict[str, list[ScriptedTurn]] = {
         "player_a": [
             read,
-            ToolTurn(tool_name="move", args={"directions": ["up"]}),
+            ToolTurn(tool_name="move", args={"directions": ["up"], "reasoning": "Scripted move."}),
             end_round,
             wait,
         ],
