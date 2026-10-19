@@ -132,6 +132,7 @@ def _thinking_parts_in_history(events: list[SimulationEvent]) -> list[ThinkingPa
         cutoff_round=None,
         tool_calls_only=False,
         channel_visibility={},
+        history_floor_round=None,
         filter_below_round=None,
         split_parallel_tool_calls=False,
     )

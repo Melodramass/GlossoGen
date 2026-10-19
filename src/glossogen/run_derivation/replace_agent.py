@@ -33,9 +33,12 @@ from glossogen.message_rewind import build_rewind_state_at_event
 from glossogen.model_catalog import SIMULATION_PROVIDERS, Provider
 from glossogen.models.event import (
     AgentRegistered,
+    AgentResumed,
     AgentSwappedMidRun,
+    PostmortemEnded,
     RoundAdvanced,
     RoundEnded,
+    RoundResultRecorded,
     RunStatus,
     SimulationEnded,
     SimulationEvent,
@@ -84,7 +87,8 @@ class ReplaceAgentRequest(NamedTuple):
     prior agent's tool-call history (text and thinking stripped, blocked
     channels dropped) and runs under ``model``/``provider``; every other
     agent keeps its full reconstructed history pinned to its
-    source-active model.
+    source-active model. ``history_floor_round`` drops that tool-call
+    history's non-channel calls from rounds below it.
 
     When ``replaced_agent_id`` is ``None``, the operation is a pure
     fork-at-round: ``model``, ``provider``, and
@@ -103,6 +107,7 @@ class ReplaceAgentRequest(NamedTuple):
     knobs: dict[str, Any] | None
     channels_with_visible_history: list[str] | None
     channel_history_floors: dict[str, int]
+    history_floor_round: int | None
     runs_dir: Path
 
 
@@ -139,9 +144,9 @@ def resolve_fork_boundary(
     ``RoundAdvanced`` is the anchor: the clone captures round ``after_round``
     fully closed, with the entry round opened but its injections not yet
     delivered, and the resumed clock re-opens it. When the source *finished* at
-    round ``after_round``, the anchor is the last event before
-    ``SimulationEnded``, and the resumed clock advances into the entry round
-    instead.
+    round ``after_round``, the anchor is the last event before its agents were
+    told the game was over (see ``_last_event_before_game_over``), and the
+    resumed clock advances into the entry round instead.
 
     Raises ``ValueError`` when ``after_round`` is below 1, when the source
     never completed that round, when the source opened it but never finished
@@ -179,21 +184,14 @@ def resolve_fork_boundary(
             f"source run never completed round {after_round}: "
             f"last round advanced was {last_advanced_round}"
         )
-    last_ended: SimulationEnded | None = None
-    target: SimulationEvent | None = None
-    for event in reversed(events):
-        if isinstance(event, SimulationEnded):
-            if last_ended is None:
-                last_ended = event
-        elif target is None:
-            target = event
-        if last_ended is not None and target is not None:
-            break
-    if last_ended is None:
+    end_index = _last_simulation_ended_index(events=events)
+    if end_index is None:
         raise ValueError(
             f"source run opened round {after_round} but never finished it "
             f"(no simulation_ended); fork-at-round requires a completed boundary"
         )
+    last_ended = events[end_index]
+    assert isinstance(last_ended, SimulationEnded)
     if last_ended.reason != RunStatus.SCENARIO_COMPLETE:
         raise ValueError(
             f"source run ended with reason {last_ended.reason.value!r}, so round "
@@ -206,6 +204,7 @@ def resolve_fork_boundary(
             f"{after_round} (no round_ended for it), so that round was never "
             f"judged; fork after the last round the source completed instead"
         )
+    target = _last_event_before_game_over(events=events, end_index=end_index)
     if target is None:
         raise ValueError("source run holds nothing before simulation_ended")
     return ForkBoundary(
@@ -213,6 +212,63 @@ def resolve_fork_boundary(
         boundary_timestamp=target.timestamp,
         advances_into_round=True,
     )
+
+
+def _last_simulation_ended_index(events: list[SimulationEvent]) -> int | None:
+    """Index of the log's last ``SimulationEnded``; a recovered crash leaves earlier ones."""
+    for index in range(len(events) - 1, -1, -1):
+        if isinstance(events[index], SimulationEnded):
+            return index
+    return None
+
+
+def _last_event_before_game_over(
+    events: list[SimulationEvent],
+    end_index: int,
+) -> SimulationEvent | None:
+    """The last event of a finished source before its agents were told the game was over.
+
+    A run ends by pushing a done notice to every agent: a parked agent is woken
+    with ``AgentResumed(terminated=True)`` and its ``read_notifications`` returns
+    the notice, and an agent that asks later is woken the same way at once. A
+    clone keeping that notice rebuilds agents who remember the game ending, and
+    they stop playing when the fork opens another round. The clock closes the
+    final round (its ``RoundEnded``, verdict and postmortem end) before the done
+    notice goes out, so the first terminated wake after the last of those
+    closing events marks the ending. An in-run swap wakes the agent it replaces
+    the same way; starting after the closing events keeps such a wake from ever
+    cutting them out of the clone. Without a terminated wake, the last event
+    before ``SimulationEnded`` at ``end_index`` is returned.
+    """
+    search_from = _last_round_closing_index(events=events, end_index=end_index)
+    for index in range(search_from, end_index):
+        event = events[index]
+        if isinstance(event, AgentResumed) and event.terminated:
+            return _event_before(events=events, index=index)
+    return _event_before(events=events, index=end_index)
+
+
+def _last_round_closing_index(events: list[SimulationEvent], end_index: int) -> int:
+    """Index of the last round-closing event before ``end_index``.
+
+    A round closes with ``RoundEnded``, its ``RoundResultRecorded`` verdicts and,
+    with a postmortem, ``PostmortemEnded``. Returns the last ``RoundAdvanced`` for a
+    log holding none of them, and 0 for a log holding no round event at all.
+    """
+    for index in range(end_index - 1, -1, -1):
+        if isinstance(events[index], (RoundEnded, RoundResultRecorded, PostmortemEnded)):
+            return index
+    for index in range(end_index - 1, -1, -1):
+        if isinstance(events[index], RoundAdvanced):
+            return index
+    return 0
+
+
+def _event_before(events: list[SimulationEvent], index: int) -> SimulationEvent | None:
+    """The event just before ``index``, or None when ``index`` is the first."""
+    if index == 0:
+        return None
+    return events[index - 1]
 
 
 def refuse_unforkable_source(
@@ -446,14 +502,15 @@ def _validate_replacement_payload(request: ReplaceAgentRequest) -> None:
     ``channels_with_visible_history`` must all be present and ``provider``
     must be a known provider name. When ``replaced_agent_id`` is ``None``,
     all three companion fields must also be ``None`` and
-    ``channel_history_floors`` must be empty so the fork-at-round code path
-    has no half-populated replacement state to interpret.
+    ``channel_history_floors`` must be empty and ``history_floor_round``
+    ``None`` so the fork-at-round code path has no half-populated replacement
+    state to interpret.
 
     Every channel named in ``channel_history_floors`` must also appear in
     ``channels_with_visible_history`` (a windowed channel is still a
-    visible channel), and each floor must satisfy
-    ``1 <= floor <= after_round + 1`` (a floor of the entry round yields zero
-    prior history, the no-history window).
+    visible channel). Each channel floor and ``history_floor_round`` must
+    satisfy ``1 <= floor <= after_round + 1`` (a floor of the entry round
+    yields zero prior history, the no-history window).
     """
     if request.replaced_agent_id is None:
         misset = [
@@ -467,6 +524,8 @@ def _validate_replacement_payload(request: ReplaceAgentRequest) -> None:
         ]
         if request.channel_history_floors:
             misset.append("channel_history_floors")
+        if request.history_floor_round is not None:
+            misset.append("history_floor_round")
         if misset:
             raise ValueError(
                 f"replaced_agent_id is None but {', '.join(misset)} is set; "
@@ -502,6 +561,12 @@ def _validate_replacement_payload(request: ReplaceAgentRequest) -> None:
                 f"channel_history_floors[{channel_id!r}]={floor} must satisfy "
                 f"1 <= floor <= after_round + 1 ({entry_round})"
             )
+    floor = request.history_floor_round
+    if floor is not None and not 1 <= floor <= entry_round:
+        raise ValueError(
+            f"history_floor_round={floor} must satisfy 1 <= floor <= after_round + 1 "
+            f"({entry_round})"
+        )
 
 
 def _pick_subprocess_default_model(
@@ -773,6 +838,7 @@ async def prepare_replace_agent_run(request: ReplaceAgentRequest) -> PreparedFor
         channels_with_visible_history=visible_channels,
         blocked_tool_call_channels=blocked_tool_call_channels,
         channel_history_floors=dict(request.channel_history_floors),
+        history_floor_round=request.history_floor_round,
         replaced_at=time.time(),
     )
     manifest_path = new_run_dir / REPLACE_MANIFEST_FILENAME

@@ -88,6 +88,7 @@ def _history(events: list[SimulationEvent], *, tool_calls_only: bool):
         cutoff_round=None,
         tool_calls_only=tool_calls_only,
         channel_visibility={},
+        history_floor_round=None,
         filter_below_round=None,
         split_parallel_tool_calls=False,
     )

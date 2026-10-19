@@ -105,6 +105,7 @@ def build_swap_seed(
         cutoff_round=swap.round_number,
         tool_calls_only=True,
         channel_visibility=swap.channel_visibility,
+        history_floor_round=None,
         filter_below_round=None,
         split_parallel_tool_calls=swap.new_provider == Provider.SELF_HOSTED,
     )

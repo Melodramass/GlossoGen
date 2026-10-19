@@ -151,6 +151,19 @@ the commit log.
   and the rest) stays where it was.
 
 ### Fixed
+- A fork after the source's final round (`replace-agent`, `fork-at-round` or
+  `cross-run-replace-agent` with `--after-round <final round>`) ends its clone
+  before the agents were told the game was over. It ended just before
+  `simulation_ended`, after every agent's `read_notifications` had returned the
+  `done` notice, so the rebuilt agents remembered the game ending: in signal_game
+  the remaining player answered each new round with "the game has concluded" and
+  never moved.
+- `replace-agent --history-from-round` windows a seat that belongs to no channel.
+  The floor was set per channel only, so in a scenario without channels, such as
+  signal_game, the flag did nothing and the replacement kept its predecessor's
+  whole record of tool calls. The manifest records the flag as
+  `history_floor_round`, and `protocol_explanation` applies it to the replaced
+  seat's history too.
 - A scenario judge under a provider outside `JUDGE_PROVIDERS` (`judge_provider`,
   or any model a scenario's `get_judge_models` returns) is refused at launch.
   `judge_provider` accepts any `Provider`, and such a judge passed the credential

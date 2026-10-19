@@ -164,6 +164,10 @@ class ProtocolExplanationMetric(Metric):
                 cutoff_round=None,
                 tool_calls_only=False,
                 channel_visibility=channel_visibility,
+                history_floor_round=_replaced_seat_history_floor(
+                    manifest=manifest,
+                    agent_id=agent.agent_id,
+                ),
                 filter_below_round=None,
                 split_parallel_tool_calls=agent.provider == Provider.SELF_HOSTED,
             )
@@ -316,6 +320,16 @@ def _resolve_channel_visibility(
     for channel_id in manifest.blocked_tool_call_channels:
         visibility[channel_id] = ChannelVisibilityNone()
     return visibility
+
+
+def _replaced_seat_history_floor(manifest: ReplaceManifest | None, agent_id: str) -> int | None:
+    """Return the non-channel history floor the runtime applied to this agent at resume.
+
+    Only the agent swapped in via ``replace-agent`` has one.
+    """
+    if manifest is None or manifest.replaced_agent_id != agent_id:
+        return None
+    return manifest.history_floor_round
 
 
 def _last_event_timestamp(events: list[SimulationEvent]) -> datetime:

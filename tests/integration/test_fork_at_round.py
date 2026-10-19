@@ -132,6 +132,7 @@ async def prepare_fork(
             knobs=knobs,
             channels_with_visible_history=None,
             channel_history_floors={},
+            history_floor_round=None,
             runs_dir=tmp_path / "runs",
         )
     )

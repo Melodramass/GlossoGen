@@ -36,6 +36,12 @@ class ReplaceManifest(BaseModel):
     ``channels_with_visible_history`` keep their full prior history.
     Defaults to empty so manifests written before windowing existed
     still load.
+
+    ``history_floor_round`` is the round from which the replaced agent keeps
+    its predecessor's non-channel tool calls (``read_notifications``, a
+    scenario's own tools). It is the only floor a seat that belongs to no
+    channel has. ``None`` keeps them all, and is what manifests written
+    before the field existed load as.
     """
 
     source_run_id: str
@@ -49,6 +55,7 @@ class ReplaceManifest(BaseModel):
     channels_with_visible_history: list[str]
     blocked_tool_call_channels: list[str]
     channel_history_floors: dict[str, int] = Field(default_factory=dict)
+    history_floor_round: int | None = None
     replaced_at: float
 
 

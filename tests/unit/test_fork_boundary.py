@@ -1,8 +1,9 @@
 """Where a fork cuts the source log, and how many rounds it plays after.
 
 ``resolve_fork_boundary`` picks the truncation anchor for a fork after round N:
-the source's ``RoundAdvanced(N+1)`` when one exists, or the last event before
-``SimulationEnded`` when round N was the source's final round.
+the source's ``RoundAdvanced(N+1)`` when one exists, or, when round N was the
+source's final round, the last event before its agents were told the game was
+over.
 ``resolve_rounds_after`` turns the CLI's ``--rounds-after`` into the stored
 manifest window.
 """
@@ -13,8 +14,11 @@ import pytest
 
 from glossogen.message_rewind import find_event_timestamp
 from glossogen.models.event import (
+    AgentResumed,
+    PostmortemEnded,
     RoundAdvanced,
     RoundEnded,
+    RoundResultRecorded,
     RunStatus,
     SimulationEnded,
     SimulationEvent,
@@ -109,6 +113,100 @@ def test_a_fork_after_the_final_round_anchors_just_before_simulation_ended() -> 
     assert isinstance(events[-1], SimulationEnded)
     assert boundary.target_event_id == last_before_ended.event_id
     assert boundary.advances_into_round is True
+
+
+def _done_wake(agent_id: str, round_number: int) -> AgentResumed:
+    """The terminated wake that tells a parked agent the run is over."""
+    return AgentResumed(
+        round_number=round_number,
+        agent_id=agent_id,
+        wait_id=f"wait-{agent_id}",
+        wake_reasons=["done"],
+        waited_seconds=1.0,
+        terminated=True,
+    )
+
+
+def _simulation_ended(round_number: int) -> SimulationEnded:
+    """A ``scenario_complete`` end marker."""
+    return SimulationEnded(
+        round_number=round_number,
+        reason=RunStatus.SCENARIO_COMPLETE,
+        total_messages=4,
+        total_cost_usd=0.0,
+    )
+
+
+def _verdict(round_number: int) -> RoundResultRecorded:
+    """A single-team round verdict."""
+    return RoundResultRecorded(round_number=round_number, success=True, team_id=None, reason="")
+
+
+def test_a_final_round_fork_stops_before_the_agents_hear_the_game_ended() -> None:
+    """A clone holding the done wakes rebuilds agents who think the game is over."""
+    events = _stamp(
+        events=[
+            _started(),
+            RoundAdvanced(round_number=1, trigger="all_agents_idle"),
+            RoundAdvanced(round_number=2, trigger="all_agents_idle"),
+            RoundEnded(round_number=2, trigger="all_agents_idle"),
+            _verdict(round_number=2),
+            PostmortemEnded(round_number=2, trigger="postmortem_timeout"),
+            _done_wake(agent_id="first", round_number=2),
+            _done_wake(agent_id="second", round_number=2),
+            _simulation_ended(round_number=2),
+        ]
+    )
+
+    boundary = resolve_fork_boundary(events=events, after_round=2)
+
+    postmortem_end = events[5]
+    assert isinstance(postmortem_end, PostmortemEnded)
+    assert boundary.target_event_id == postmortem_end.event_id
+    assert boundary.advances_into_round is True
+
+
+def test_a_late_swap_wake_cannot_cut_the_final_verdict_out() -> None:
+    """A swapped-out runner can park after the round ends; the verdict still stays."""
+    events = _stamp(
+        events=[
+            _started(),
+            RoundAdvanced(round_number=1, trigger="all_agents_idle"),
+            RoundAdvanced(round_number=2, trigger="all_agents_idle"),
+            RoundEnded(round_number=2, trigger="all_agents_idle"),
+            _done_wake(agent_id="swapped_out", round_number=2),
+            _verdict(round_number=2),
+            _done_wake(agent_id="first", round_number=2),
+            _simulation_ended(round_number=2),
+        ]
+    )
+
+    boundary = resolve_fork_boundary(events=events, after_round=2)
+
+    verdict = events[5]
+    assert isinstance(verdict, RoundResultRecorded)
+    assert boundary.target_event_id == verdict.event_id
+
+
+def test_a_swap_wake_before_the_final_round_ended_is_not_the_game_ending() -> None:
+    """An in-run swap wakes the replaced agent the same way, but at a round's start."""
+    events = _stamp(
+        events=[
+            _started(),
+            RoundAdvanced(round_number=1, trigger="all_agents_idle"),
+            RoundEnded(round_number=1, trigger="all_agents_idle"),
+            RoundAdvanced(round_number=2, trigger="all_agents_idle"),
+            _done_wake(agent_id="swapped_out", round_number=2),
+            RoundEnded(round_number=2, trigger="all_agents_idle"),
+            _simulation_ended(round_number=2),
+        ]
+    )
+
+    boundary = resolve_fork_boundary(events=events, after_round=2)
+
+    final_round_end = events[-2]
+    assert isinstance(final_round_end, RoundEnded)
+    assert boundary.target_event_id == final_round_end.event_id
 
 
 def test_a_killed_source_cannot_be_forked_after_its_final_round() -> None:

@@ -34,9 +34,8 @@ rebuilt, how the boundary round is ordered), see Architecture:
 
 ## Replace an agent at a round boundary
 
-Keeps rounds 1..N as the source played them and restarts one agent on a fresh
-history for round N+1 onward, while everyone else continues from where they
-were. The question it answers: could a newcomer pick up the protocol the others
+Keeps rounds 1..N as the source played them and puts a new agent in one seat
+for round N+1 onward, while everyone else continues from where they were. The question it answers: could a newcomer pick up the protocol the others
 built?
 
 ![Replacing an agent at a round boundary](../images/replace_agent.webp)
@@ -68,7 +67,11 @@ glossogen replace-agent veyru \
 
 The replaced agent's own event log is preserved on disk. What it *sees* is
 reconstructed without `text` and `thinking` parts, and without tool calls on
-channels the scenario blocks (veyru's postmortem, for instance).
+channels the scenario blocks (veyru's postmortem, for instance). Every other
+tool call its predecessor made stays, result included. In a scenario without
+channels, such as signal_game, that is the predecessor's whole record of moves
+and boards; `--history-from-round` windows it (see
+[Channel history visibility](#channel-history-visibility)).
 
 Passing `postmortem_disabled_at_start: true` here drops the postmortem channel
 for the rest of the resumed run: no postmortem injections, no postmortem phase,
@@ -146,7 +149,9 @@ end: `--after-round <final round>` with an explicit `--rounds-after` plays
 rounds the source never did. No default exists there, because the default
 replays the source's remaining rounds and a final-round fork has none. The
 resumed clock records the advance into the new round as
-`RoundAdvanced(trigger="fork_after_round")`.
+`RoundAdvanced(trigger="fork_after_round")`. The clone ends before the source
+told its agents the game was over, so every rebuilt agent remembers the final
+round and its verdict but not the ending, and keeps playing.
 
 **Inherited `scheduled_events`.** The source's schedule carries over unless
 `--knobs` overrides it. Entries at `at_round ≤ after_round` never re-fire: the
@@ -208,9 +213,12 @@ history. Every other channel the agent belongs to has its join index bumped, so
 source's `replace_agent_default_channel_visibility` knob decides, defaulting to
 visible for any channel it does not list.
 
-On `replace-agent`, `--history-from-round R` then windows the visible set to round
-`R` onward. For the previous P rounds before the boundary, pass
-`after_round - P + 1`. `cross-run-replace-agent` has no such flag, because the
+On `replace-agent`, `--history-from-round R` then windows the replaced agent's
+history to round `R` onward: the visible channels, and every other tool call
+its predecessor made (`read_notifications`, the scenario's own tools). For the
+previous P rounds before the boundary, pass `after_round - P + 1`. Passing
+`after_round + 1` keeps no prior history at all, which in a scenario without
+channels is the only way to give the seat nothing of its predecessor's. `cross-run-replace-agent` has no such flag, because the
 imported agent brings its own history rather than inheriting a predecessor's, and
 `fork-at-round` replaces no agent, so neither flag applies.
 

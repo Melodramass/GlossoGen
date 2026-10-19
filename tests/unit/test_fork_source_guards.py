@@ -81,6 +81,7 @@ def _write_replace_manifest(run_dir: Path, replaced_agent_id: str | None) -> Non
         channels_with_visible_history=[],
         blocked_tool_call_channels=[],
         channel_history_floors={},
+        history_floor_round=None,
     )
 
 

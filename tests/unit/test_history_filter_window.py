@@ -118,6 +118,7 @@ def _build(filter_below_round: int | None) -> tuple[set[str], set[str]]:
         cutoff_round=None,
         tool_calls_only=True,
         channel_visibility=visibility,
+        history_floor_round=None,
         filter_below_round=filter_below_round,
         split_parallel_tool_calls=False,
     )

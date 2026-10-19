@@ -158,6 +158,7 @@ class ProtocolProbeMetric(Metric):
                         cutoff_round=probe_round,
                         tool_calls_only=False,
                         channel_visibility={},
+                        history_floor_round=None,
                         filter_below_round=None,
                         split_parallel_tool_calls=agent_config.provider == Provider.SELF_HOSTED,
                     )
