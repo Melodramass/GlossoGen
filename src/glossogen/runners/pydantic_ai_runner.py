@@ -64,6 +64,7 @@ from glossogen.runners.communication_protocol import (
     build_full_system_prompt,
     runner_prompts_for,
 )
+from glossogen.runners.context_budget_processor import ContextBudgetTrimmer
 from glossogen.runners.history_cleanup_processor import clean_history
 from glossogen.runners.pydantic_ai_model_factory import (
     agent_model_settings,
@@ -504,6 +505,13 @@ class PydanticAIRunner(AgentRunner):
                             token_threshold=agent_config.compaction.token_threshold,
                         )
                     )
+                elif provider == "self-hosted":
+                    trimmer = ContextBudgetTrimmer(
+                        agent_id=agent_id,
+                        token_threshold=agent_config.compaction.token_threshold,
+                        thinking_in_requests=True,
+                    )
+                    capabilities.append(ProcessHistory(trimmer.trim))
 
             model_settings = agent_model_settings(
                 provider=provider,

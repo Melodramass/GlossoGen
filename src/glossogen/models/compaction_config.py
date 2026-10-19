@@ -12,7 +12,10 @@ from glossogen.model_catalog import Provider
 
 # The providers the agent runner attaches a compaction capability for. A run
 # enabling compaction under any other provider is refused before it starts.
-COMPACTION_PROVIDERS: frozenset[Provider] = frozenset({Provider.ANTHROPIC, Provider.OPENAI})
+# Self-hosted agents get local history trimming instead of provider compaction.
+COMPACTION_PROVIDERS: frozenset[Provider] = frozenset(
+    {Provider.ANTHROPIC, Provider.OPENAI, Provider.SELF_HOSTED}
+)
 
 
 class CompactionConfig(BaseModel):

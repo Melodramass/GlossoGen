@@ -14,6 +14,7 @@ from glossogen.models.agent_config import AgentConfig, AgentRole
 from glossogen.models.channel import DIRECT_CHANNEL_PREFIX, Channel, ChannelTemplateEntry
 from glossogen.models.mcp_responses import SendStatus
 from glossogen.models.message import SimulationMessage
+from glossogen.models.public_message_block import NO_PUBLIC_MESSAGES, PUBLIC_MESSAGES_HEADER
 from glossogen.models.runner_prompts import RunnerPrompts
 from glossogen.runtime.activity_notification import (
     ActivityNotification,
@@ -73,8 +74,6 @@ from glossogen.scenarios.textcraft_shared_workspace.world import (
 )
 from glossogen.template_renderer import TemplateRenderer
 
-PUBLIC_MESSAGES_HEADER = "NEW PUBLIC MESSAGES"
-NO_PUBLIC_MESSAGES = "none"
 HIDDEN_CHANNEL_TOOLS = frozenset({"read_channel", "list_channels", "get_channel_members"})
 """Messages reach agents inside tool results, so the channel browsing tools are withheld."""
 
