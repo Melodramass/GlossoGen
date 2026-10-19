@@ -157,7 +157,8 @@ def list_tool_definitions(runtime: SimulationRuntime) -> list[RecordedToolDefini
         )
     definitions.append(
         read_notifications_tool_definition(
-            description=runtime.scenario.read_notifications_description()
+            description=runtime.scenario.read_notifications_description(),
+            offers_depot_wait=runtime.scenario.offers_depot_wait(),
         )
     )
     return definitions

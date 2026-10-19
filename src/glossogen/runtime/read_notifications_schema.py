@@ -4,9 +4,9 @@ The agent runner builds the tool; the supervisor records its definition on
 ``AgentRegistered`` with the other tools'. Both read it from here.
 """
 
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from glossogen.models.tool_definition import RecordedToolDefinition
 from glossogen.runtime.wait_for import WaitFor
@@ -45,8 +45,16 @@ class ReadNotificationsArguments(BaseModel):
         title="read_notificationsArguments",
         json_schema_extra=_without_description,
     )
-    wait_for: Literal["any", "message", "next_round"] = "any"
+    wait_for: Literal["any", "message", "next_round", "depot"] = "any"
     timeout_s: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    items: list[str] | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def items_only_with_depot(self) -> Self:
+        """``items`` names what a depot wait watches, so it belongs to that wait alone."""
+        if self.items is not None and self.wait_for != "depot":
+            raise ValueError("items applies only to wait_for='depot'")
+        return self
 
     @property
     def wait_kind(self) -> WaitFor:
@@ -54,10 +62,25 @@ class ReadNotificationsArguments(BaseModel):
         return WaitFor(self.wait_for)
 
 
-def read_notifications_tool_definition(description: str) -> RecordedToolDefinition:
+def read_notifications_json_schema(offers_depot_wait: bool) -> dict[str, Any]:
+    """The input schema a model reads, with ``depot`` and ``items`` only where they are offered."""
+    schema = ReadNotificationsArguments.model_json_schema()
+    if offers_depot_wait:
+        return schema
+    properties = schema["properties"]
+    del properties["items"]
+    properties["wait_for"]["enum"] = [
+        kind for kind in properties["wait_for"]["enum"] if kind != WaitFor.DEPOT.value
+    ]
+    return schema
+
+
+def read_notifications_tool_definition(
+    description: str, offers_depot_wait: bool
+) -> RecordedToolDefinition:
     """The tool's name, ``description`` and input schema, as recorded on ``AgentRegistered``."""
     return RecordedToolDefinition(
         name=READ_NOTIFICATIONS_TOOL_NAME,
         description=description,
-        input_schema=ReadNotificationsArguments.model_json_schema(),
+        input_schema=read_notifications_json_schema(offers_depot_wait=offers_depot_wait),
     )

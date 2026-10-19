@@ -16,6 +16,9 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+RawOwnership = Literal["shared", "private"]
+"""Whether the columns draw on one set of raw items or each on its own."""
+
 
 class Recipe(BaseModel):
     """An atomic, positive integer multiset rewrite."""
@@ -117,6 +120,7 @@ def generate_task(
     cross_edge_density: float,
     raw_material_count: int | None,
     max_raw_inputs: int,
+    raw_ownership: RawOwnership,
 ) -> WorkspaceTask:
     """Generate a ``width`` x ``span`` recipe grid with exact work and span.
 
@@ -124,9 +128,11 @@ def generate_task(
     previous output. Cross edges only join adjacent layers, so every path visits
     one recipe per layer. Work is ``width * span``, span is ``span`` and every
     layer is exactly ``width`` recipes wide, whatever the density. Density zero
-    gives ``width`` independent chains. Every column's first recipe draws from
-    one shared set of ``raw_material_count`` raw items (chosen at random in 1..3
-    when None).
+    gives ``width`` independent chains. With ``raw_ownership="shared"`` every
+    column's first recipe draws from one shared set of ``raw_material_count`` raw
+    items (chosen at random in 1..3 when None). With ``"private"`` each column
+    gets its own ``raw_material_count`` raw items that no other column uses, so
+    columns compete for nothing at density zero.
     """
     if width < 1 or span < 1 or quantity_scale < 1:
         raise ValueError("invalid task dimensions")
@@ -145,8 +151,11 @@ def generate_task(
 
     columns = [f"crafter_{i + 1}" for i in range(width)]
     rng.shuffle(columns)
-    symbols = [f"r{x:06d}" for x in rng.sample(range(1_000_000), raw_count + width * span)]
-    raw_items = [symbols.pop() for _ in range(raw_count)]
+    raw_symbol_count = raw_count
+    if raw_ownership == "private":
+        raw_symbol_count = raw_count * width
+    symbols = [f"r{x:06d}" for x in rng.sample(range(1_000_000), raw_symbol_count + width * span)]
+    raw_items = [symbols.pop() for _ in range(raw_symbol_count)]
     outputs = {column: [symbols.pop() for _ in range(span)] for column in columns}
 
     # parents[(column, layer)] lists the producing columns in the previous layer.
@@ -171,14 +180,19 @@ def generate_task(
             demand[outputs[producer][layer - 1]] += 1
 
     raw_needs: dict[str, dict[str, int]] = {column: {} for column in columns}
-    for index, item in enumerate(raw_items):
-        raw_needs[columns[index % width]][item] = rng.randint(1, quantity_scale)
-    for column in columns:
-        desired = rng.randint(1, min(max_raw_inputs, raw_count))
-        candidates = [item for item in raw_items if item not in raw_needs[column]]
-        rng.shuffle(candidates)
-        for item in candidates[: max(0, desired - len(raw_needs[column]))]:
-            raw_needs[column][item] = rng.randint(1, quantity_scale)
+    if raw_ownership == "private":
+        for index, column in enumerate(columns):
+            for item in raw_items[index * raw_count : (index + 1) * raw_count]:
+                raw_needs[column][item] = rng.randint(1, quantity_scale)
+    else:
+        for index, item in enumerate(raw_items):
+            raw_needs[columns[index % width]][item] = rng.randint(1, quantity_scale)
+        for column in columns:
+            desired = rng.randint(1, min(max_raw_inputs, raw_count))
+            candidates = [item for item in raw_items if item not in raw_needs[column]]
+            rng.shuffle(candidates)
+            for item in candidates[: max(0, desired - len(raw_needs[column]))]:
+                raw_needs[column][item] = rng.randint(1, quantity_scale)
     initial_depot: Counter[str] = Counter()
     for needs in raw_needs.values():
         initial_depot.update(needs)

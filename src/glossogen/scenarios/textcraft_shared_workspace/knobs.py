@@ -1,6 +1,6 @@
 """Experimental factors for finite shared-workspace crafting."""
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -19,8 +19,10 @@ class SharedWorkspaceKnobs(BaseKnobs):
     ``crafter_count`` may be 1, a pure chain. ``quantity_scale`` bounds each raw
     input quantity, ``dag_raw_material_count`` and ``dag_max_raw_inputs`` the raw
     items, and ``resource_slack_fraction`` adds that fraction of each raw item's
-    exact need, rounded up. ``task_manifest`` replays certified tasks from a file
-    instead of generating them.
+    exact need, rounded up. ``raw_ownership`` is ``shared`` (every column draws
+    on one set of raw items) or ``private`` (each column has its own).
+    ``task_manifest`` replays certified tasks from a file instead of generating
+    them.
 
     ``pool_agent_count`` agents take part (``crafter_count`` when unset; 1 is the
     single-agent baseline). Every agent is briefed with every target and the
@@ -45,6 +47,15 @@ class SharedWorkspaceKnobs(BaseKnobs):
     virtual seconds: its inputs leave the depot when it starts, its output lands
     when it ends, and the crafter is busy in between while teammates act. Uncraft
     stays instantaneous.
+
+    ``recipe_reveal`` is ``full`` (the briefing lists every recipe) or
+    ``frontier``: a recipe becomes visible to every agent once each of its inputs
+    has been in the depot, so the briefing lists the first layer and later
+    recipes are announced in tool results as they unlock. ``depot_view`` is
+    ``full`` (observations list every item, zeros included) or ``nonzero``.
+    Every agent may call ``read_notifications(wait_for="depot", items=[...])``,
+    which resumes when one of those items increases, when a recipe unlocks, or
+    at its timeout.
     """
 
     crafter_count: int = Field(ge=1, le=12)
@@ -68,6 +79,9 @@ class SharedWorkspaceKnobs(BaseKnobs):
     virtual_base_latency_s: float = Field(ge=0, le=600)
     virtual_output_tokens_per_second: float = Field(gt=0)
     craft_duration_s: float = Field(ge=0, le=3600)
+    raw_ownership: Literal["shared", "private"]
+    recipe_reveal: Literal["full", "frontier"]
+    depot_view: Literal["full", "nonzero"]
 
     @model_validator(mode="after")
     def validate_experiment(self) -> Self:
@@ -84,6 +98,10 @@ class SharedWorkspaceKnobs(BaseKnobs):
             raise ValueError("craft_duration_s applies only with virtual_clock=true")
         if self.recipe_holders is not None and self.recipe_holders > self.agent_count:
             raise ValueError("recipe_holders cannot exceed the number of agents")
+        if self.recipe_reveal == "frontier" and self.recipe_holders is not None:
+            raise ValueError(
+                "recipe_reveal=frontier announces recipes to everyone; unset recipe_holders"
+            )
         if self.agent_count == 1 and self.comms_enabled:
             raise ValueError("a single agent has no one to broadcast to; comms_enabled=false")
         return self

@@ -27,8 +27,10 @@ from glossogen.runtime.notification_payload import (
 from glossogen.runtime.read_notifications_schema import (
     READ_NOTIFICATIONS_TOOL_NAME,
     ReadNotificationsArguments,
+    read_notifications_json_schema,
 )
 from glossogen.runtime.simulation_state import SimulationRuntime
+from glossogen.runtime.wait_for import WaitFor
 from glossogen.runtime.wait_registry import WakeReason, wait_deadline
 
 logger = logging.getLogger(__name__)
@@ -70,6 +72,8 @@ def build_read_notifications_tool(
         except ValidationError as error:
             logger.exception("Agent %s passed invalid read_notifications arguments", agent_id)
             return f"Invalid arguments for read_notifications: {error}"
+        if parsed.wait_kind is WaitFor.DEPOT and not runtime.scenario.offers_depot_wait():
+            return "Invalid arguments for read_notifications: wait_for='depot' is not offered."
         session = runtime.resolve_session(agent_id=agent_id)
         if _called_with_siblings(messages=ctx.messages):
             logger.info("Agent %s read_notifications rejected: parallel call", agent_id)
@@ -86,7 +90,9 @@ def build_read_notifications_tool(
         function=read_notifications,
         name=READ_NOTIFICATIONS_TOOL_NAME,
         description=runtime.scenario.read_notifications_description(),
-        json_schema=ReadNotificationsArguments.model_json_schema(),
+        json_schema=read_notifications_json_schema(
+            offers_depot_wait=runtime.scenario.offers_depot_wait()
+        ),
         takes_ctx=True,
     )
 
@@ -104,7 +110,12 @@ async def _park_and_render(
         timeout_s=arguments.timeout_s,
         default_any_timeout_s=runtime.scenario.default_any_wait_timeout_s(),
     )
-    wait = registry.register(agent_id=agent_id, wait_for=arguments.wait_kind, deadline_s=deadline_s)
+    items: tuple[str, ...] = ()
+    if arguments.items is not None:
+        items = tuple(arguments.items)
+    wait = registry.register(
+        agent_id=agent_id, wait_for=arguments.wait_kind, deadline_s=deadline_s, items=items
+    )
     try:
         await runtime.event_logger.log(
             event=WaitRegistered(

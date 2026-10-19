@@ -27,6 +27,7 @@ def layered(seed: int, width: int, span: int, density: float, slack: float) -> W
         cross_edge_density=density,
         raw_material_count=None,
         max_raw_inputs=2,
+        raw_ownership="shared",
     )
 
 

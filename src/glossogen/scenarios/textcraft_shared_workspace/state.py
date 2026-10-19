@@ -2,6 +2,7 @@
 
 from collections import Counter, deque
 from dataclasses import dataclass, field
+from typing import Literal
 
 from glossogen.scenarios.textcraft_shared_workspace.tasks import WorkspaceTask
 
@@ -42,14 +43,32 @@ def restore_lots(lots: deque[tuple[str, int]], restored: list[tuple[str, int]]) 
         lots.appendleft((producer, quantity))
 
 
+def unlocked_commands(task: WorkspaceTask, seen_items: set[str]) -> list[str]:
+    """Sorted commands of the recipes whose every input is in ``seen_items``."""
+    return sorted(recipe.command for recipe in task.recipes if set(recipe.inputs) <= seen_items)
+
+
+def initially_unlocked(task: WorkspaceTask) -> list[str]:
+    """The recipes a frontier briefing lists: those the initial depot can feed."""
+    return unlocked_commands(
+        task=task, seen_items={item for item, count in task.initial_depot.items() if count > 0}
+    )
+
+
 class DepotState:
-    """Every item is public state; there are no inventories or resource fetching."""
+    """Every item is public state; there are no inventories or resource fetching.
+
+    Under ``recipe_reveal="frontier"`` a recipe is usable and announced once each
+    of its inputs has been in the depot; an unlock is never withdrawn.
+    """
 
     def __init__(
         self,
         task: WorkspaceTask,
         seats: list[str],
         uncraft_enabled: bool,
+        recipe_reveal: Literal["full", "frontier"],
+        depot_view: Literal["full", "nonzero"],
     ) -> None:
         self.task = task
         self.seats = seats
@@ -58,6 +77,14 @@ class DepotState:
         self.changes: list[dict[str, int]] = []
         self.cursors = dict.fromkeys(seats, 0)
         self.recipes = {recipe.command: recipe for recipe in task.recipes}
+        self.recipe_reveal = recipe_reveal
+        self.depot_view = depot_view
+        self.seen_items = {item for item, count in self.depot.items() if count > 0}
+        # Unlocked commands in unlock order; the briefing lists the initial ones.
+        self.unlocked: list[str] = initially_unlocked(task=task)
+        if recipe_reveal == "full":
+            self.unlocked = sorted(self.recipes)
+        self.unlock_cursors = dict.fromkeys(seats, len(self.unlocked))
         self.provenance: dict[str, deque[tuple[str, int]]] = {
             item: deque([("environment", count)]) for item, count in self.depot.items()
         }
@@ -67,6 +94,34 @@ class DepotState:
         self.failed_crafts = 0
         # Started crafts whose output has not landed, in start order.
         self.in_progress: list[PendingCraft] = []
+
+    def _record_change(self, delta: dict[str, int]) -> None:
+        """Version one depot change and unlock what the items it added can feed."""
+        self.version += 1
+        self.changes.append(delta)
+        added = {item for item, change in delta.items() if change > 0}
+        if not added - self.seen_items:
+            return
+        self.seen_items |= added
+        known = set(self.unlocked)
+        self.unlocked.extend(
+            command
+            for command in unlocked_commands(task=self.task, seen_items=self.seen_items)
+            if command not in known
+        )
+
+    def increased_since_seen(self, agent_id: str, items: tuple[str, ...]) -> bool:
+        """True when one of ``items`` went up after ``agent_id`` last observed the depot."""
+        watched = set(items)
+        return any(
+            change > 0 and item in watched
+            for delta in self.changes[self.cursors[agent_id] :]
+            for item, change in delta.items()
+        )
+
+    def unlocked_since_seen(self, agent_id: str) -> bool:
+        """True when a recipe unlocked after ``agent_id`` last observed."""
+        return len(self.unlocked) > self.unlock_cursors[agent_id]
 
     @property
     def solved(self) -> bool:
@@ -93,7 +148,7 @@ class DepotState:
         if self.uncraft_enabled and command.startswith(UNCRAFT_PREFIX):
             return self.uncraft(command=command)
         recipe = self.recipes.get(command)
-        if recipe is None:
+        if recipe is None or command not in self.unlocked:
             return Transition(
                 command=command,
                 accepted=False,
@@ -129,8 +184,7 @@ class DepotState:
                 consumed=consumed,
             )
             self.in_progress.append(pending)
-            self.version += 1
-            self.changes.append(delta)
+            self._record_change(delta=delta)
             return Transition(
                 command=command,
                 accepted=True,
@@ -142,8 +196,7 @@ class DepotState:
         self._land(agent_id=agent_id, output=recipe.output, count=recipe.count)
         self.live_crafts.setdefault(command, []).append(consumed)
         delta[recipe.output] = delta.get(recipe.output, 0) + recipe.count
-        self.version += 1
-        self.changes.append(delta)
+        self._record_change(delta=delta)
         return Transition(
             command=command,
             accepted=True,
@@ -163,8 +216,7 @@ class DepotState:
         self._land(agent_id=pending.agent_id, output=pending.output, count=pending.count)
         self.live_crafts.setdefault(pending.command, []).append(pending.consumed)
         delta = {pending.output: pending.count}
-        self.version += 1
-        self.changes.append(delta)
+        self._record_change(delta=delta)
         return Transition(
             command=pending.command,
             accepted=True,
@@ -222,8 +274,7 @@ class DepotState:
         self.depot.update(recipe.inputs)
         delta = dict(recipe.inputs)
         delta[recipe.output] = delta.get(recipe.output, 0) - recipe.count
-        self.version += 1
-        self.changes.append(delta)
+        self._record_change(delta=delta)
         returned = ", ".join(f"{n} {item}" for item, n in sorted(recipe.inputs.items()))
         return Transition(
             command=command,
@@ -238,8 +289,13 @@ class DepotState:
         since = self.cursors[agent_id]
         changes = self.changes[since:]
         self.cursors[agent_id] = self.version
-        snapshot = ", ".join(f"{item}={count}" for item, count in sorted(self.depot.items()))
-        lines = [f"Depot now (v{self.version}): {snapshot}", "Changes since your last observation:"]
+        shown = sorted(self.depot.items())
+        heading = f"Depot now (v{self.version})"
+        if self.depot_view == "nonzero":
+            shown = [(item, count) for item, count in shown if count > 0]
+            heading = f"Depot now (v{self.version}; unlisted items are 0)"
+        snapshot = ", ".join(f"{item}={count}" for item, count in shown)
+        lines = [f"{heading}: {snapshot}", "Changes since your last observation:"]
         for version, delta in enumerate(changes, since + 1):
             lines.append(
                 f"v{version}: " + ", ".join(f"{i} {n:+d}" for i, n in sorted(delta.items()))
@@ -249,4 +305,9 @@ class DepotState:
         if self.in_progress:
             making = ", ".join(f"{craft.count} {craft.output}" for craft in self.in_progress)
             lines.append(f"Being crafted now (inputs taken, output not in the depot yet): {making}")
+        newly_unlocked = self.unlocked[self.unlock_cursors[agent_id] :]
+        self.unlock_cursors[agent_id] = len(self.unlocked)
+        if newly_unlocked:
+            lines.append("Recipes unlocked since your last observation:")
+            lines.extend(newly_unlocked)
         return "\n".join(lines)

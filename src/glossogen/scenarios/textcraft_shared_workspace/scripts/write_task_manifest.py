@@ -35,6 +35,7 @@ def main() -> None:
         help="distinct raw items, 1 to 3; drawn per task when omitted",
     )
     parser.add_argument("--max-raw-inputs", type=int, required=True)
+    parser.add_argument("--raw-ownership", choices=["shared", "private"], required=True)
     args = parser.parse_args()
     tasks = [
         generate_task(
@@ -47,6 +48,7 @@ def main() -> None:
             cross_edge_density=args.cross_edge_density,
             raw_material_count=args.raw_material_count,
             max_raw_inputs=args.max_raw_inputs,
+            raw_ownership=args.raw_ownership,
         ).model_dump()
         for index in range(args.count)
     ]

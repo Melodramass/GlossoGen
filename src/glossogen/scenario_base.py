@@ -644,6 +644,16 @@ class ScenarioBase(ABC):
         handle = asyncio.get_running_loop().call_later(timeout_s, fire)
         return handle.cancel
 
+    def offers_depot_wait(self) -> bool:
+        """Whether agents may call ``read_notifications(wait_for="depot", items=...)``.
+
+        The default is False, and the tool's schema then lists neither ``depot``
+        nor ``items``. A scenario returning True resumes such a wait itself, with
+        ``runtime.release_wait``, when the watched part of its world changes;
+        ``runtime.parked_waits()`` carries the watched items.
+        """
+        return False
+
     def read_notifications_description(self) -> str:
         """The ``read_notifications`` description agents read.
 

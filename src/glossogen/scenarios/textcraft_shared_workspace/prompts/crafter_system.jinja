@@ -18,9 +18,10 @@ OPERATIONS
 {% if craft_duration_s %}  Each accepted craft takes {{ craft_duration_s | round | int }} seconds. Its inputs leave the depot when it starts and its output lands when it ends; until then you can do nothing else, while teammates keep working.
 {% endif %}{% if uncraft_enabled %}- act("uncraft craft ..."): undo one earlier craft of that recipe while its full output is still in the depot; the output is removed and every input, raw materials included, comes back. Costs one action.
 {% endif %}{% if comms_enabled %}- observe(): see the current depot and new messages. Free.
-- read_notifications(wait_for="message"): pause until a teammate's message arrives. Free.
-- send_message(text, to): message your teammates. Costs no action.
 {% else %}- observe(): see the current depot. Free.
+{% endif %}- read_notifications(wait_for="depot", items=[...], timeout_s=...): pause until one of those items increases in the depot{% if recipe_reveal == "frontier" %}, a recipe unlocks,{% endif %} or the timeout passes (seconds). Free.
+{% if comms_enabled %}- read_notifications(wait_for="message"): pause until a teammate's message arrives. Free.
+- send_message(text, to): message your teammates. Costs no action.
 {% endif %}- read_notifications(wait_for="next_round"): stop for the rest of the round. Free.
 Any crafter may run any recipe{% if recipe_holders %} whose exact command it has{% endif %}. Calls that compete for the same inputs run one at a time, so the later one can fail.
 
@@ -40,8 +41,14 @@ of your own target is not itself the team objective. Use the feedback available
 to you to revise your plan; repeating a failed craft without a relevant change
 still spends an action.
 
-Every act, {% if comms_enabled %}send_message, {% endif %}observe{% if comms_enabled %} and wake{% endif %} result includes the current absolute depot
-quantities, including zeros for depleted items, and the ordered quantity deltas
+{% if recipe_reveal == "frontier" %}RECIPE UNLOCKING
+Your briefing lists only the recipes whose inputs are in the depot at the start.
+Every other recipe unlocks, for the whole team at once, the first time all of its
+inputs have been in the depot. Newly unlocked recipes appear in your next act,
+observe{% if comms_enabled %}, send_message{% endif %} or wake result. Only unlocked recipes can be run.
+
+{% endif %}Every act, {% if comms_enabled %}send_message, {% endif %}observe and wake result includes the current absolute depot
+quantities{% if depot_view == "nonzero" %} of every item you have more than zero of (an unlisted item is at zero){% else %}, including zeros for depleted items,{% endif %} and the ordered quantity deltas
 since your previous observation. A name absent from the current depot has
 quantity zero. A version identifies a successful resource transition. Deltas show
 no actor IDs, other agents' commands, private cards or thoughts.

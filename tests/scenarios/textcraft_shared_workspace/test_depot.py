@@ -24,11 +24,18 @@ def chain_task() -> WorkspaceTask:
         cross_edge_density=0.0,
         raw_material_count=1,
         max_raw_inputs=1,
+        raw_ownership="shared",
     )
 
 
 def depot(task: WorkspaceTask, uncraft_enabled: bool) -> DepotState:
-    return DepotState(task=task, seats=SEATS, uncraft_enabled=uncraft_enabled)
+    return DepotState(
+        task=task,
+        seats=SEATS,
+        uncraft_enabled=uncraft_enabled,
+        recipe_reveal="full",
+        depot_view="full",
+    )
 
 
 def test_missing_inputs_consume_nothing() -> None:
@@ -137,8 +144,15 @@ def test_undoing_and_redoing_every_craft_still_solves() -> None:
             cross_edge_density=0.5,
             raw_material_count=None,
             max_raw_inputs=2,
+            raw_ownership="shared",
         )
-        state = DepotState(task=task, seats=list(task.cards), uncraft_enabled=True)
+        state = DepotState(
+            task=task,
+            seats=list(task.cards),
+            uncraft_enabled=True,
+            recipe_reveal="full",
+            depot_view="full",
+        )
         for column, command in task.witness:
             assert state.step(agent_id=column, command=command).accepted
             assert state.step(agent_id=column, command=UNCRAFT_PREFIX + command).accepted

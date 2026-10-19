@@ -9,10 +9,14 @@ class WaitFor(str, Enum):
     ``ANY`` resumes on the next notification of any kind, or after a default
     timeout. ``MESSAGE`` resumes on a teammate's message or the next injection.
     ``NEXT_ROUND`` is the agent declaring it has finished: it resumes on the next
-    injection, which is the next round's briefing or a postmortem briefing. A
-    ``done`` notification resumes every kind, and so does an explicit timeout.
+    injection, which is the next round's briefing or a postmortem briefing.
+    ``DEPOT`` waits for a change in the scenario's world: the scenario resumes it
+    with a release when the change happens, and the next injection resumes it
+    too. Only scenarios that offer it accept it. A ``done`` notification resumes
+    every kind, and so does an explicit timeout.
     """
 
     ANY = "any"
     MESSAGE = "message"
     NEXT_ROUND = "next_round"
+    DEPOT = "depot"

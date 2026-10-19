@@ -94,7 +94,7 @@ async def test_an_any_wait_resumes_at_once_when_a_notification_is_already_queued
     fixture.sessions["a"].push_notification(
         notification=NewInfoNotification(text="briefing", kind="injection")
     )
-    wait = fixture.registry.register(agent_id="a", wait_for=WaitFor.ANY, deadline_s=None)
+    wait = fixture.registry.register(agent_id="a", wait_for=WaitFor.ANY, deadline_s=None, items=())
     signal = await wait.future
     assert signal.reasons == [WakeReason.NEW_NOTIFICATION]
     assert fixture.parked == []
@@ -102,7 +102,7 @@ async def test_an_any_wait_resumes_at_once_when_a_notification_is_already_queued
 
 async def test_an_any_wait_resumes_on_a_later_notification() -> None:
     fixture = Fixture()
-    wait = fixture.registry.register(agent_id="a", wait_for=WaitFor.ANY, deadline_s=None)
+    wait = fixture.registry.register(agent_id="a", wait_for=WaitFor.ANY, deadline_s=None, items=())
     assert fixture.registry.pending_wait(agent_id="a") is wait
     fixture.sessions["a"].push_notification(
         notification=NewInfoNotification(text="budget at 75%", kind="world")
@@ -116,7 +116,9 @@ async def test_an_any_wait_resumes_on_a_later_notification() -> None:
 
 async def test_a_message_wait_ignores_world_info_and_resumes_on_a_message() -> None:
     fixture = Fixture()
-    wait = fixture.registry.register(agent_id="a", wait_for=WaitFor.MESSAGE, deadline_s=None)
+    wait = fixture.registry.register(
+        agent_id="a", wait_for=WaitFor.MESSAGE, deadline_s=None, items=()
+    )
     fixture.sessions["a"].push_notification(
         notification=NewInfoNotification(text="budget at 75%", kind="world")
     )
@@ -128,7 +130,9 @@ async def test_a_message_wait_ignores_world_info_and_resumes_on_a_message() -> N
 
 async def test_a_message_wait_resumes_on_the_next_injection() -> None:
     fixture = Fixture()
-    wait = fixture.registry.register(agent_id="a", wait_for=WaitFor.MESSAGE, deadline_s=None)
+    wait = fixture.registry.register(
+        agent_id="a", wait_for=WaitFor.MESSAGE, deadline_s=None, items=()
+    )
     fixture.sessions["a"].push_notification(
         notification=NewInfoNotification(text="round 2", kind="injection")
     )
@@ -138,7 +142,9 @@ async def test_a_message_wait_resumes_on_the_next_injection() -> None:
 
 async def test_a_next_round_wait_ignores_messages_and_resumes_on_the_next_injection() -> None:
     fixture = Fixture()
-    wait = fixture.registry.register(agent_id="a", wait_for=WaitFor.NEXT_ROUND, deadline_s=None)
+    wait = fixture.registry.register(
+        agent_id="a", wait_for=WaitFor.NEXT_ROUND, deadline_s=None, items=()
+    )
     fixture.post_from_b(text="are you there")
     assert not wait.resumed
     fixture.sessions["a"].push_notification(
@@ -152,7 +158,7 @@ async def test_a_notice_for_messages_already_read_is_dropped_and_wakes_nothing()
     fixture = Fixture()
     fixture.post_from_b(text="hello")
     fixture.sessions["a"].record_channel_read(channel_id=CHANNEL, message_count=1)
-    wait = fixture.registry.register(agent_id="a", wait_for=WaitFor.ANY, deadline_s=None)
+    wait = fixture.registry.register(agent_id="a", wait_for=WaitFor.ANY, deadline_s=None, items=())
     assert not wait.resumed
     assert fixture.sessions["a"].pending_notifications() == []
 
@@ -160,7 +166,7 @@ async def test_a_notice_for_messages_already_read_is_dropped_and_wakes_nothing()
 @pytest.mark.parametrize("wait_for", list(WaitFor))
 async def test_done_resumes_every_kind_of_wait(wait_for: WaitFor) -> None:
     fixture = Fixture()
-    wait = fixture.registry.register(agent_id="a", wait_for=wait_for, deadline_s=None)
+    wait = fixture.registry.register(agent_id="a", wait_for=wait_for, deadline_s=None, items=())
     fixture.sessions["a"].push_notification(notification=DoneNotification(reason="run over"))
     signal = await wait.future
     assert WakeReason.DONE in signal.reasons
@@ -168,7 +174,9 @@ async def test_done_resumes_every_kind_of_wait(wait_for: WaitFor) -> None:
 
 async def test_a_deadline_resumes_through_the_scenario_timer_and_reports_the_wait() -> None:
     fixture = Fixture()
-    wait = fixture.registry.register(agent_id="a", wait_for=WaitFor.MESSAGE, deadline_s=30.0)
+    wait = fixture.registry.register(
+        agent_id="a", wait_for=WaitFor.MESSAGE, deadline_s=30.0, items=()
+    )
     assert [(agent, seconds) for agent, seconds, _fire in fixture.timer.scheduled] == [("a", 30.0)]
     fixture.now = 130.0
     fixture.timer.fire_all()
@@ -179,7 +187,9 @@ async def test_a_deadline_resumes_through_the_scenario_timer_and_reports_the_wai
 
 async def test_a_wait_resumed_by_a_notification_cancels_its_timer() -> None:
     fixture = Fixture()
-    wait = fixture.registry.register(agent_id="a", wait_for=WaitFor.MESSAGE, deadline_s=30.0)
+    wait = fixture.registry.register(
+        agent_id="a", wait_for=WaitFor.MESSAGE, deadline_s=30.0, items=()
+    )
     fixture.post_from_b(text="done")
     await wait.future
     assert fixture.timer.cancelled == 1
@@ -189,9 +199,9 @@ async def test_a_wait_resumed_by_a_notification_cancels_its_timer() -> None:
 
 async def test_an_agent_holds_one_pending_wait_at_a_time() -> None:
     fixture = Fixture()
-    fixture.registry.register(agent_id="a", wait_for=WaitFor.ANY, deadline_s=None)
+    fixture.registry.register(agent_id="a", wait_for=WaitFor.ANY, deadline_s=None, items=())
     with pytest.raises(ValueError, match="already has a pending wait"):
-        fixture.registry.register(agent_id="a", wait_for=WaitFor.ANY, deadline_s=None)
+        fixture.registry.register(agent_id="a", wait_for=WaitFor.ANY, deadline_s=None, items=())
 
 
 def test_any_takes_the_scenarios_default_and_the_others_have_none() -> None:
@@ -212,7 +222,9 @@ def test_any_takes_the_scenarios_default_and_the_others_have_none() -> None:
 
 async def test_cancelling_a_parked_wait_removes_its_timer_and_listener_and_unparks() -> None:
     fixture = Fixture()
-    wait = fixture.registry.register(agent_id="a", wait_for=WaitFor.MESSAGE, deadline_s=30.0)
+    wait = fixture.registry.register(
+        agent_id="a", wait_for=WaitFor.MESSAGE, deadline_s=30.0, items=()
+    )
     waiter = asyncio.ensure_future(wait.future)
     waiter.cancel()
     with pytest.raises(asyncio.CancelledError):
@@ -225,7 +237,7 @@ async def test_cancelling_a_parked_wait_removes_its_timer_and_listener_and_unpar
     fixture.post_from_b(text="too late")
     assert fixture.resumed == ["a"]
     assert fixture.registry.register(
-        agent_id="a", wait_for=WaitFor.MESSAGE, deadline_s=None
+        agent_id="a", wait_for=WaitFor.MESSAGE, deadline_s=None, items=()
     ).future.done()
 
 
@@ -244,7 +256,9 @@ def test_taking_lifecycle_leaves_message_notices_and_read_positions_alone() -> N
 
 async def test_a_release_resumes_the_wait_with_the_scenarios_reason() -> None:
     fixture = Fixture()
-    wait = fixture.registry.register(agent_id="a", wait_for=WaitFor.MESSAGE, deadline_s=None)
+    wait = fixture.registry.register(
+        agent_id="a", wait_for=WaitFor.MESSAGE, deadline_s=None, items=()
+    )
     fixture.now = 130.0
     assert fixture.registry.release(agent_id="a", detail="Nobody is going to write first.")
     signal = await wait.future
@@ -263,11 +277,11 @@ def test_releasing_an_agent_that_is_not_parked_does_nothing() -> None:
 
 async def test_parked_waits_lists_each_parked_agents_wait() -> None:
     fixture = Fixture()
-    fixture.registry.register(agent_id="a", wait_for=WaitFor.MESSAGE, deadline_s=None)
-    fixture.registry.register(agent_id="b", wait_for=WaitFor.ANY, deadline_s=120.0)
+    fixture.registry.register(agent_id="a", wait_for=WaitFor.MESSAGE, deadline_s=None, items=())
+    fixture.registry.register(agent_id="b", wait_for=WaitFor.ANY, deadline_s=120.0, items=())
     assert fixture.registry.parked_waits() == {
-        "a": ParkedWait(wait_for=WaitFor.MESSAGE, deadline_s=None),
-        "b": ParkedWait(wait_for=WaitFor.ANY, deadline_s=120.0),
+        "a": ParkedWait(wait_for=WaitFor.MESSAGE, deadline_s=None, items=()),
+        "b": ParkedWait(wait_for=WaitFor.ANY, deadline_s=120.0, items=()),
     }
     fixture.registry.release(agent_id="b", detail="go")
     assert list(fixture.registry.parked_waits()) == ["a"]
@@ -292,8 +306,8 @@ async def test_a_release_from_inside_on_park_resumes_the_wait_being_registered()
         on_resume=fixture.resumed.append,
     )
     fixture.registry = registry
-    first = registry.register(agent_id="a", wait_for=WaitFor.MESSAGE, deadline_s=None)
-    second = registry.register(agent_id="b", wait_for=WaitFor.MESSAGE, deadline_s=None)
+    first = registry.register(agent_id="a", wait_for=WaitFor.MESSAGE, deadline_s=None, items=())
+    second = registry.register(agent_id="b", wait_for=WaitFor.MESSAGE, deadline_s=None, items=())
     assert not first.resumed
     assert second.resumed
     assert (await second.future).reasons == [WakeReason.RELEASED]

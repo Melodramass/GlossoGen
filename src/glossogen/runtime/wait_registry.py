@@ -75,10 +75,12 @@ class WakeSignal(NamedTuple):
 
 
 class ParkedWait(NamedTuple):
-    """What a parked agent waits for, and its deadline in seconds, or None for none."""
+    """What a parked agent waits for, its deadline in seconds or None, and the items a
+    depot wait watches (empty for the other kinds)."""
 
     wait_for: WaitFor
     deadline_s: float | None
+    items: tuple[str, ...]
 
 
 @dataclass
@@ -89,6 +91,8 @@ class RegisteredWait:
     agent_id: str
     wait_for: WaitFor
     deadline_s: float | None
+    items: tuple[str, ...]
+    """What a depot wait watches; empty for the other kinds."""
     registered_at: float
     future: asyncio.Future[WakeSignal]
     cancel_timer: CancelTimer | None
@@ -158,7 +162,11 @@ class WaitRegistry:
         self._wait_ids = itertools.count(1)
 
     def register(
-        self, agent_id: str, wait_for: WaitFor, deadline_s: float | None
+        self,
+        agent_id: str,
+        wait_for: WaitFor,
+        deadline_s: float | None,
+        items: tuple[str, ...],
     ) -> RegisteredWait:
         """Park ``agent_id`` until a condition of ``wait_for`` holds or ``deadline_s`` passes.
 
@@ -174,6 +182,7 @@ class WaitRegistry:
             agent_id=agent_id,
             wait_for=wait_for,
             deadline_s=deadline_s,
+            items=items,
             registered_at=self._clock(),
             future=asyncio.get_running_loop().create_future(),
             cancel_timer=None,
@@ -214,7 +223,9 @@ class WaitRegistry:
     def parked_waits(self) -> dict[str, ParkedWait]:
         """Every parked agent's wait, by agent id."""
         return {
-            agent_id: ParkedWait(wait_for=wait.wait_for, deadline_s=wait.deadline_s)
+            agent_id: ParkedWait(
+                wait_for=wait.wait_for, deadline_s=wait.deadline_s, items=wait.items
+            )
             for agent_id, wait in self._waits_by_agent.items()
             if not wait.resumed
         }

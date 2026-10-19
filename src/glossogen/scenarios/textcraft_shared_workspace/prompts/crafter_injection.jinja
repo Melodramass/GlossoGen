@@ -8,7 +8,8 @@ You are the only crafter.{% endif %}
 TARGETS (retain at least 1 of each in the depot at completion)
 {{ targets | join(", ") }}
 
-{% if recipe_holders %}YOUR RECIPES ({{ recipes | length }} of {{ recipe_total }})
+{% if recipe_reveal == "frontier" %}UNLOCKED RECIPES ({{ recipes | length }} of {{ recipe_total }}; the rest unlock as their inputs are first made)
+{% elif recipe_holders %}YOUR RECIPES ({{ recipes | length }} of {{ recipe_total }})
 {% else %}ALL RECIPES
 {% endif %}{% for recipe in recipes %}{{ recipe }}
 {% endfor %}

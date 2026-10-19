@@ -126,6 +126,8 @@ class SharedWorkspaceWorld(RoundWorld):
             task=task,
             seats=self.seats,
             uncraft_enabled=self.knobs.uncraft_enabled,
+            recipe_reveal=self.knobs.recipe_reveal,
+            depot_view=self.knobs.depot_view,
         )
         self.actions = dict.fromkeys(self.seats, 0)
         self.action_allowance = self.team_action_allowance(task=task)

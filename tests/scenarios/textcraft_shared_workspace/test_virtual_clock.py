@@ -196,7 +196,7 @@ async def test_registry_deadlines_and_waited_time_are_virtual():
     first = respond(clock, "a", tokens=10)  # a acts at 2.0
     await settle()
     assert first.done() and not long_think.done()
-    wait = registry.register(agent_id="a", wait_for=WaitFor.MESSAGE, deadline_s=30.0)
+    wait = registry.register(agent_id="a", wait_for=WaitFor.MESSAGE, deadline_s=30.0, items=())
     signal = await wait.future
     assert signal.reasons == [WakeReason.TIMEOUT]
     assert signal.waited_seconds == 30.0

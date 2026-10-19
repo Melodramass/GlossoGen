@@ -23,6 +23,8 @@ from glossogen.runtime.activity_notification import (
 )
 from glossogen.runtime.notification_payload import Wake
 from glossogen.runtime.scenario_tool import ScenarioTool
+from glossogen.runtime.wait_for import WaitFor
+from glossogen.runtime.wait_registry import WakeReason
 from glossogen.scenario_base import PrimaryChannel, RoundResult, SendMessageExecutor
 from glossogen.scenario_protocol import SimulationScenario
 from glossogen.scenarios.channel_noise import apply_character_noise
@@ -45,6 +47,7 @@ from glossogen.scenarios.textcraft_shared_workspace.state import (
     DepotState,
     PendingCraft,
     Transition,
+    initially_unlocked,
 )
 from glossogen.scenarios.textcraft_shared_workspace.tasks import (
     WorkspaceTask,
@@ -149,6 +152,7 @@ class TextcraftSharedWorkspaceScenario(SimulationScenario):
                     cross_edge_density=self._knobs.dag_cross_edge_density,
                     raw_material_count=self._knobs.dag_raw_material_count,
                     max_raw_inputs=self._knobs.dag_max_raw_inputs,
+                    raw_ownership=self._knobs.raw_ownership,
                 )
                 for index in range(self._knobs.round_count)
             ]
@@ -191,6 +195,8 @@ class TextcraftSharedWorkspaceScenario(SimulationScenario):
                 "uncraft_enabled": self._knobs.uncraft_enabled,
                 "craft_duration_s": self._knobs.craft_duration_s,
                 "recipe_holders": self._knobs.recipe_holders,
+                "recipe_reveal": self._knobs.recipe_reveal,
+                "depot_view": self._knobs.depot_view,
                 "agent_id": role.agent_id,
                 "teammates": [seat for seat in self.world.seats if seat != role.agent_id],
             },
@@ -253,10 +259,45 @@ class TextcraftSharedWorkspaceScenario(SimulationScenario):
             return super().clock_now_s()
         return self._clock.time()
 
+    def offers_depot_wait(self) -> bool:
+        """Every arm may wait for depot items or recipe unlocks."""
+        return True
+
     def on_agent_parked(self, agent_id: str) -> None:
-        """A parked agent is not a lower bound on when anyone acts next."""
+        """A parked agent is not a lower bound on when anyone acts next.
+
+        A depot wait that something since the agent's last observation already
+        satisfies resumes at once, before the clock sees a park, so no virtual
+        time passes.
+        """
+        wait = self.runtime.parked_waits().get(agent_id)
+        if wait is not None and wait.wait_for is WaitFor.DEPOT:
+            detail = self._depot_wake_detail(agent_id=agent_id, items=wait.items)
+            if detail is not None:
+                self.runtime.release_wait(agent_id=agent_id, detail=detail)
+                return
         if self._clock is not None:
             self._clock.park(agent_id=agent_id)
+
+    def _depot_wake_detail(self, agent_id: str, items: tuple[str, ...]) -> str | None:
+        """Why a depot wait on ``items`` should resume now, or None while nothing applies."""
+        state = self.world.state
+        if state is None or self.world.closed:
+            return None
+        if state.increased_since_seen(agent_id=agent_id, items=items):
+            return "a watched item increased"
+        if state.unlocked_since_seen(agent_id=agent_id):
+            return "a recipe unlocked"
+        return None
+
+    def _release_depot_waiters(self) -> None:
+        """Resume every depot wait the latest depot change satisfies."""
+        for agent_id, wait in self.runtime.parked_waits().items():
+            if wait.wait_for is not WaitFor.DEPOT:
+                continue
+            detail = self._depot_wake_detail(agent_id=agent_id, items=wait.items)
+            if detail is not None:
+                self.runtime.release_wait(agent_id=agent_id, detail=detail)
 
     def on_agent_resumed(self, agent_id: str) -> None:
         """A resumed agent's next request starts at the instant that woke it."""
@@ -308,6 +349,8 @@ class TextcraftSharedWorkspaceScenario(SimulationScenario):
         holders = self._knobs.recipe_holders
         if holders is not None:
             recipes = self._recipe_hands(task=task, holders=holders)[agent_id]
+        if self._knobs.recipe_reveal == "frontier":
+            recipes = initially_unlocked(task=task)
         return self._renderer.render(
             template_name="crafter_injection.jinja",
             template_variables={
@@ -319,6 +362,7 @@ class TextcraftSharedWorkspaceScenario(SimulationScenario):
                 "recipes": recipes,
                 "recipe_holders": holders,
                 "recipe_total": recipe_total,
+                "recipe_reveal": self._knobs.recipe_reveal,
                 "initial_depot": initial_depot,
                 "actions": self.world.team_action_allowance(task=task),
             },
@@ -576,6 +620,15 @@ class TextcraftSharedWorkspaceScenario(SimulationScenario):
         result. The end of the run renders as ``done``, with the final workspace.
         """
         reasons = [reason.value for reason in wake.reasons]
+        if WakeReason.RELEASED in wake.reasons and wake.release_detail:
+            reasons = [
+                (
+                    f"{reason}: {wake.release_detail}"
+                    if reason == WakeReason.RELEASED.value
+                    else reason
+                )
+                for reason in reasons
+            ]
         async with self._lock:
             workspace: str | None = None
             delivery = PublicInboxDelivery(messages=[], rendered="")
@@ -625,7 +678,9 @@ class TextcraftSharedWorkspaceScenario(SimulationScenario):
             messages = ", every message that arrived"
         return (
             "Free. read_notifications() returns your task card at startup; otherwise it "
-            f"waits until something arrives. {message_wait}wait_for='next_round' declares "
+            f"waits until something arrives. {message_wait}wait_for='depot' with items=[...] "
+            "parks you until one of those items increases in the depot, a recipe unlocks, "
+            "the next briefing arrives, or timeout_s passes. wait_for='next_round' declares "
             "you finished with this round and parks you until the next briefing. The "
             f"result is a wake package: the reasons, the current workspace{messages}, and "
             "any briefing or end-of-run notice (type done ends the run). Must be the only "
@@ -645,6 +700,7 @@ class TextcraftSharedWorkspaceScenario(SimulationScenario):
         variables: dict[str, object] = {
             "role_name": seat_role_name(seat=agent_id),
             "can_send": self._knobs.comms_enabled,
+            "frontier": self._knobs.recipe_reveal == "frontier",
         }
         return RunnerPrompts(
             system_suffix=self._renderer.render(
@@ -675,6 +731,7 @@ class TextcraftSharedWorkspaceScenario(SimulationScenario):
                 return "Round changed; use your new briefing."
             record, observation = self.world.execute(agent=agent, command=command, timed=timed)
             self._note_virtual_terminal(round_number=requested_round)
+            self._release_depot_waiters()
             clock = self._clock
             if clock is not None:
                 virtual_time_s = clock.round_elapsed_s()
@@ -767,6 +824,7 @@ class TextcraftSharedWorkspaceScenario(SimulationScenario):
                     f"{pending.output} finished."
                 )
             self._note_virtual_terminal(round_number=round_number)
+            self._release_depot_waiters()
             await runtime.event_logger.log(
                 event=WorkspaceCraftCompleted(
                     round_number=round_number,

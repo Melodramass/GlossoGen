@@ -153,8 +153,12 @@ async def test_a_message_wakes_only_the_message_waits_that_can_see_it(
 ) -> None:
     wired = await wire(monkeypatch=monkeypatch)
     registry = wired.runtime.wait_registry
-    finished = registry.register(agent_id="crafter_3", wait_for=WaitFor.NEXT_ROUND, deadline_s=None)
-    waiting = registry.register(agent_id="crafter_2", wait_for=WaitFor.MESSAGE, deadline_s=None)
+    finished = registry.register(
+        agent_id="crafter_3", wait_for=WaitFor.NEXT_ROUND, deadline_s=None, items=()
+    )
+    waiting = registry.register(
+        agent_id="crafter_2", wait_for=WaitFor.MESSAGE, deadline_s=None, items=()
+    )
     await wired.call("crafter_1", "send_message", text="Only for you", to=["crafter_3"])
     assert not finished.resumed and not waiting.resumed
     await wired.call("crafter_1", "send_message", text="Everyone reconsider")
@@ -169,7 +173,7 @@ async def test_a_wait_registered_after_a_message_arrived_resumes_at_once(
     wired = await wire(monkeypatch=monkeypatch)
     await wired.call("crafter_1", "send_message", text="Change the plan", to=["crafter_2"])
     wait = wired.runtime.wait_registry.register(
-        agent_id="crafter_2", wait_for=WaitFor.MESSAGE, deadline_s=None
+        agent_id="crafter_2", wait_for=WaitFor.MESSAGE, deadline_s=None, items=()
     )
     assert wait.resumed
 
