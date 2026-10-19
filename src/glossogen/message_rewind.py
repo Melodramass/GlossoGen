@@ -83,6 +83,10 @@ class AgentHistoryFilter(NamedTuple):
     ``ImportedHistory``); when ``None`` the agent's history is built
     from the caller's primary event list.
 
+    ``history_floor_round`` drops the agent's non-channel tool calls from
+    rounds below it, which is how a seat belonging to no channel is windowed
+    (see ``build_message_history``). ``None`` applies no such floor.
+
     ``filter_below_round`` bounds ``tool_calls_only`` and
     ``channel_visibility`` to content from rounds strictly below it; later
     rounds pass through unfiltered. Crash recovery of a replace-agent fork
@@ -93,6 +97,7 @@ class AgentHistoryFilter(NamedTuple):
 
     tool_calls_only: bool
     channel_visibility: dict[str, ChannelVisibility]
+    history_floor_round: int | None
     imported: ImportedHistory | None
     filter_below_round: int | None
     split_parallel_tool_calls: bool
@@ -101,6 +106,7 @@ class AgentHistoryFilter(NamedTuple):
 _PASS_THROUGH_FILTER = AgentHistoryFilter(
     tool_calls_only=False,
     channel_visibility={},
+    history_floor_round=None,
     imported=None,
     filter_below_round=None,
     split_parallel_tool_calls=False,
@@ -378,6 +384,7 @@ def _build_rewind_state_at_timestamp(
             cutoff_round=history_cutoff_round,
             tool_calls_only=history_filter.tool_calls_only,
             channel_visibility=history_filter.channel_visibility,
+            history_floor_round=history_filter.history_floor_round,
             filter_below_round=history_filter.filter_below_round,
             split_parallel_tool_calls=history_filter.split_parallel_tool_calls,
         )

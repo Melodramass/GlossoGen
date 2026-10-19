@@ -25,10 +25,9 @@ import json
 from pathlib import Path
 
 from glossogen.evaluation.log_reader import load_events
-from glossogen.message_rewind import AgentHistoryFilter, build_rewind_state_from_last_message
-from glossogen.model_catalog import Provider
+from glossogen.message_rewind import build_rewind_state_from_last_message
 from glossogen.models.event import AgentRegistered, InjectionDelivered
-from glossogen.resume_state_loader import read_replace_manifest_info
+from glossogen.resume_state_loader import read_replace_manifest_info, replaced_seat_history_filter
 from glossogen.run_file_paths import event_log_path
 
 
@@ -102,15 +101,7 @@ async def main() -> None:
     print(new_reg.system_prompt)
 
     # 2. Reconstructed pydantic-ai history — replay build_rewind_state with the filter
-    agent_filters = {
-        replaced: AgentHistoryFilter(
-            tool_calls_only=True,
-            channel_visibility=replace_info.channel_visibility,
-            imported=None,
-            filter_below_round=replace_info.entry_round,
-            split_parallel_tool_calls=replace_info.replacement_provider == Provider.SELF_HOSTED,
-        )
-    }
+    agent_filters = {replaced: replaced_seat_history_filter(replace_info=replace_info)}
     state = build_rewind_state_from_last_message(events=events, agent_filters=agent_filters)
     history = state.agent_message_histories[replaced]
     _print_section(

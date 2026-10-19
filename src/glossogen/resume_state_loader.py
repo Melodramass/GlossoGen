@@ -74,10 +74,13 @@ class ReplaceManifestInfo(NamedTuple):
     path then treats every agent as a non-replaced agent (full reconstructed
     history, no channel-visibility filtering). ``entry_round`` is the round the
     fork enters, recorded in the manifest as ``round_start``.
+    ``history_floor_round`` is the manifest's floor for the replaced seat's
+    non-channel tool calls.
     """
 
     replaced_agent_id: str | None
     channel_visibility: dict[str, ChannelVisibility]
+    history_floor_round: int | None
     target_event_id: str
     entry_round: int
     replacement_provider: str | None
@@ -163,6 +166,7 @@ def read_replace_manifest_info(run_dir: Path) -> ReplaceManifestInfo | None:
             blocked_channels=list(manifest.blocked_tool_call_channels),
             history_floors=dict(manifest.channel_history_floors),
         ),
+        history_floor_round=manifest.history_floor_round,
         target_event_id=manifest.target_event_id,
         entry_round=manifest.round_start,
         replacement_provider=manifest.replacement_provider,
@@ -323,6 +327,7 @@ async def imported_seat_history_filter(cross_run_info: CrossRunManifestInfo) -> 
     return AgentHistoryFilter(
         tool_calls_only=False,
         channel_visibility=cross_run_info.channel_visibility,
+        history_floor_round=None,
         imported=ImportedHistory(
             events=tuple(imported_events),
             target_timestamp=imported_target_timestamp,
@@ -439,11 +444,13 @@ def replaced_seat_history_filter(replace_info: ReplaceManifestInfo) -> AgentHist
     """The filter that seeds a replace-agent run's replaced seat from its predecessor.
 
     Keeps the predecessor's tool calls on visible channels from the rounds before
-    the entry round, and none of its text or thinking.
+    the entry round, its other tool calls from ``history_floor_round`` onward, and
+    none of its text or thinking.
     """
     return AgentHistoryFilter(
         tool_calls_only=True,
         channel_visibility=replace_info.channel_visibility,
+        history_floor_round=replace_info.history_floor_round,
         imported=None,
         filter_below_round=replace_info.entry_round,
         split_parallel_tool_calls=replace_info.replacement_provider == Provider.SELF_HOSTED,

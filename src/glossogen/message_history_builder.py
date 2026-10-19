@@ -146,6 +146,7 @@ def _tool_call_filtered_by_visibility(
 
 def _derive_nonchannel_round_floor(
     channel_visibility: dict[str, ChannelVisibility],
+    history_floor_round: int | None,
 ) -> int | None:
     """Return the lowest round below which non-channel tool calls should be dropped.
 
@@ -155,17 +156,21 @@ def _derive_nonchannel_round_floor(
     hide: ``read_notifications`` returns carry the round-start injection text
     (e.g. ``--- PREVIOUS VEYRU RESULT ---``), and ``stabilize_veyru`` calls
     and returns reveal the agent's own prior actions, symptoms, and outcomes.
-    The floor is the minimum ``round_floor`` across every
-    ``ChannelVisibilityFromRound`` entry; non-channel calls before that round
-    are dropped. Returns ``None`` (no filtering) when no channel uses
-    ``FromRound``. Fork and resume flows pass ``Full`` visibility and keep the
-    full history intact.
+    The floor is the minimum of ``history_floor_round`` and the
+    ``round_floor`` of every ``ChannelVisibilityFromRound`` entry; non-channel
+    calls before that round are dropped. ``history_floor_round`` is what
+    windows a seat that belongs to no channel, where no entry exists to carry
+    a floor. Returns ``None`` (no filtering) when neither gives one. Fork and
+    resume flows pass ``Full`` visibility and no floor, and keep the full
+    history intact.
     """
     floors = [
         visibility.round_floor
         for visibility in channel_visibility.values()
         if isinstance(visibility, ChannelVisibilityFromRound)
     ]
+    if history_floor_round is not None:
+        floors.append(history_floor_round)
     if not floors:
         return None
     return min(floors)
@@ -544,6 +549,7 @@ def build_message_history(
     cutoff_round: int | None,
     tool_calls_only: bool,
     channel_visibility: dict[str, ChannelVisibility],
+    history_floor_round: int | None,
     filter_below_round: int | None,
     split_parallel_tool_calls: bool,
 ) -> list[ModelMessage]:
@@ -575,6 +581,11 @@ def build_message_history(
     ``FromRound(R)`` drops every read and drops sends from rounds <R.
     Used by the replace-agent flow to hide e.g. postmortem traffic from
     the new agent while exposing recent protocol activity.
+
+    ``history_floor_round`` drops every non-channel tool call (``move``,
+    ``read_notifications``, ...) from rounds below it, whether or not the
+    agent belongs to any channel. ``None`` leaves the non-channel floor to
+    the ``FromRound`` entries in ``channel_visibility``.
 
     ``filter_below_round`` bounds ``tool_calls_only`` and
     ``channel_visibility`` to content from rounds strictly below it;
@@ -623,6 +634,7 @@ def build_message_history(
     preserve_compaction = (
         not tool_calls_only
         and not channel_visibility
+        and history_floor_round is None
         and filter_below_round is None
         and not split_parallel_tool_calls
     )
@@ -642,6 +654,7 @@ def build_message_history(
     simulation_start_time = find_simulation_start_time(events=events)
     nonchannel_round_floor = _derive_nonchannel_round_floor(
         channel_visibility=channel_visibility,
+        history_floor_round=history_floor_round,
     )
     sent_channel_by_call_id = _sent_channel_by_call_id(events=events, agent_id=agent_id)
 

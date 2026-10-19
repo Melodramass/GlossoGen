@@ -52,6 +52,7 @@ def test_a_replace_manifest_naming_a_seat_without_its_replacement_is_refused(
         channels_with_visible_history=[],
         blocked_tool_call_channels=[],
         channel_history_floors={},
+        history_floor_round=None,
     )
 
     with pytest.raises(ValueError, match="without a replacement model and provider"):
@@ -68,6 +69,7 @@ def test_a_replace_manifest_with_no_seat_is_a_fork_at_round(tmp_path: Path) -> N
         channels_with_visible_history=[],
         blocked_tool_call_channels=[],
         channel_history_floors={},
+        history_floor_round=None,
     )
 
     fields = read_derivation_fields(run_dir=tmp_path)

@@ -701,12 +701,15 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help=(
-            "Window the replaced agent's visible-channel history: it sees those "
-            "channels only from this round onward (read_channel returns dropped, "
-            "send_message kept from this round). Applies to every channel in the "
-            "resolved visible set. For the previous P rounds before the boundary, "
-            "pass after_round - P + 1. When omitted, visible channels keep full "
-            "prior history."
+            "Window the replaced agent's history: it keeps its predecessor's "
+            "tool calls only from this round onward. On every channel in the "
+            "resolved visible set, read_channel returns are dropped and "
+            "send_message is kept from this round; every other tool call "
+            "(read_notifications, the scenario's own tools) from an earlier round "
+            "is dropped, which is what windows a seat that belongs to no channel. "
+            "For the previous P rounds before the boundary, pass "
+            "after_round - P + 1; after_round + 1 keeps no prior history. When "
+            "omitted, the predecessor's whole tool-call history is kept."
         ),
     )
     replace_parser.add_argument(
@@ -2068,10 +2071,11 @@ async def _run_replace_agent(args: argparse.Namespace) -> None:
         }
 
     logger.info(
-        "Replace-agent: replaced=%s visible_channels=%s history_floors=%s",
+        "Replace-agent: replaced=%s visible_channels=%s history_floors=%s history_floor_round=%s",
         args.replaced_agent_id,
         visible_channels,
         channel_history_floors,
+        args.history_from_round,
     )
 
     request = ReplaceAgentCoreRequest(
@@ -2085,6 +2089,7 @@ async def _run_replace_agent(args: argparse.Namespace) -> None:
         knobs=knobs,
         channels_with_visible_history=visible_channels,
         channel_history_floors=channel_history_floors,
+        history_floor_round=args.history_from_round,
         runs_dir=Path(args.runs_dir).resolve(),
     )
     try:
@@ -2132,6 +2137,7 @@ async def _run_fork_at_round(args: argparse.Namespace) -> None:
         knobs=knobs,
         channels_with_visible_history=None,
         channel_history_floors={},
+        history_floor_round=None,
         runs_dir=Path(args.runs_dir).resolve(),
     )
     try:

@@ -118,7 +118,7 @@ def test_a_clone_more_than_one_round_behind_its_manifest_is_refused() -> None:
 
 
 def _write_manifest(run_dir: Path, replaced_agent_id: str | None) -> None:
-    """Write a replace manifest with entry round 3 and one windowed channel."""
+    """Write a replace manifest with entry round 3, one windowed channel and a seat floor."""
     write_replace_manifest(
         run_dir=run_dir,
         round_start=3,
@@ -128,6 +128,7 @@ def _write_manifest(run_dir: Path, replaced_agent_id: str | None) -> None:
         channels_with_visible_history=["link", "side"],
         blocked_tool_call_channels=["postmortem"],
         channel_history_floors={"side": 2},
+        history_floor_round=2,
     )
 
 
@@ -143,6 +144,7 @@ def test_the_manifest_projection_names_the_entry_round_and_visibility(tmp_path: 
     assert info.channel_visibility["link"] == ChannelVisibilityFull()
     assert info.channel_visibility["side"] == ChannelVisibilityFromRound(round_floor=2)
     assert info.channel_visibility["postmortem"].kind == "none"
+    assert info.history_floor_round == 2
 
 
 def test_a_directory_without_a_manifest_projects_to_none(tmp_path: Path) -> None:

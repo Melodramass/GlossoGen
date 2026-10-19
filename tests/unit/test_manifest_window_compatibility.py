@@ -29,6 +29,7 @@ def _write_manifest(run_dir: Path, round_start: int, rounds_after_swap: int) -> 
         channels_with_visible_history=[],
         blocked_tool_call_channels=[],
         channel_history_floors={},
+        history_floor_round=None,
     )
 
 

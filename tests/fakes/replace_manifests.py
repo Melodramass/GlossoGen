@@ -21,6 +21,7 @@ def write_replace_manifest(
     channels_with_visible_history: list[str],
     blocked_tool_call_channels: list[str],
     channel_history_floors: dict[str, int],
+    history_floor_round: int | None,
 ) -> None:
     """Write a manifest with the frozen on-disk field names into ``run_dir``."""
     manifest = ReplaceManifest(
@@ -35,6 +36,7 @@ def write_replace_manifest(
         channels_with_visible_history=channels_with_visible_history,
         blocked_tool_call_channels=blocked_tool_call_channels,
         channel_history_floors=channel_history_floors,
+        history_floor_round=history_floor_round,
         replaced_at=1_700_000_000.0,
     )
     (run_dir / REPLACE_MANIFEST_FILENAME).write_bytes(orjson.dumps(manifest.model_dump()))
