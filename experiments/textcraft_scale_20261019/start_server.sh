@@ -12,7 +12,7 @@ CONDA_SH=${CONDA_SH-/work/11672/lwang33287/vista/miniforge3/etc/profile.d/conda.
 if [ -n "$CONDA_SH" ]; then source "$CONDA_SH"; conda activate "${CONDA_ENV:-aiem}"; fi
 exec vllm serve Qwen/Qwen3.5-27B \
   --served-model-name Qwen/Qwen3.5-27B \
-  --port 8010 \
+  --port "${PORT:-8010}" \
   --max-model-len 131072 \
   --gpu-memory-utilization 0.95 \
   --language-model-only \

@@ -4,3 +4,4 @@ plan.json
 slurm/
 smoke_*/
 aborted_*/
+logs/
