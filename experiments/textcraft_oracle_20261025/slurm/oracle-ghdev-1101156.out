@@ -1,0 +1,10 @@
+[Mon Oct 26 02:41:15 AM CDT 2026] end Mon Oct 26 04:41:08 AM CDT 2026 textcraft: c642-002 c642-011 c642-022  syn-code: c642-032
+[Mon Oct 26 02:43:35 AM CDT 2026] syn-code launch window 4233s
+[Mon Oct 26 04:34:14 AM CDT 2026] textcraft link exited 0
+[Mon Oct 26 04:34:14 AM CDT 2026] syn-code link exited
+srun: forcing job termination
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+srun: error: c642-022: task 2: Killed
+srun: error: c642-032: task 3: Killed
+srun: error: c642-002: task 0: Killed
+srun: error: c642-011: task 1: Killed

@@ -1,0 +1,937 @@
+[
+  {
+    "schema_version": 1,
+    "family": "layered",
+    "seed": 1002,
+    "initial_depot": {
+      "r115653": 1,
+      "r787690": 2,
+      "r746603": 1,
+      "r188781": 2,
+      "r217237": 2,
+      "r064679": 1,
+      "r027130": 2,
+      "r878834": 2,
+      "r282407": 1,
+      "r516554": 1,
+      "r049733": 2,
+      "r506152": 1
+    },
+    "cards": {
+      "crafter_5": {
+        "target": "r966005",
+        "recipes": [
+          {
+            "output": "r069350",
+            "count": 2,
+            "inputs": {
+              "r115653": 1
+            }
+          },
+          {
+            "output": "r447857",
+            "count": 2,
+            "inputs": {
+              "r069350": 1,
+              "r680800": 1
+            }
+          },
+          {
+            "output": "r801528",
+            "count": 3,
+            "inputs": {
+              "r447857": 1,
+              "r676285": 1
+            }
+          },
+          {
+            "output": "r088095",
+            "count": 2,
+            "inputs": {
+              "r801528": 1,
+              "r519586": 1
+            }
+          },
+          {
+            "output": "r100591",
+            "count": 1,
+            "inputs": {
+              "r088095": 1,
+              "r534900": 1
+            }
+          },
+          {
+            "output": "r966005",
+            "count": 1,
+            "inputs": {
+              "r100591": 1,
+              "r135904": 1
+            }
+          }
+        ]
+      },
+      "crafter_1": {
+        "target": "r849564",
+        "recipes": [
+          {
+            "output": "r044546",
+            "count": 2,
+            "inputs": {
+              "r787690": 2
+            }
+          },
+          {
+            "output": "r836167",
+            "count": 1,
+            "inputs": {
+              "r044546": 1,
+              "r069350": 1
+            }
+          },
+          {
+            "output": "r187901",
+            "count": 1,
+            "inputs": {
+              "r836167": 1,
+              "r089253": 1
+            }
+          },
+          {
+            "output": "r575718",
+            "count": 1,
+            "inputs": {
+              "r187901": 1,
+              "r029229": 1
+            }
+          },
+          {
+            "output": "r840958",
+            "count": 1,
+            "inputs": {
+              "r575718": 1,
+              "r753639": 1
+            }
+          },
+          {
+            "output": "r849564",
+            "count": 1,
+            "inputs": {
+              "r840958": 1,
+              "r983575": 1
+            }
+          }
+        ]
+      },
+      "crafter_6": {
+        "target": "r626734",
+        "recipes": [
+          {
+            "output": "r552352",
+            "count": 1,
+            "inputs": {
+              "r746603": 1
+            }
+          },
+          {
+            "output": "r089253",
+            "count": 3,
+            "inputs": {
+              "r552352": 1,
+              "r583299": 1
+            }
+          },
+          {
+            "output": "r519586",
+            "count": 2,
+            "inputs": {
+              "r089253": 1,
+              "r253787": 1
+            }
+          },
+          {
+            "output": "r071835",
+            "count": 4,
+            "inputs": {
+              "r519586": 1,
+              "r801528": 1
+            }
+          },
+          {
+            "output": "r437049",
+            "count": 2,
+            "inputs": {
+              "r071835": 1,
+              "r793596": 1
+            }
+          },
+          {
+            "output": "r626734",
+            "count": 1,
+            "inputs": {
+              "r437049": 1,
+              "r789745": 1
+            }
+          }
+        ]
+      },
+      "crafter_11": {
+        "target": "r410273",
+        "recipes": [
+          {
+            "output": "r162367",
+            "count": 3,
+            "inputs": {
+              "r188781": 2
+            }
+          },
+          {
+            "output": "r638832",
+            "count": 2,
+            "inputs": {
+              "r162367": 1,
+              "r327038": 1
+            }
+          },
+          {
+            "output": "r847959",
+            "count": 3,
+            "inputs": {
+              "r638832": 1,
+              "r089253": 1
+            }
+          },
+          {
+            "output": "r984924",
+            "count": 1,
+            "inputs": {
+              "r847959": 1,
+              "r801528": 1
+            }
+          },
+          {
+            "output": "r328446",
+            "count": 2,
+            "inputs": {
+              "r984924": 1,
+              "r606754": 1
+            }
+          },
+          {
+            "output": "r410273",
+            "count": 1,
+            "inputs": {
+              "r328446": 1,
+              "r083846": 1
+            }
+          }
+        ]
+      },
+      "crafter_12": {
+        "target": "r106180",
+        "recipes": [
+          {
+            "output": "r072303",
+            "count": 3,
+            "inputs": {
+              "r217237": 2
+            }
+          },
+          {
+            "output": "r676285",
+            "count": 2,
+            "inputs": {
+              "r072303": 1,
+              "r044546": 1
+            }
+          },
+          {
+            "output": "r093483",
+            "count": 2,
+            "inputs": {
+              "r676285": 1,
+              "r592658": 1
+            }
+          },
+          {
+            "output": "r753639",
+            "count": 2,
+            "inputs": {
+              "r093483": 1,
+              "r898826": 1
+            }
+          },
+          {
+            "output": "r448849",
+            "count": 1,
+            "inputs": {
+              "r753639": 1,
+              "r071835": 1
+            }
+          },
+          {
+            "output": "r106180",
+            "count": 1,
+            "inputs": {
+              "r448849": 1,
+              "r328446": 1
+            }
+          }
+        ]
+      },
+      "crafter_8": {
+        "target": "r461539",
+        "recipes": [
+          {
+            "output": "r075237",
+            "count": 1,
+            "inputs": {
+              "r064679": 1
+            }
+          },
+          {
+            "output": "r836113",
+            "count": 1,
+            "inputs": {
+              "r075237": 1,
+              "r583299": 1
+            }
+          },
+          {
+            "output": "r734199",
+            "count": 2,
+            "inputs": {
+              "r836113": 1,
+              "r638832": 1
+            }
+          },
+          {
+            "output": "r303419",
+            "count": 1,
+            "inputs": {
+              "r734199": 1,
+              "r847959": 1
+            }
+          },
+          {
+            "output": "r652517",
+            "count": 2,
+            "inputs": {
+              "r303419": 1,
+              "r793596": 1
+            }
+          },
+          {
+            "output": "r461539",
+            "count": 1,
+            "inputs": {
+              "r652517": 1,
+              "r456545": 1
+            }
+          }
+        ]
+      },
+      "crafter_2": {
+        "target": "r549962",
+        "recipes": [
+          {
+            "output": "r724754",
+            "count": 1,
+            "inputs": {
+              "r027130": 2
+            }
+          },
+          {
+            "output": "r981032",
+            "count": 2,
+            "inputs": {
+              "r724754": 1,
+              "r072303": 1
+            }
+          },
+          {
+            "output": "r686262",
+            "count": 2,
+            "inputs": {
+              "r981032": 1,
+              "r592658": 1
+            }
+          },
+          {
+            "output": "r606754",
+            "count": 5,
+            "inputs": {
+              "r686262": 1,
+              "r029229": 1
+            }
+          },
+          {
+            "output": "r983575",
+            "count": 3,
+            "inputs": {
+              "r606754": 1,
+              "r088095": 1
+            }
+          },
+          {
+            "output": "r549962",
+            "count": 1,
+            "inputs": {
+              "r983575": 1,
+              "r789745": 1
+            }
+          }
+        ]
+      },
+      "crafter_3": {
+        "target": "r294585",
+        "recipes": [
+          {
+            "output": "r862232",
+            "count": 2,
+            "inputs": {
+              "r878834": 2
+            }
+          },
+          {
+            "output": "r890072",
+            "count": 2,
+            "inputs": {
+              "r862232": 1,
+              "r583299": 1
+            }
+          },
+          {
+            "output": "r898826",
+            "count": 2,
+            "inputs": {
+              "r890072": 1,
+              "r981032": 1
+            }
+          },
+          {
+            "output": "r944218",
+            "count": 1,
+            "inputs": {
+              "r898826": 1,
+              "r686262": 1
+            }
+          },
+          {
+            "output": "r083846",
+            "count": 2,
+            "inputs": {
+              "r944218": 1,
+              "r606754": 1
+            }
+          },
+          {
+            "output": "r294585",
+            "count": 1,
+            "inputs": {
+              "r083846": 1,
+              "r135904": 1
+            }
+          }
+        ]
+      },
+      "crafter_4": {
+        "target": "r488876",
+        "recipes": [
+          {
+            "output": "r680800",
+            "count": 2,
+            "inputs": {
+              "r282407": 1
+            }
+          },
+          {
+            "output": "r980242",
+            "count": 1,
+            "inputs": {
+              "r680800": 1,
+              "r162367": 1
+            }
+          },
+          {
+            "output": "r820049",
+            "count": 1,
+            "inputs": {
+              "r980242": 1,
+              "r253787": 1
+            }
+          },
+          {
+            "output": "r684362",
+            "count": 1,
+            "inputs": {
+              "r820049": 1,
+              "r029229": 1
+            }
+          },
+          {
+            "output": "r789745",
+            "count": 3,
+            "inputs": {
+              "r684362": 1,
+              "r071835": 1
+            }
+          },
+          {
+            "output": "r488876",
+            "count": 1,
+            "inputs": {
+              "r789745": 1,
+              "r983575": 1
+            }
+          }
+        ]
+      },
+      "crafter_7": {
+        "target": "r709261",
+        "recipes": [
+          {
+            "output": "r327038",
+            "count": 2,
+            "inputs": {
+              "r516554": 1
+            }
+          },
+          {
+            "output": "r170405",
+            "count": 2,
+            "inputs": {
+              "r327038": 1,
+              "r162367": 1
+            }
+          },
+          {
+            "output": "r611353",
+            "count": 1,
+            "inputs": {
+              "r170405": 1,
+              "r890072": 1
+            }
+          },
+          {
+            "output": "r793596",
+            "count": 3,
+            "inputs": {
+              "r611353": 1,
+              "r847959": 1
+            }
+          },
+          {
+            "output": "r135904",
+            "count": 3,
+            "inputs": {
+              "r793596": 1,
+              "r606754": 1
+            }
+          },
+          {
+            "output": "r709261",
+            "count": 1,
+            "inputs": {
+              "r135904": 1,
+              "r437049": 1
+            }
+          }
+        ]
+      },
+      "crafter_10": {
+        "target": "r826852",
+        "recipes": [
+          {
+            "output": "r583299",
+            "count": 4,
+            "inputs": {
+              "r049733": 2
+            }
+          },
+          {
+            "output": "r592658",
+            "count": 3,
+            "inputs": {
+              "r583299": 1,
+              "r072303": 1
+            }
+          },
+          {
+            "output": "r029229",
+            "count": 4,
+            "inputs": {
+              "r592658": 1,
+              "r447857": 1
+            }
+          },
+          {
+            "output": "r441543",
+            "count": 1,
+            "inputs": {
+              "r029229": 1,
+              "r093483": 1
+            }
+          },
+          {
+            "output": "r042310",
+            "count": 1,
+            "inputs": {
+              "r441543": 1,
+              "r071835": 1
+            }
+          },
+          {
+            "output": "r826852",
+            "count": 1,
+            "inputs": {
+              "r042310": 1,
+              "r456545": 1
+            }
+          }
+        ]
+      },
+      "crafter_9": {
+        "target": "r741634",
+        "recipes": [
+          {
+            "output": "r236437",
+            "count": 1,
+            "inputs": {
+              "r506152": 1
+            }
+          },
+          {
+            "output": "r253787",
+            "count": 3,
+            "inputs": {
+              "r236437": 1,
+              "r862232": 1
+            }
+          },
+          {
+            "output": "r050434",
+            "count": 1,
+            "inputs": {
+              "r253787": 1,
+              "r170405": 1
+            }
+          },
+          {
+            "output": "r534900",
+            "count": 2,
+            "inputs": {
+              "r050434": 1,
+              "r734199": 1
+            }
+          },
+          {
+            "output": "r456545",
+            "count": 3,
+            "inputs": {
+              "r534900": 1,
+              "r606754": 1
+            }
+          },
+          {
+            "output": "r741634",
+            "count": 1,
+            "inputs": {
+              "r456545": 1,
+              "r652517": 1
+            }
+          }
+        ]
+      }
+    },
+    "witness": [
+      [
+        "crafter_5",
+        "craft 2 r069350 using 1 r115653"
+      ],
+      [
+        "crafter_1",
+        "craft 2 r044546 using 2 r787690"
+      ],
+      [
+        "crafter_6",
+        "craft 1 r552352 using 1 r746603"
+      ],
+      [
+        "crafter_11",
+        "craft 3 r162367 using 2 r188781"
+      ],
+      [
+        "crafter_12",
+        "craft 3 r072303 using 2 r217237"
+      ],
+      [
+        "crafter_8",
+        "craft 1 r075237 using 1 r064679"
+      ],
+      [
+        "crafter_2",
+        "craft 1 r724754 using 2 r027130"
+      ],
+      [
+        "crafter_3",
+        "craft 2 r862232 using 2 r878834"
+      ],
+      [
+        "crafter_4",
+        "craft 2 r680800 using 1 r282407"
+      ],
+      [
+        "crafter_7",
+        "craft 2 r327038 using 1 r516554"
+      ],
+      [
+        "crafter_10",
+        "craft 4 r583299 using 2 r049733"
+      ],
+      [
+        "crafter_9",
+        "craft 1 r236437 using 1 r506152"
+      ],
+      [
+        "crafter_5",
+        "craft 2 r447857 using 1 r069350, 1 r680800"
+      ],
+      [
+        "crafter_1",
+        "craft 1 r836167 using 1 r044546, 1 r069350"
+      ],
+      [
+        "crafter_6",
+        "craft 3 r089253 using 1 r552352, 1 r583299"
+      ],
+      [
+        "crafter_11",
+        "craft 2 r638832 using 1 r162367, 1 r327038"
+      ],
+      [
+        "crafter_12",
+        "craft 2 r676285 using 1 r044546, 1 r072303"
+      ],
+      [
+        "crafter_8",
+        "craft 1 r836113 using 1 r075237, 1 r583299"
+      ],
+      [
+        "crafter_2",
+        "craft 2 r981032 using 1 r072303, 1 r724754"
+      ],
+      [
+        "crafter_3",
+        "craft 2 r890072 using 1 r583299, 1 r862232"
+      ],
+      [
+        "crafter_4",
+        "craft 1 r980242 using 1 r162367, 1 r680800"
+      ],
+      [
+        "crafter_7",
+        "craft 2 r170405 using 1 r162367, 1 r327038"
+      ],
+      [
+        "crafter_10",
+        "craft 3 r592658 using 1 r072303, 1 r583299"
+      ],
+      [
+        "crafter_9",
+        "craft 3 r253787 using 1 r236437, 1 r862232"
+      ],
+      [
+        "crafter_5",
+        "craft 3 r801528 using 1 r447857, 1 r676285"
+      ],
+      [
+        "crafter_1",
+        "craft 1 r187901 using 1 r089253, 1 r836167"
+      ],
+      [
+        "crafter_6",
+        "craft 2 r519586 using 1 r089253, 1 r253787"
+      ],
+      [
+        "crafter_11",
+        "craft 3 r847959 using 1 r089253, 1 r638832"
+      ],
+      [
+        "crafter_12",
+        "craft 2 r093483 using 1 r592658, 1 r676285"
+      ],
+      [
+        "crafter_8",
+        "craft 2 r734199 using 1 r638832, 1 r836113"
+      ],
+      [
+        "crafter_2",
+        "craft 2 r686262 using 1 r592658, 1 r981032"
+      ],
+      [
+        "crafter_3",
+        "craft 2 r898826 using 1 r890072, 1 r981032"
+      ],
+      [
+        "crafter_4",
+        "craft 1 r820049 using 1 r253787, 1 r980242"
+      ],
+      [
+        "crafter_7",
+        "craft 1 r611353 using 1 r170405, 1 r890072"
+      ],
+      [
+        "crafter_10",
+        "craft 4 r029229 using 1 r447857, 1 r592658"
+      ],
+      [
+        "crafter_9",
+        "craft 1 r050434 using 1 r170405, 1 r253787"
+      ],
+      [
+        "crafter_5",
+        "craft 2 r088095 using 1 r519586, 1 r801528"
+      ],
+      [
+        "crafter_1",
+        "craft 1 r575718 using 1 r029229, 1 r187901"
+      ],
+      [
+        "crafter_6",
+        "craft 4 r071835 using 1 r519586, 1 r801528"
+      ],
+      [
+        "crafter_11",
+        "craft 1 r984924 using 1 r801528, 1 r847959"
+      ],
+      [
+        "crafter_12",
+        "craft 2 r753639 using 1 r093483, 1 r898826"
+      ],
+      [
+        "crafter_8",
+        "craft 1 r303419 using 1 r734199, 1 r847959"
+      ],
+      [
+        "crafter_2",
+        "craft 5 r606754 using 1 r029229, 1 r686262"
+      ],
+      [
+        "crafter_3",
+        "craft 1 r944218 using 1 r686262, 1 r898826"
+      ],
+      [
+        "crafter_4",
+        "craft 1 r684362 using 1 r029229, 1 r820049"
+      ],
+      [
+        "crafter_7",
+        "craft 3 r793596 using 1 r611353, 1 r847959"
+      ],
+      [
+        "crafter_10",
+        "craft 1 r441543 using 1 r029229, 1 r093483"
+      ],
+      [
+        "crafter_9",
+        "craft 2 r534900 using 1 r050434, 1 r734199"
+      ],
+      [
+        "crafter_5",
+        "craft 1 r100591 using 1 r088095, 1 r534900"
+      ],
+      [
+        "crafter_1",
+        "craft 1 r840958 using 1 r575718, 1 r753639"
+      ],
+      [
+        "crafter_6",
+        "craft 2 r437049 using 1 r071835, 1 r793596"
+      ],
+      [
+        "crafter_11",
+        "craft 2 r328446 using 1 r606754, 1 r984924"
+      ],
+      [
+        "crafter_12",
+        "craft 1 r448849 using 1 r071835, 1 r753639"
+      ],
+      [
+        "crafter_8",
+        "craft 2 r652517 using 1 r303419, 1 r793596"
+      ],
+      [
+        "crafter_2",
+        "craft 3 r983575 using 1 r088095, 1 r606754"
+      ],
+      [
+        "crafter_3",
+        "craft 2 r083846 using 1 r606754, 1 r944218"
+      ],
+      [
+        "crafter_4",
+        "craft 3 r789745 using 1 r071835, 1 r684362"
+      ],
+      [
+        "crafter_7",
+        "craft 3 r135904 using 1 r606754, 1 r793596"
+      ],
+      [
+        "crafter_10",
+        "craft 1 r042310 using 1 r071835, 1 r441543"
+      ],
+      [
+        "crafter_9",
+        "craft 3 r456545 using 1 r534900, 1 r606754"
+      ],
+      [
+        "crafter_5",
+        "craft 1 r966005 using 1 r100591, 1 r135904"
+      ],
+      [
+        "crafter_1",
+        "craft 1 r849564 using 1 r840958, 1 r983575"
+      ],
+      [
+        "crafter_6",
+        "craft 1 r626734 using 1 r437049, 1 r789745"
+      ],
+      [
+        "crafter_11",
+        "craft 1 r410273 using 1 r083846, 1 r328446"
+      ],
+      [
+        "crafter_12",
+        "craft 1 r106180 using 1 r328446, 1 r448849"
+      ],
+      [
+        "crafter_8",
+        "craft 1 r461539 using 1 r456545, 1 r652517"
+      ],
+      [
+        "crafter_2",
+        "craft 1 r549962 using 1 r789745, 1 r983575"
+      ],
+      [
+        "crafter_3",
+        "craft 1 r294585 using 1 r083846, 1 r135904"
+      ],
+      [
+        "crafter_4",
+        "craft 1 r488876 using 1 r789745, 1 r983575"
+      ],
+      [
+        "crafter_7",
+        "craft 1 r709261 using 1 r135904, 1 r437049"
+      ],
+      [
+        "crafter_10",
+        "craft 1 r826852 using 1 r042310, 1 r456545"
+      ],
+      [
+        "crafter_9",
+        "craft 1 r741634 using 1 r456545, 1 r652517"
+      ]
+    ]
+  }
+]

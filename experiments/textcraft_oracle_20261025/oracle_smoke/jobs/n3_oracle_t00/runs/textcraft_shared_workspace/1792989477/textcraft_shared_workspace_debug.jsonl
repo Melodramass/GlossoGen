@@ -1,0 +1,293 @@
+{"timestamp":"2026-10-26T04:37:58.545391+00:00","logger":"glossogen.cli","level":"INFO","message":"Running scenario: textcraft_shared_workspace"}
+{"timestamp":"2026-10-26T04:37:58.545922+00:00","logger":"glossogen.cli","level":"INFO","message":"Model: Qwen/Qwen3.8-27B"}
+{"timestamp":"2026-10-26T04:37:58.546016+00:00","logger":"glossogen.cli","level":"INFO","message":"Max agent turns: 2000"}
+{"timestamp":"2026-10-26T04:37:58.546251+00:00","logger":"glossogen.cli","level":"INFO","message":"Run directory: /work/11672/lwang33287/vista/agent/GlossoGen-scale/experiments/textcraft_oracle_20261025/oracle_smoke/jobs/n3_oracle_t00/runs/textcraft_shared_workspace/1792989477"}
+{"timestamp":"2026-10-26T04:37:58.546690+00:00","logger":"glossogen.cli","level":"INFO","message":"Log: /work/11672/lwang33287/vista/agent/GlossoGen-scale/experiments/textcraft_oracle_20261025/oracle_smoke/jobs/n3_oracle_t00/runs/textcraft_shared_workspace/1792989477/textcraft_shared_workspace.jsonl"}
+{"timestamp":"2026-10-26T04:37:58.549866+00:00","logger":"glossogen.stream_manifest","level":"INFO","message":"Wrote stream manifest: /work/11672/lwang33287/vista/agent/GlossoGen-scale/experiments/textcraft_oracle_20261025/oracle_smoke/jobs/n3_oracle_t00/runs/textcraft_shared_workspace/1792989477/stream.json (port=48621)"}
+{"timestamp":"2026-10-26T04:37:58.651492+00:00","logger":"glossogen.simulation_server","level":"INFO","message":"Simulation server started on port 48621 for run textcraft_shared_workspace/1792989477"}
+{"timestamp":"2026-10-26T04:37:58.651627+00:00","logger":"glossogen.cli","level":"INFO","message":"Streaming server started on port 48621"}
+{"timestamp":"2026-10-26T04:37:58.652906+00:00","logger":"glossogen.event_logger","level":"INFO","message":"Event log opened: /work/11672/lwang33287/vista/agent/GlossoGen-scale/experiments/textcraft_oracle_20261025/oracle_smoke/jobs/n3_oracle_t00/runs/textcraft_shared_workspace/1792989477/textcraft_shared_workspace.jsonl"}
+{"timestamp":"2026-10-26T04:37:58.667127+00:00","logger":"glossogen.runtime.game_clock","level":"INFO","message":"Game clock started. Round 1/1, injections delivered."}
+{"timestamp":"2026-10-26T04:37:58.667328+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Starting Pydantic AI agent crafter_1 (Crafter 1) max_turns=2000 provider=self-hosted model=Qwen/Qwen3.8-27B"}
+{"timestamp":"2026-10-26T04:37:58.709239+00:00","logger":"glossogen.autonomous_supervisor","level":"INFO","message":"Launched agent crafter_1 (Crafter 1)"}
+{"timestamp":"2026-10-26T04:37:58.709671+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Starting Pydantic AI agent crafter_2 (Crafter 2) max_turns=2000 provider=self-hosted model=Qwen/Qwen3.8-27B"}
+{"timestamp":"2026-10-26T04:37:58.714638+00:00","logger":"glossogen.autonomous_supervisor","level":"INFO","message":"Launched agent crafter_2 (Crafter 2)"}
+{"timestamp":"2026-10-26T04:37:58.717067+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Starting Pydantic AI agent crafter_3 (Crafter 3) max_turns=2000 provider=self-hosted model=Qwen/Qwen3.8-27B"}
+{"timestamp":"2026-10-26T04:37:58.722663+00:00","logger":"glossogen.autonomous_supervisor","level":"INFO","message":"Launched agent crafter_3 (Crafter 3)"}
+{"timestamp":"2026-10-26T04:38:00.429945+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:38:00.435651+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:38:00.459952+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:38:00.461535+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: read_notifications({\"wait_for\": \"any\"})"}
+{"timestamp":"2026-10-26T04:38:00.461935+00:00","logger":"glossogen.runtime.wait_registry","level":"INFO","message":"Agent crafter_1 wait wait-1 (any) resumed after 0.0s: ['new_notification']"}
+{"timestamp":"2026-10-26T04:38:00.463185+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:38:00.466809+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: read_notifications({\"wait_for\": \"any\"})"}
+{"timestamp":"2026-10-26T04:38:00.467128+00:00","logger":"glossogen.runtime.wait_registry","level":"INFO","message":"Agent crafter_2 wait wait-2 (any) resumed after 0.0s: ['new_notification']"}
+{"timestamp":"2026-10-26T04:38:00.468153+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:38:00.471427+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: read_notifications({\"wait_for\": \"any\"})"}
+{"timestamp":"2026-10-26T04:38:00.471731+00:00","logger":"glossogen.runtime.wait_registry","level":"INFO","message":"Agent crafter_3 wait wait-3 (any) resumed after 0.0s: ['new_notification']"}
+{"timestamp":"2026-10-26T04:38:00.472714+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:38:19.025297+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:38:21.461499+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:38:22.776789+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:38:22.778670+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 2 r465200 using 2 r721487\"})"}
+{"timestamp":"2026-10-26T04:38:22.779837+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 1 r885064 using 1 r120682\"})"}
+{"timestamp":"2026-10-26T04:38:22.780799+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 4 r454140 using 1 r992200\"})"}
+{"timestamp":"2026-10-26T04:38:22.782132+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: I'll start with my first three independent crafts."}
+{"timestamp":"2026-10-26T04:38:22.786124+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: I'll start with my first craft, which uses a raw resource available now."}
+{"timestamp":"2026-10-26T04:38:22.789695+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: I have my task card with 24 assigned crafts. Let me start with the first one, which uses an available resource."}
+{"timestamp":"2026-10-26T04:38:37.765095+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:38:39.739702+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:38:41.434131+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:38:41.435876+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 3 r037205 using 1 r872631\"})"}
+{"timestamp":"2026-10-26T04:38:41.436970+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 1 r411056 using 1 r191078\"})"}
+{"timestamp":"2026-10-26T04:38:41.437901+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 2 r621657 using 1 r454893\"})"}
+{"timestamp":"2026-10-26T04:38:41.439215+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:38:41.443231+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:38:41.446856+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:39:05.562656+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:39:05.564348+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:39:06.493479+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:39:06.495415+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 4 r135872 using 1 r388309\"})"}
+{"timestamp":"2026-10-26T04:39:06.496518+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 1 r920368 using 2 r061953\"})"}
+{"timestamp":"2026-10-26T04:39:06.497459+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 1 r938506 using 2 r040363\"})"}
+{"timestamp":"2026-10-26T04:39:06.498805+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:39:06.503049+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:39:06.506901+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:39:25.161456+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:39:25.802735+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:39:25.833747+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:39:25.835261+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 2 r772912 using 1 r602068\"})"}
+{"timestamp":"2026-10-26T04:39:25.836325+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 1 r966967 using 1 r228617\"})"}
+{"timestamp":"2026-10-26T04:39:25.837248+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 2 r053187 using 2 r924080\"})"}
+{"timestamp":"2026-10-26T04:39:25.838545+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:39:25.842996+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:39:25.846977+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:39:41.408883+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:39:42.398449+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:39:44.431474+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:39:44.433439+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 2 r564872 using 1 r454140, 1 r465200\"})"}
+{"timestamp":"2026-10-26T04:39:44.434568+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 1 r210327 using 1 r135872, 1 r885064\"})"}
+{"timestamp":"2026-10-26T04:39:44.435523+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 1 r005937 using 1 r454140, 1 r621657\"})"}
+{"timestamp":"2026-10-26T04:39:44.436845+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:39:44.441518+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:39:44.445773+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:39:54.536286+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:39:56.698073+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:49:44.442060+00:00","logger":"openai._base_client","level":"INFO","message":"Retrying request in 0.440987 seconds (retry 1 of 2)"}
+{"timestamp":"2026-10-26T04:50:05.624114+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:50:05.626305+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 3 r419186 using 1 r037205, 1 r135872\"})"}
+{"timestamp":"2026-10-26T04:50:05.627418+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 1 r830518 using 1 r411056, 1 r465200\"})"}
+{"timestamp":"2026-10-26T04:50:05.628394+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 1 r455667 using 1 r037205, 1 r621657\"})"}
+{"timestamp":"2026-10-26T04:50:05.629709+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:50:05.634469+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:50:05.639218+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:50:24.532139+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:50:24.564871+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:50:24.868922+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:50:24.870419+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 3 r720338 using 1 r135872, 1 r454140\"})"}
+{"timestamp":"2026-10-26T04:50:24.871469+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 3 r591252 using 1 r135872, 1 r920368\"})"}
+{"timestamp":"2026-10-26T04:50:24.872460+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 2 r769212 using 1 r454140, 1 r938506\"})"}
+{"timestamp":"2026-10-26T04:50:24.873725+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:50:24.878617+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:50:24.883138+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:50:34.094664+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:50:34.154918+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:50:36.806846+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:50:36.808887+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 2 r642598 using 1 r037205, 1 r772912\"})"}
+{"timestamp":"2026-10-26T04:50:36.809998+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 3 r783109 using 1 r053187, 1 r966967\"})"}
+{"timestamp":"2026-10-26T04:50:36.810940+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 2 r921936 using 1 r053187, 1 r772912\"})"}
+{"timestamp":"2026-10-26T04:50:36.812277+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:50:36.817364+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:50:36.822135+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:50:44.169349+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:50:44.170655+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:50:50.284115+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:50:50.286030+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 1 r353736 using 1 r210327, 1 r769212\"})"}
+{"timestamp":"2026-10-26T04:50:50.287117+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: read_notifications({\"wait_for\": \"depot\", \"items\": [\"r591252\", \"r783109\", \"r921936\"]})"}
+{"timestamp":"2026-10-26T04:50:50.287453+00:00","logger":"glossogen.runtime.wait_registry","level":"INFO","message":"Agent crafter_1 wait wait-4 (depot) resumed after 0.0s: ['released']"}
+{"timestamp":"2026-10-26T04:50:50.288328+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 1 r221555 using 1 r005937, 1 r419186\"})"}
+{"timestamp":"2026-10-26T04:50:50.289275+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:51:16.047138+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:51:16.049395+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 2 r144495 using 1 r564872, 1 r591252\"})"}
+{"timestamp":"2026-10-26T04:51:16.050942+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:51:16.056722+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:51:35.935323+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:51:41.095035+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:51:41.097180+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 2 r583517 using 1 r720338, 1 r830518\"})"}
+{"timestamp":"2026-10-26T04:51:41.098849+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:51:41.104390+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 2 r266124 using 1 r455667, 1 r591252\"})"}
+{"timestamp":"2026-10-26T04:52:03.047715+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:52:03.049902+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 1 r174214 using 1 r419186, 1 r642598\"})"}
+{"timestamp":"2026-10-26T04:52:03.051473+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:52:03.057541+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:52:22.301159+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:52:22.331993+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:52:22.333616+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 4 r019914 using 1 r591252, 1 r783109\"})"}
+{"timestamp":"2026-10-26T04:52:22.335156+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:52:22.340800+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 2 r526361 using 1 r720338, 1 r769212\"})"}
+{"timestamp":"2026-10-26T04:52:43.855964+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:52:43.858142+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 2 r426387 using 1 r720338, 1 r783109\"})"}
+{"timestamp":"2026-10-26T04:52:43.859746+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:52:43.865891+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:53:08.094501+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:53:10.341341+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:53:10.343233+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 3 r742901 using 1 r419186, 1 r783109\"})"}
+{"timestamp":"2026-10-26T04:53:10.344838+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:53:10.350583+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 3 r637317 using 1 r564872, 1 r921936\"})"}
+{"timestamp":"2026-10-26T04:53:22.368972+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:53:22.371084+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 1 r687627 using 1 r642598, 1 r921936\"})"}
+{"timestamp":"2026-10-26T04:53:22.372638+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:53:22.378893+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:53:48.813857+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:53:49.503365+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:53:49.505057+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 1 r803732 using 1 r353736, 1 r526361\"})"}
+{"timestamp":"2026-10-26T04:53:49.506590+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:53:49.512505+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 2 r099408 using 1 r221555, 1 r266124\"})"}
+{"timestamp":"2026-10-26T04:54:14.129178+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:54:14.131351+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 1 r883177 using 1 r144495, 1 r426387\"})"}
+{"timestamp":"2026-10-26T04:54:14.132888+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:54:14.139332+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:54:29.034585+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:54:29.064451+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:54:29.066090+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 2 r569418 using 1 r019914, 1 r583517\"})"}
+{"timestamp":"2026-10-26T04:54:29.067644+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:54:29.073734+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 4 r924713 using 1 r019914, 1 r266124\"})"}
+{"timestamp":"2026-10-26T04:54:41.562855+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:54:41.564991+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 3 r365519 using 1 r174214, 1 r583517\"})"}
+{"timestamp":"2026-10-26T04:54:41.566610+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:54:41.573316+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:55:18.716702+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:55:38.892045+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:55:38.894217+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 2 r155867 using 1 r019914, 1 r144495\"})"}
+{"timestamp":"2026-10-26T04:55:38.895806+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:55:38.902075+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 1 r953287 using 1 r526361, 1 r742901\"})"}
+{"timestamp":"2026-10-26T04:55:56.103808+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:55:56.105900+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 2 r946799 using 1 r019914, 1 r426387\"})"}
+{"timestamp":"2026-10-26T04:55:56.107452+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:55:56.114532+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:56:12.516446+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:56:15.765510+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:56:15.767429+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 2 r995446 using 1 r637317, 1 r742901\"})"}
+{"timestamp":"2026-10-26T04:56:15.769062+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:56:15.775525+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 1 r208751 using 1 r637317, 1 r742901\"})"}
+{"timestamp":"2026-10-26T04:56:29.354615+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:56:29.356689+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 3 r736652 using 1 r637317, 1 r687627\"})"}
+{"timestamp":"2026-10-26T04:56:29.358263+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:56:29.365290+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:56:37.426151+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:56:37.579060+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:56:37.580569+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 2 r870282 using 1 r155867, 1 r803732\"})"}
+{"timestamp":"2026-10-26T04:56:37.582100+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:56:37.588633+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 1 r915834 using 1 r099408, 1 r365519\"})"}
+{"timestamp":"2026-10-26T04:56:52.720947+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:56:52.723004+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 3 r812447 using 1 r883177, 1 r924713\"})"}
+{"timestamp":"2026-10-26T04:56:52.724538+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:56:52.731699+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:57:07.989190+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:57:08.908970+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:57:08.910841+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 2 r078939 using 1 r569418, 1 r924713\"})"}
+{"timestamp":"2026-10-26T04:57:08.912467+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:57:08.919383+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 1 r904593 using 1 r569418, 1 r924713\"})"}
+{"timestamp":"2026-10-26T04:57:37.529113+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:57:37.531270+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 2 r321505 using 1 r365519, 1 r736652\"})"}
+{"timestamp":"2026-10-26T04:57:37.532919+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:57:37.540539+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:57:47.741051+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:57:48.078430+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:57:48.080029+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 2 r971357 using 1 r155867, 1 r736652\"})"}
+{"timestamp":"2026-10-26T04:57:48.081599+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:57:48.088570+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 1 r196652 using 1 r946799, 1 r953287\"})"}
+{"timestamp":"2026-10-26T04:57:58.528893+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:57:58.530886+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 3 r667201 using 1 r946799, 1 r995446\"})"}
+{"timestamp":"2026-10-26T04:57:58.532462+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:57:58.540073+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:58:06.234847+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:58:08.206323+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:58:08.208084+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 3 r772892 using 1 r365519, 1 r995446\"})"}
+{"timestamp":"2026-10-26T04:58:08.209651+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:58:08.216786+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 3 r599901 using 1 r099408, 1 r208751\"})"}
+{"timestamp":"2026-10-26T04:58:22.190781+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:58:22.192983+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 1 r749667 using 1 r736652, 1 r924713\"})"}
+{"timestamp":"2026-10-26T04:58:22.194614+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:58:22.202661+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:58:43.699394+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:58:44.825897+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:58:44.827674+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 1 r607518 using 1 r667201, 1 r870282\"})"}
+{"timestamp":"2026-10-26T04:58:44.829354+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:58:44.836723+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 1 r156332 using 1 r599901, 1 r915834\"})"}
+{"timestamp":"2026-10-26T04:59:07.521043+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:59:07.523276+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 1 r974465 using 1 r321505, 1 r812447\"})"}
+{"timestamp":"2026-10-26T04:59:07.524924+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:59:07.532885+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:59:13.425589+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:59:16.642405+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:59:16.644476+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 1 r957483 using 1 r078939, 1 r812447\"})"}
+{"timestamp":"2026-10-26T04:59:16.646066+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:59:16.653618+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 1 r104498 using 1 r078939, 1 r904593\"})"}
+{"timestamp":"2026-10-26T04:59:27.349639+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:59:27.351694+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 1 r093604 using 1 r321505, 1 r870282\"})"}
+{"timestamp":"2026-10-26T04:59:27.353332+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:59:27.361455+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T04:59:45.779502+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:59:46.599656+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:59:46.601339+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 1 r641240 using 1 r772892, 1 r971357\"})"}
+{"timestamp":"2026-10-26T04:59:46.602935+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T04:59:46.610675+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 1 r982672 using 1 r196652, 1 r667201\"})"}
+{"timestamp":"2026-10-26T04:59:51.737642+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T04:59:51.739903+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 1 r105901 using 1 r667201, 1 r772892\"})"}
+{"timestamp":"2026-10-26T04:59:51.741547+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T04:59:51.749812+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T05:00:00.687950+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T05:00:06.136516+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T05:00:06.138614+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: act({\"command\": \"craft 1 r032126 using 1 r599901, 1 r772892\"})"}
+{"timestamp":"2026-10-26T05:00:06.140196+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T05:00:06.148010+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: act({\"command\": \"craft 1 r819127 using 1 r599901, 1 r812447\"})"}
+{"timestamp":"2026-10-26T05:00:39.416603+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T05:00:39.418887+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: act({\"command\": \"craft 1 r517057 using 1 r749667, 1 r971357\"})"}
+{"timestamp":"2026-10-26T05:00:39.420534+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: "}
+{"timestamp":"2026-10-26T05:00:39.429043+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T05:00:58.090123+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T05:01:09.329746+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T05:01:09.331820+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: observe({})"}
+{"timestamp":"2026-10-26T05:01:09.332720+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: I've completed all 24 of my assigned crafts. Let me verify all targets are in the depot."}
+{"timestamp":"2026-10-26T05:01:09.341932+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: "}
+{"timestamp":"2026-10-26T05:01:09.349601+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: read_notifications({\"wait_for\": \"depot\", \"items\": [\"r517057\", \"r819127\"]})"}
+{"timestamp":"2026-10-26T05:01:09.350495+00:00","logger":"glossogen.runtime.wait_registry","level":"INFO","message":"Agent crafter_2 wait wait-5 (depot) resumed after 0.0s: ['released']"}
+{"timestamp":"2026-10-26T05:01:09.352122+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: I've completed all 24 of my assigned crafts. The depot now shows most targets. Let me wait for the last in-progress crafts to finish."}
+{"timestamp":"2026-10-26T05:01:09.524371+00:00","logger":"glossogen.runtime.game_clock","level":"INFO","message":"Round 1 ending early via scenario trigger: all_targets_satisfied"}
+{"timestamp":"2026-10-26T05:01:09.525263+00:00","logger":"glossogen.runtime.game_clock","level":"INFO","message":"All 1 rounds complete, ending simulation"}
+{"timestamp":"2026-10-26T05:01:09.525385+00:00","logger":"glossogen.autonomous_supervisor","level":"INFO","message":"Game clock finished: scenario_complete"}
+{"timestamp":"2026-10-26T05:01:09.525465+00:00","logger":"glossogen.runtime.simulation_state","level":"INFO","message":"Broadcasting done to 3 agents: scenario_complete"}
+{"timestamp":"2026-10-26T05:01:09.525546+00:00","logger":"glossogen.runtime.agent_session","level":"INFO","message":"Agent crafter_1 marked terminated: scenario_complete"}
+{"timestamp":"2026-10-26T05:01:09.525612+00:00","logger":"glossogen.runtime.agent_session","level":"INFO","message":"Agent crafter_2 marked terminated: scenario_complete"}
+{"timestamp":"2026-10-26T05:01:09.525670+00:00","logger":"glossogen.runtime.agent_session","level":"INFO","message":"Agent crafter_3 marked terminated: scenario_complete"}
+{"timestamp":"2026-10-26T05:01:23.368043+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T05:01:23.370181+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 tool call: read_notifications({\"wait_for\": \"next_round\"})"}
+{"timestamp":"2026-10-26T05:01:23.370547+00:00","logger":"glossogen.runtime.wait_registry","level":"INFO","message":"Agent crafter_1 wait wait-6 (next_round) resumed after 0.0s: ['done']"}
+{"timestamp":"2026-10-26T05:01:23.371716+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_1 reasoning: All 12 targets are now present in the depot simultaneously. The round is complete."}
+{"timestamp":"2026-10-26T05:01:25.596919+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T05:01:25.598718+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 tool call: read_notifications({\"wait_for\": \"next_round\"})"}
+{"timestamp":"2026-10-26T05:01:25.599048+00:00","logger":"glossogen.runtime.wait_registry","level":"INFO","message":"Agent crafter_2 wait wait-7 (next_round) resumed after 0.0s: ['done']"}
+{"timestamp":"2026-10-26T05:01:25.600122+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: All 12 targets are now in the depot simultaneously, and the round status shows \"all_targets_satisfied\". My work is complete."}
+{"timestamp":"2026-10-26T05:01:29.490876+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T05:01:29.492645+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: read_notifications({\"items\": [\"r517057\"]})"}
+{"timestamp":"2026-10-26T05:01:29.492957+00:00","logger":"glossogen.runners.read_notifications_tool","level":"ERROR","message":"Agent crafter_3 passed invalid read_notifications arguments\nTraceback (most recent call last):\n  File \"/work/11672/lwang33287/vista/agent/GlossoGen-scale/src/glossogen/runners/read_notifications_tool.py\", line 71, in read_notifications\n    parsed = ReadNotificationsArguments.model_validate(arguments)\n  File \"/work/11672/lwang33287/vista/agent/GlossoGen-scale/.venv/lib/python3.14/site-packages/pydantic/main.py\", line 790, in model_validate\n    return cls.__pydantic_validator__.validate_python(\n           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^\n        obj,\n        ^^^^\n    ...<5 lines>...\n        by_name=by_name,\n        ^^^^^^^^^^^^^^^^\n    )\n    ^\npydantic_core._pydantic_core.ValidationError: 1 validation error for read_notificationsArguments\n  Value error, items applies only to wait_for='depot' [type=value_error, input_value={'items': ['r517057']}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error"}
+{"timestamp":"2026-10-26T05:01:29.495529+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: All 11 of my targets are in the depot. The last target r517057 is being crafted by crafter_1. Let me wait for it to complete."}
+{"timestamp":"2026-10-26T05:01:37.092469+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T05:01:37.094399+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 tool call: read_notifications({\"wait_for\": \"depot\", \"items\": [\"r517057\"]})"}
+{"timestamp":"2026-10-26T05:01:37.094755+00:00","logger":"glossogen.runtime.wait_registry","level":"INFO","message":"Agent crafter_3 wait wait-8 (depot) resumed after 0.0s: ['done']"}
+{"timestamp":"2026-10-26T05:01:37.095880+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: "}
+{"timestamp":"2026-10-26T05:01:39.527315+00:00","logger":"glossogen.autonomous_supervisor","level":"WARNING","message":"Agent task agent-crafter_1 did not finish in 30s, cancelling"}
+{"timestamp":"2026-10-26T05:01:46.019299+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T05:01:46.021890+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 cycle 1 complete: in=265923 out=1600 cache_read=0 cache_write=0 tokens"}
+{"timestamp":"2026-10-26T05:01:46.022020+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 reasoning: The run is complete. All 12 targets were achieved in the shared depot:\n\n- r032126, r093604, r104498, r105901, r156332, r517057, r607518, r641240, r819127, r957483, r974465, r982672\n\nI executed my 24 a"}
+{"timestamp":"2026-10-26T05:01:46.022131+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 received done notification after 1 turns, stopping"}
+{"timestamp":"2026-10-26T05:01:46.022222+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_2 finished. Total turns: 1, total cost: $0.0000"}
+{"timestamp":"2026-10-26T05:01:47.808419+00:00","logger":"httpx2","level":"INFO","message":"HTTP Request: POST http://localhost:8010/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp":"2026-10-26T05:01:47.810403+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 cycle 1 complete: in=273300 out=1603 cache_read=0 cache_write=0 tokens"}
+{"timestamp":"2026-10-26T05:01:47.810518+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 reasoning: All 12 targets are now in the depot and the run is complete. The team successfully satisfied all targets:\n- r032126, r093604, r104498, r105901, r156332, r517057, r607518, r641240, r819127, r957483, r9"}
+{"timestamp":"2026-10-26T05:01:47.810616+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 received done notification after 1 turns, stopping"}
+{"timestamp":"2026-10-26T05:01:47.810698+00:00","logger":"glossogen.runners.pydantic_ai_runner","level":"INFO","message":"Agent crafter_3 finished. Total turns: 1, total cost: $0.0000"}
+{"timestamp":"2026-10-26T05:01:47.810854+00:00","logger":"glossogen.autonomous_supervisor","level":"INFO","message":"Stopping world simulation"}
+{"timestamp":"2026-10-26T05:01:47.811212+00:00","logger":"glossogen.autonomous_supervisor","level":"INFO","message":"Simulation complete. Total messages: 0, total cost: $0.0000"}
+{"timestamp":"2026-10-26T05:01:47.811674+00:00","logger":"glossogen.event_logger","level":"INFO","message":"Event log closed: /work/11672/lwang33287/vista/agent/GlossoGen-scale/experiments/textcraft_oracle_20261025/oracle_smoke/jobs/n3_oracle_t00/runs/textcraft_shared_workspace/1792989477/textcraft_shared_workspace.jsonl"}

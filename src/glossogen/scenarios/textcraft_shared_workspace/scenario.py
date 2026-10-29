@@ -38,6 +38,7 @@ from glossogen.scenarios.textcraft_shared_workspace.events import (
     WorkspaceRoundResolved,
     WorkspaceTaskStarted,
 )
+from glossogen.scenarios.textcraft_shared_workspace.oracle_plan import list_schedule
 from glossogen.scenarios.textcraft_shared_workspace.knobs import SharedWorkspaceKnobs
 from glossogen.scenarios.textcraft_shared_workspace.recipe_dealing import deal_recipes
 from glossogen.scenarios.textcraft_shared_workspace.round_vocabulary import (
@@ -361,7 +362,7 @@ class TextcraftSharedWorkspaceScenario(SimulationScenario):
             recipes = self._recipe_hands(task=task, holders=holders)[agent_id]
         if self._knobs.recipe_reveal == "frontier":
             recipes = initially_unlocked(task=task)
-        return self._renderer.render(
+        briefing = self._renderer.render(
             template_name="crafter_injection.jinja",
             template_variables={
                 "round_number": round_number,
@@ -377,6 +378,14 @@ class TextcraftSharedWorkspaceScenario(SimulationScenario):
                 "actions": self.world.team_action_allowance(task=task),
             },
         )
+        if self._knobs.oracle_plan and self._knobs.agent_count > 1:
+            plan = list_schedule(task=task, seats=self.world.seats)
+            others = [f"{seat}: {len(crafts)} crafts" for seat, crafts in plan.items() if seat != agent_id]
+            briefing += "\n\n" + self._renderer.render(
+                template_name="oracle_plan.jinja",
+                template_variables={"crafts": plan[agent_id], "others": others},
+            )
+        return briefing
 
     def _recipe_hands(self, task: WorkspaceTask, holders: int) -> dict[str, list[str]]:
         """Each agent's dealt recipes under ``recipe_holders``."""

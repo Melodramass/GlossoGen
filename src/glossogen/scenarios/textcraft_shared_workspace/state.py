@@ -69,8 +69,13 @@ class DepotState:
         uncraft_enabled: bool,
         recipe_reveal: Literal["full", "frontier"],
         depot_view: Literal["full", "nonzero"],
+        team_feed: bool,
     ) -> None:
         self.task = task
+        # Oracle communication: who started, finished or undid which craft, shown to everyone else.
+        self.team_feed = team_feed
+        self.activity: list[tuple[str, str]] = []
+        self.activity_cursors = dict.fromkeys(seats, 0)
         self.seats = seats
         self.depot = Counter(task.initial_depot)
         self.version = 0
@@ -146,7 +151,10 @@ class DepotState:
             raise ValueError("unknown crafter")
         command = command.strip()
         if self.uncraft_enabled and command.startswith(UNCRAFT_PREFIX):
-            return self.uncraft(command=command)
+            undone = self.uncraft(command=command)
+            if undone.accepted:
+                self.activity.append((agent_id, f"undid: {command[len(UNCRAFT_PREFIX):].strip()}"))
+            return undone
         recipe = self.recipes.get(command)
         if recipe is None or command not in self.unlocked:
             return Transition(
@@ -184,6 +192,7 @@ class DepotState:
                 consumed=consumed,
             )
             self.in_progress.append(pending)
+            self.activity.append((agent_id, f"started: {command}"))
             self._record_change(delta=delta)
             return Transition(
                 command=command,
@@ -213,6 +222,7 @@ class DepotState:
     def finish(self, pending: PendingCraft) -> Transition:
         """Land a started craft's output; it becomes visible and uncraftable now."""
         self.in_progress.remove(pending)
+        self.activity.append((pending.agent_id, f"finished: {pending.command}"))
         self._land(agent_id=pending.agent_id, output=pending.output, count=pending.count)
         self.live_crafts.setdefault(pending.command, []).append(pending.consumed)
         delta = {pending.output: pending.count}
@@ -302,7 +312,19 @@ class DepotState:
             )
         if not changes:
             lines.append("none")
-        if self.in_progress:
+        if self.team_feed:
+            seen = self.activity_cursors[agent_id]
+            self.activity_cursors[agent_id] = len(self.activity)
+            news = [f"{who} {what}" for who, what in self.activity[seen:] if who != agent_id]
+            if news:
+                lines.append("Teammate activity since your last observation:")
+                lines.extend(news)
+        if self.in_progress and self.team_feed:
+            making = ", ".join(
+                f"{craft.agent_id}: {craft.count} {craft.output}" for craft in self.in_progress
+            )
+            lines.append(f"Being crafted now (inputs taken, output not in the depot yet): {making}")
+        elif self.in_progress:
             making = ", ".join(f"{craft.count} {craft.output}" for craft in self.in_progress)
             lines.append(f"Being crafted now (inputs taken, output not in the depot yet): {making}")
         newly_unlocked = self.unlocked[self.unlock_cursors[agent_id] :]

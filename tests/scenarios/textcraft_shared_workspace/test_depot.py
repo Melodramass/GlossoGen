@@ -35,6 +35,7 @@ def depot(task: WorkspaceTask, uncraft_enabled: bool) -> DepotState:
         uncraft_enabled=uncraft_enabled,
         recipe_reveal="full",
         depot_view="full",
+        team_feed=False,
     )
 
 
@@ -152,6 +153,7 @@ def test_undoing_and_redoing_every_craft_still_solves() -> None:
             uncraft_enabled=True,
             recipe_reveal="full",
             depot_view="full",
+            team_feed=False,
         )
         for column, command in task.witness:
             assert state.step(agent_id=column, command=command).accepted

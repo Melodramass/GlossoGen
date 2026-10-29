@@ -82,6 +82,10 @@ class SharedWorkspaceKnobs(BaseKnobs):
     raw_ownership: Literal["shared", "private"]
     recipe_reveal: Literal["full", "frontier"]
     depot_view: Literal["full", "nonzero"]
+    team_feed: bool = False
+    """Oracle communication: observations name who started, finished or undid each craft."""
+    oracle_plan: bool = False
+    """Oracle communication: each crafter's briefing carries its share of a list schedule."""
 
     @model_validator(mode="after")
     def validate_experiment(self) -> Self:

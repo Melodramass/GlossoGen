@@ -1,0 +1,40 @@
+{
+  "label": "n3_nocomm_t00",
+  "arm": "n3_nocomm",
+  "task_index": 0,
+  "task_id": "428d0d5b4326ce5f110f",
+  "agents": 3,
+  "comms": false,
+  "work": 72,
+  "directory": "experiments/textcraft_oracle_20261025/jobs/n3_nocomm_t00",
+  "cycle_failures": 0,
+  "success": false,
+  "stop_reason": "round_timeout",
+  "targets_satisfied": 9,
+  "virtual_elapsed_seconds": 1407.5999999999958,
+  "actions_by_agent": {
+    "crafter_1": 98,
+    "crafter_2": 47,
+    "crafter_3": 23
+  },
+  "actions_used": 168,
+  "accepted_crafts": 73,
+  "failed_acts": 93,
+  "uncrafts": 2,
+  "messages_sent": 0,
+  "observes": 5,
+  "waits_by_kind": {
+    "any": 5,
+    "depot": 77
+  },
+  "requests": 264,
+  "runaway_requests": 0,
+  "input_tokens": 1724677,
+  "output_tokens": 8985,
+  "event_log": "experiments/textcraft_oracle_20261025/jobs/n3_nocomm_t00/runs/textcraft_shared_workspace/1792989296/textcraft_shared_workspace.jsonl",
+  "node": "localhost:8010",
+  "status": "completed",
+  "seconds": 2216.254,
+  "returncode": 0,
+  "outer_timeout": false
+}

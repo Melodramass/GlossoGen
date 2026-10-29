@@ -1,0 +1,2 @@
+arm         done solved makespan speedup   eff oracle faster busiest crafters rejected  msgs dwaits Mtok_in   req
+n10_comm      16      0 - - -   9.0x   0/0     0.21     10.0     0.56    54    222    5.50   591

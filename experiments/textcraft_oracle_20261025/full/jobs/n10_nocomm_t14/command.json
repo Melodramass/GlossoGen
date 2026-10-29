@@ -1,0 +1,18 @@
+[
+  "/work/11672/lwang33287/vista/agent/GlossoGen-scale/.venv/bin/python",
+  "-m",
+  "glossogen",
+  "run",
+  "textcraft_shared_workspace",
+  "--model",
+  "Qwen/Qwen3.8-27B",
+  "--provider",
+  "self-hosted",
+  "--runs-dir",
+  "/work/11672/lwang33287/vista/agent/GlossoGen-scale/experiments/textcraft_oracle_20261025/full/jobs/n10_nocomm_t14/runs",
+  "--config",
+  "/work/11672/lwang33287/vista/agent/GlossoGen-scale/experiments/textcraft_oracle_20261025/full/jobs/n10_nocomm_t14/config.json",
+  "--max-agent-turns",
+  "2000",
+  "max_round_duration_seconds=2802"
+]

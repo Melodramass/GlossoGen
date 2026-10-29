@@ -1,0 +1,191 @@
+{
+  "solo": {
+    "episodes": 2,
+    "completed": 2,
+    "successes": 0,
+    "infrastructure_errors": 0,
+    "stop_reasons": {
+      "round_timeout": 2
+    },
+    "mean_score": 0.0,
+    "mean_completion_tokens": 27571.0,
+    "mean_prompt_tokens": 2041414.0,
+    "mean_probes_used": 5142.5,
+    "mean_duplicate_probes": 4128.0,
+    "mean_cross_agent_duplicate_probes": 0.0,
+    "mean_messages_sent": 0.0,
+    "mean_directory_reads": 0.0,
+    "mean_directory_writes": 0.0,
+    "mean_elapsed_seconds": 2427.57672173006,
+    "mean_probes_vs_solo": 1.0,
+    "hit_probe_cap": 1
+  },
+  "n3_artifact": {
+    "episodes": 2,
+    "completed": 2,
+    "successes": 0,
+    "infrastructure_errors": 0,
+    "stop_reasons": {
+      "round_timeout": 2
+    },
+    "mean_score": 0.8293800539083558,
+    "mean_completion_tokens": 105937.5,
+    "mean_prompt_tokens": 14312128.0,
+    "mean_probes_used": 6953.5,
+    "mean_duplicate_probes": 3979.0,
+    "mean_cross_agent_duplicate_probes": 145.0,
+    "mean_messages_sent": 0.0,
+    "mean_directory_reads": 0.0,
+    "mean_directory_writes": 0.0,
+    "mean_elapsed_seconds": 2456.4216162885423,
+    "mean_probes_vs_solo": 2.3058154401856634,
+    "hit_probe_cap": 1
+  },
+  "n3_chat": {
+    "episodes": 2,
+    "completed": 2,
+    "successes": 0,
+    "infrastructure_errors": 0,
+    "stop_reasons": {
+      "round_timeout": 2
+    },
+    "mean_score": 0.4025157232704403,
+    "mean_completion_tokens": 109354.5,
+    "mean_prompt_tokens": 15987540.5,
+    "mean_probes_used": 7611.5,
+    "mean_duplicate_probes": 6033.5,
+    "mean_cross_agent_duplicate_probes": 328.5,
+    "mean_messages_sent": 0.5,
+    "mean_directory_reads": 0.0,
+    "mean_directory_writes": 0.0,
+    "mean_elapsed_seconds": 2457.9205657214334,
+    "mean_probes_vs_solo": 2.179646440516006,
+    "hit_probe_cap": 1
+  },
+  "n10_artifact": {
+    "episodes": 1,
+    "completed": 1,
+    "successes": 0,
+    "infrastructure_errors": 0,
+    "stop_reasons": {
+      "round_timeout": 1
+    },
+    "mean_score": 0.0,
+    "mean_completion_tokens": 151988.0,
+    "mean_prompt_tokens": 7302710.0,
+    "mean_probes_used": 8176.0,
+    "mean_duplicate_probes": 3684.0,
+    "mean_cross_agent_duplicate_probes": 2052.0,
+    "mean_messages_sent": 0.0,
+    "mean_directory_reads": 0.0,
+    "mean_directory_writes": 0.0,
+    "mean_elapsed_seconds": 2493.1321801499,
+    "mean_probes_vs_solo": 3.9063545150501673,
+    "hit_probe_cap": 0
+  },
+  "n10_chat": {
+    "episodes": 1,
+    "completed": 1,
+    "successes": 0,
+    "infrastructure_errors": 0,
+    "stop_reasons": {
+      "round_timeout": 1
+    },
+    "mean_score": 0.0,
+    "mean_completion_tokens": 83862.0,
+    "mean_prompt_tokens": 4166558.0,
+    "mean_probes_used": 6581.0,
+    "mean_duplicate_probes": 3891.0,
+    "mean_cross_agent_duplicate_probes": 1674.0,
+    "mean_messages_sent": 0.0,
+    "mean_directory_reads": 0.0,
+    "mean_directory_writes": 0.0,
+    "mean_elapsed_seconds": 2575.5592799590086,
+    "mean_probes_vs_solo": 3.1442904921165793,
+    "hit_probe_cap": 0
+  },
+  "n3_feed": {
+    "episodes": 1,
+    "completed": 1,
+    "successes": 0,
+    "infrastructure_errors": 0,
+    "stop_reasons": {
+      "round_timeout": 1
+    },
+    "mean_score": 0.0,
+    "mean_completion_tokens": 44189.0,
+    "mean_prompt_tokens": 6420036.0,
+    "mean_probes_used": 2003.0,
+    "mean_duplicate_probes": 1090.0,
+    "mean_cross_agent_duplicate_probes": 256.0,
+    "mean_messages_sent": 0.0,
+    "mean_directory_reads": 0.0,
+    "mean_directory_writes": 0.0,
+    "mean_elapsed_seconds": 2474.7155622001737,
+    "mean_probes_vs_solo": 0.9569995222169135,
+    "hit_probe_cap": 0
+  },
+  "n3_oracle": {
+    "episodes": 1,
+    "completed": 1,
+    "successes": 0,
+    "infrastructure_errors": 0,
+    "stop_reasons": {
+      "round_timeout": 1
+    },
+    "mean_score": 0.0,
+    "mean_completion_tokens": 30384.0,
+    "mean_prompt_tokens": 8010505.0,
+    "mean_probes_used": 8192.0,
+    "mean_duplicate_probes": 7352.0,
+    "mean_cross_agent_duplicate_probes": 29.0,
+    "mean_messages_sent": 1.0,
+    "mean_directory_reads": 0.0,
+    "mean_directory_writes": 0.0,
+    "mean_elapsed_seconds": 2471.179591856897,
+    "mean_probes_vs_solo": 3.913999044433827,
+    "hit_probe_cap": 1
+  },
+  "n10_feed": {
+    "episodes": 1,
+    "completed": 1,
+    "successes": 0,
+    "infrastructure_errors": 0,
+    "stop_reasons": {
+      "round_timeout": 1
+    },
+    "mean_score": 0.0,
+    "mean_completion_tokens": 60121.0,
+    "mean_prompt_tokens": 5110337.0,
+    "mean_probes_used": 2246.0,
+    "mean_duplicate_probes": 965.0,
+    "mean_cross_agent_duplicate_probes": 536.0,
+    "mean_messages_sent": 0.0,
+    "mean_directory_reads": 0.0,
+    "mean_directory_writes": 0.0,
+    "mean_elapsed_seconds": 2580.7594134949613,
+    "mean_probes_vs_solo": 1.073100812231247,
+    "hit_probe_cap": 0
+  },
+  "n10_oracle": {
+    "episodes": 1,
+    "completed": 1,
+    "successes": 0,
+    "infrastructure_errors": 0,
+    "stop_reasons": {
+      "round_timeout": 1
+    },
+    "mean_score": 0.6095238095238096,
+    "mean_completion_tokens": 61946.0,
+    "mean_prompt_tokens": 9997275.0,
+    "mean_probes_used": 8192.0,
+    "mean_duplicate_probes": 3926.0,
+    "mean_cross_agent_duplicate_probes": 1798.0,
+    "mean_messages_sent": 2.0,
+    "mean_directory_reads": 0.0,
+    "mean_directory_writes": 0.0,
+    "mean_elapsed_seconds": 2566.2297051690402,
+    "mean_probes_vs_solo": 3.913999044433827,
+    "hit_probe_cap": 1
+  }
+}

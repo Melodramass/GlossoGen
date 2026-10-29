@@ -1,0 +1,5 @@
+COORDINATOR PLAN
+A coordinator who knows every recipe split the crafts so no two crafters make the same item and nobody waits longer than needed. Run YOUR crafts below in order, one application each. A craft becomes possible (and its recipe unlocks) once teammates' earlier crafts have put its inputs in the depot; wait for those items instead of crafting anything else.
+YOUR CRAFTS ({{ crafts | length }}):
+{% for command in crafts %}{{ command }}
+{% endfor %}{% if others %}Teammates have their own lists ({{ others | join(", ") }}).{% endif %}
